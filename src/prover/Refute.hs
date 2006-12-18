@@ -1,10 +1,12 @@
-module ProofProc where
+module Refute where
 
 -- import HOPL
 import Control.Monad
 import Control.Monad.State
+import Control.Monad.Identity
+import LogicT
+
 import List
-import Debug.Trace
 
 -- Syntax of a Higher Order Program
 
@@ -31,7 +33,23 @@ type Goal = [Atom]
 instance Show Term where
     showsPrec n (Var v) = showString v
     showsPrec n (Pre v) = showString v
+    showsPrec n (Con "__lnil") = showString "[]"
     showsPrec n (Con c) = showString c
+    showsPrec n t@(Fun "s" [t']) = 
+        let countS (Fun "s" [t]) = 1 + (countS t)
+            countS (Con "0") = 0
+        in  shows (countS t)
+    showsPrec n t@(Fun "__l" tl) = 
+        let getLElems (Con "__lnil") = []
+            getLElems (Fun "__l" [t1,t2]) = t1:(getLElems t2)
+            getLElems _ = []
+            getLTail (Con "__lnil") = Nothing
+            getLTail (Fun "__l" [t1,t2]) = getLTail t2
+            getLTail t = Just t
+            showTail t = case getLTail t of
+                            Nothing -> id
+                            Just t  -> (showString " | ").showsPrec n t
+        in  (showString "[").(showTerms (getLElems t)).(showTail t).(showString "]")
     showsPrec n (Fun v tl) = (showString v).(showString "(").(showTerms tl).(showString ")")
     showsPrec n (Set tl)   = (showString "{").(showTerms tl).(showString "}")
     showsPrec n (Uni t t') = (showsPrec n t).(showString "U").(showsPrec n t')
@@ -150,78 +168,54 @@ listUnify (x:xs) (y:ys) =  do
 occurCheck :: Var -> Term -> Bool
 occurCheck v t = v `elem` (varsT t)
 
+--type RefuteM a = LogicT (StateT Int Identity) a
+type RefuteM a = StateT Int (LogicT Identity) a
 
--- Backtrack Monad
+instance MonadLogic m => MonadLogic (StateT s m) where
+    msplit (StateT m) = StateT $ \s -> 
+                            msplit (m s) >>= \r ->
+                                case r of 
+                                    Nothing -> return (Nothing, s)
+                                    Just ((a, s'), m') -> return (Just (a, StateT $ \s -> m' ), s')
 
-newtype BackTr a = Stream { unStream :: [a] }
-
-type Refutation a = StateT Int BackTr a
-
-instance Monad BackTr where
-    return a         = Stream [a]
-    (Stream l) >>= f = Stream $ concatMap (unStream.f) l
-    --s >>= f = s >>- f
-    fail str         = Stream []
-
---(Stream l) >>== f = Stream $ concatMap (unStream.f) l
-
-instance MonadPlus BackTr where
-    mzero = Stream []
-    mplus (Stream a) (Stream b) = Stream $ a ++ b
-
---msplit :: BackTr a -> BackTr (Maybe (a, BackTr a))
-msplit (Stream [])     = return $ Nothing
-msplit (Stream (a:as)) = return $ Just (a, Stream as)
-
-interleave s s' = do
-    msplit s >>= \r -> case r of
-                            Nothing -> s'
-                            Just (a,as) -> (return a) `mplus` (interleave s' as)
-
-s >>- g = do
-    msplit s >>= \r -> case r of
-                            Nothing -> mzero
-                            Just (a,as) -> (g a) `interleave` (as >>- g)
-
-
-runL :: Maybe Int -> BackTr a -> [a]
-runL (Just n) (Stream s) = take n s
-runL Nothing  (Stream s) = s
-
--- refute :: Prog -> Goal -> BackTr Subst
-refute p [] = return epsilon
-refute p g  =
-    resol p g >>= \(g',s') ->
-    refute p (map (appA s') g') >>= \ans -> 
-    return (s' `comp` ans)
-
+prove :: Prog -> Goal -> RefuteM Subst
 prove p g = do
     subst <- refute p g
     return (restrict (varsAs g) subst)
 
---clauses :: Var -> Prog -> BackTr Clause
-clauses p (Atom v _) = msum (map return (filter (\((Atom v' _), _) -> v' == v) p))
+refute p [] = return epsilon
+refute p g  =
+    derive p g                  >>- \(g',s') ->
+    refute p (map (appA s') g') >>- \ans -> 
+    return (s' `comp` ans)
 
-selectAtom []     = fail "Empty goal, cannot select an atom"
-selectAtom (a:as) = return (a,as)
+
+clauses p (Atom v _) =
+    let l = filter (\((Atom v' _), _) -> v' == v) p
+    in  msum (map return l)
+
+derive = resol
+
+pickAtom :: Goal -> RefuteM (Atom, Goal)
+pickAtom []     = fail "Empty goal, cannot select an atom"
+pickAtom (a:as) = return (a,as)
 
 -- resol :: Prog -> Goal -> BackTr (Goal,Subst)
 resol p [] = return (emptyGoal,epsilon)
-resol p g  = do
-    (a,rest) <- selectAtom g
-    c        <- clauses p a
-    (h',b')  <- variant c
-    subst    <- unifyAtoms a h'
+resol p g  =
+    pickAtom g         >>- \(a,rest) ->
+    clauses p a        >>- \c ->
+    variant c          >>- \(h',b') ->
+    unifyAtoms a h'    >>- \subst ->
     return (b'++rest, subst)
 
---variant :: Clause -> Refutation Clause
 variant c@(h,b) =
     let subst = mapM (\v -> newVar >>= \n -> return (v, (Var n))) (varsC c)
     in do 
         s <- subst
         return (appA s h, map (appA s) b)
 
-newVar :: Refutation Var
+newVar :: RefuteM Var
 newVar = do
     i <- get
     put (i+1)

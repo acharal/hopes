@@ -8,8 +8,10 @@ import System
 import ErrUtils
 import HOPL
 
-import ProofProc
+import Refute
+import LogicT
 import Control.Monad.State
+import Control.Monad.Identity
 
 
 -- main = Parser.main
@@ -28,7 +30,8 @@ main = do
     print p
     print g
 -}
-    case runL Nothing (evalStateT (prove p g) 0) of
+    case runIdentity $ (runL Nothing (evalStateT (prove p g) 0)) of
+    --case runIdentity $ evalStateT (runL Nothing (prove p g)) 0 of
         [] -> putStrLn "No"
         s  -> printSols s
 

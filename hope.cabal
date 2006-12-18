@@ -20,6 +20,7 @@ Hs-Source-Dirs:	src
 		src/utils
 		src/lang
 		src/typecheck
+		src/prover
 Other-Modules:	Lexer
 		Parser
 		ParseUtils
@@ -28,7 +29,8 @@ Other-Modules:	Lexer
 		HOPL
 		Types
 		TcUtils
-		ProofProc
+		Refute
+		LogicT
 Extensions:	RankNTypes
 		OverlappingInstances
 Ghc-Options:	-O 

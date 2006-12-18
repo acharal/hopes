@@ -7,14 +7,18 @@ import ParseUtils
 import Lexer
 import HOPL
 import IO
+import Data.Char
 }
 
 %token 
-      ':-'      { (L _ TKgets) }
-      '.'       { (L _ TKdot)  }
-      ','       { (L _ TKcomma) }
+      ':-'      { (L _ TKgets)   }
+      '.'       { (L _ TKdot)    }
+      ','       { (L _ TKcomma)  }
       '('       { (L _ TKoparen) }
       ')'       { (L _ TKcparen) }
+      '['       { (L _ TKobrak ) }
+      ']'       { (L _ TKcbrak ) }
+      '|'       { (L _ TKvert )  }
       ID        { (L _ (TKid   $$)) }
 
 %monad { Parser } { >>= } { return }
@@ -52,15 +56,18 @@ atoms  :: { [HoAtom] }
        | atom               { [$1] }
 
 term :: { HoTerm }
-     : ID                    { if isVar $1 then HoVar $1 else HoConst $1 }
+     : ID                    { if isVar $1 then HoVar $1 else if (all isDigit $1) then homkNum ((read $1)::Int) else HoConst $1 }
      | ID '(' terms ')'      { HoFun $1 (reverse $3) }
+     | '[' ']'               { hoEmptyList }
+     | '[' terms ']'         { homkList (reverse (hoEmptyList:$2)) }
+     | '[' terms '|' term ']' { homkList (reverse ($4:$2)) }
 
 terms  :: { [HoTerm] }
        : terms ',' term     { $3:$1 }
        | term               { [$1] }
 
 goal :: { HoGoal }
-     : atoms                { $1 }
+     : atoms                { reverse $1 }
 
 {
 

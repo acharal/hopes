@@ -1,8 +1,10 @@
 RUNHASKELL=runhaskell
 RM=rm
 
+all: build
+
 build:
 	$(RUNHASKELL) ./Setup.hs build
 
 clean:
-	$(RM) -r -f src/*.hi src/*.o src/*/*.o src/*/*.hi
+	$(RUNHASKELL) ./Setup.hs clean

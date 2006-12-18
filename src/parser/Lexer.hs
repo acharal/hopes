@@ -10,6 +10,9 @@ data Token =
     | TKgets
     | TKdot
     | TKcomma
+    | TKvert
+    | TKobrak
+    | TKcbrak
     | TKid String
     | TKEOF
    deriving (Eq,Show)
@@ -55,6 +58,9 @@ scanTok [] loc               = TokEnd
 scanTok inp@('\n':cs) loc    = scanSkip inp loc
 scanTok ('(':cs) loc         = Tok TKoparen 1 cs
 scanTok (')':cs) loc         = Tok TKcparen 1 cs
+scanTok ('[':cs) loc         = Tok TKobrak  1 cs
+scanTok (']':cs) loc         = Tok TKcbrak  1 cs
+scanTok ('|':cs) loc         = Tok TKvert   1 cs
 scanTok (',':cs) loc         = Tok TKcomma  1 cs
 scanTok ('.':cs) loc         = Tok TKdot    1 cs
 scanTok (':':'-':cs) loc     = Tok TKgets   2 cs

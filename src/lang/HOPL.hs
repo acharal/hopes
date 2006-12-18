@@ -21,3 +21,10 @@ type HoGoal   = [HoAtom]            -- clause without head
 
 type HoProg   = [HoClause]
 
+hoEmptyList = HoConst "__lnil"
+
+homkList [t]    = t
+homkList (t:tl) = HoFun "__l" [t, (homkList tl)]
+
+homkNum 0 = (HoConst "0")
+homkNum n  = HoFun "s" [(homkNum (n-1))]
