@@ -13,6 +13,7 @@ data Token =
     | TKvert
     | TKobrak
     | TKcbrak
+    | TKwild
     | TKid String
     | TKEOF
    deriving (Eq,Show)
@@ -56,6 +57,7 @@ type ScanAction = String -> Loc -> ScanResult
 scanTok :: ScanAction
 scanTok [] loc               = TokEnd
 scanTok inp@('\n':cs) loc    = scanSkip inp loc
+scanTok inp@('%':cs) loc     = scanSkipLine inp loc
 scanTok ('(':cs) loc         = Tok TKoparen 1 cs
 scanTok (')':cs) loc         = Tok TKcparen 1 cs
 scanTok ('[':cs) loc         = Tok TKobrak  1 cs
@@ -63,6 +65,7 @@ scanTok (']':cs) loc         = Tok TKcbrak  1 cs
 scanTok ('|':cs) loc         = Tok TKvert   1 cs
 scanTok (',':cs) loc         = Tok TKcomma  1 cs
 scanTok ('.':cs) loc         = Tok TKdot    1 cs
+scanTok ('_':cs) loc         = Tok TKwild   1 cs
 scanTok (':':'-':cs) loc     = Tok TKgets   2 cs
 scanTok inp@(c:cs) loc
     | isSpace c              = scanSkip inp loc
@@ -83,17 +86,7 @@ scanSkip inp loc =
         scanSkip_aux o l [] loc           = TokEnd
     in scanSkip_aux (locOffset loc) (locLine loc) inp loc
 
-testlexer str = 
-    let getTokens =
-            lexToken >>= \t -> 
-            let L _ t' = t in
-            if t' == TKEOF then 
-                return []
-            else getTokens >>= \ts ->  return (t:ts)
+scanSkipLine :: ScanAction
+scanSkipLine inp loc = scanSkip inp2 loc{locOffset=0, locLine=(locLine loc) + 1}
+    where (com, ('\n':inp2)) = span (/='\n') inp
 
-        p = setPInput str >> getTokens
-        initst :: ParseState
-        initst = PState str (Loc "" 1 0) (Loc "" 1 0)
-    in case (runP p) initst of 
-          POk _ ts -> ts
-          PFailed l err -> error (show err)

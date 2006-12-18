@@ -126,6 +126,9 @@ restrict vl sl = filter (\(v,_) -> v `elem` vl) sl
 -- Unification 
 
 --unify :: Term -> Term -> Maybe Subst
+unify (Var "_") t = return epsilon
+unify t (Var "_") = return epsilon
+
 unify (Var v) (Var v')
     | v == v'   = return epsilon
     | otherwise = return [(v, Var v')]

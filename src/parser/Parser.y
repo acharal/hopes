@@ -19,6 +19,7 @@ import Data.Char
       '['       { (L _ TKobrak ) }
       ']'       { (L _ TKcbrak ) }
       '|'       { (L _ TKvert )  }
+      '_'       { (L _ TKwild )  }
       ID        { (L _ (TKid   $$)) }
 
 %monad { Parser } { >>= } { return }
@@ -49,7 +50,8 @@ rule :: { HoClause }
      : atom ':-' atoms '.'  { ($1, reverse $3) }
 
 atom :: { HoAtom }
-     : ID '(' terms ')'     { HoAtom $1 (reverse $3) }
+     : ID                   { HoAtom $1 [] }
+     | ID '(' terms ')'     { HoAtom $1 (reverse $3) }
 
 atoms  :: { [HoAtom] }
        : atoms ',' atom     { $3:$1 }
@@ -57,6 +59,7 @@ atoms  :: { [HoAtom] }
 
 term :: { HoTerm }
      : ID                    { if isVar $1 then HoVar $1 else if (all isDigit $1) then homkNum ((read $1)::Int) else HoConst $1 }
+     | '_'                   { HoVar "_" }
      | ID '(' terms ')'      { HoFun $1 (reverse $3) }
      | '[' ']'               { hoEmptyList }
      | '[' terms ']'         { homkList (reverse (hoEmptyList:$2)) }

@@ -28,3 +28,4 @@ homkList (t:tl) = HoFun "__l" [t, (homkList tl)]
 
 homkNum 0 = (HoConst "0")
 homkNum n  = HoFun "s" [(homkNum (n-1))]
+

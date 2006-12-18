@@ -16,7 +16,7 @@ import Control.Monad.Identity
 
 -- main = Parser.main
 
-main = do
+main2 = do
     (a1:a2:args) <- getArgs
     fileH <- openFile a1 ReadMode
     hoprog <- parseFromIO parseProg fileH
@@ -55,6 +55,14 @@ parseFromIO f handle = do
     case runP f (mkState content) of
         PFailed _ err -> fail err
         POk _ x -> return x
+
+main1 = do
+    (f:_) <- getArgs
+    fileH <- openFile f ReadMode
+    hoprog <- parseFromIO parseProg fileH
+    print hoprog
+
+main = main1
 
 transHOPLT :: HoTerm -> Term
 transHOPLT (HoVar v)    = Var v
