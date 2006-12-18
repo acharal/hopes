@@ -38,9 +38,14 @@ instance Show Term where
     showsPrec n (Con "__lnil") = showString "[]"
     showsPrec n (Con c) = showString c
     showsPrec n t@(Fun "s" [t']) = 
-        let countS (Fun "s" [t]) = 1 + (countS t)
-            countS (Con "0") = 0
-        in  shows (countS t)
+        let countS (Fun "s" [t]) =
+                let (c, t') = countS t
+                in  (c+1, t')
+            countS t = (0, t)
+            (c, t') = countS t
+        in case t' of
+                (Con "0") -> shows c
+                _ -> showsPrec n t' . showString "+" . shows c
     showsPrec n t@(Fun "__l" tl) = 
         let getLElems (Con "__lnil") = []
             getLElems (Fun "__l" [t1,t2]) = t1:(getLElems t2)
