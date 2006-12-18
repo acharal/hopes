@@ -13,6 +13,8 @@ data Token =
     | TKvert
     | TKobrak
     | TKcbrak
+    | TKocurly
+    | TKccurly
     | TKwild
     | TKid String
     | TKEOF
@@ -62,6 +64,8 @@ scanTok ('(':cs) loc         = Tok TKoparen 1 cs
 scanTok (')':cs) loc         = Tok TKcparen 1 cs
 scanTok ('[':cs) loc         = Tok TKobrak  1 cs
 scanTok (']':cs) loc         = Tok TKcbrak  1 cs
+scanTok ('{':cs) loc         = Tok TKocurly 1 cs
+scanTok ('}':cs) loc         = Tok TKccurly 1 cs
 scanTok ('|':cs) loc         = Tok TKvert   1 cs
 scanTok (',':cs) loc         = Tok TKcomma  1 cs
 scanTok ('.':cs) loc         = Tok TKdot    1 cs

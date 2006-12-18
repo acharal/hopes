@@ -8,6 +8,7 @@ import LogicT
 
 import List
 
+import Debug.Trace
 -- Syntax of a Higher Order Program
 
 type Var = String
@@ -29,6 +30,7 @@ type Clause = (Atom, [Atom])
 type Prog = [Clause]
 
 type Goal = [Atom]
+
 
 instance Show Term where
     showsPrec n (Var v) = showString v
@@ -56,6 +58,7 @@ instance Show Term where
 
 instance Show Atom where
     showsPrec n (Atom t tl) = (shows t).(showString "(").(showTerms tl).(showString ")")
+
 
 showTerms []  = id
 showTerms [t] = (shows t)
@@ -166,6 +169,9 @@ listUnify (x:xs) (y:ys) =  do
     s  <- unify x y
     s' <- listUnify (map (appT s) xs) (map (appT s) ys)
     return (s `comp` s')
+listUnify lt lt' = fail ("Atoms " ++ (show lt) ++ 
+                        " and "  ++ (show lt') ++
+                        " are not unifyable")
 
 
 occurCheck :: Var -> Term -> Bool
@@ -188,8 +194,9 @@ prove p g = do
 
 refute p [] = return epsilon
 refute p g  =
+    --trace ("Refute goal " ++ show g) $
     derive p g                  >>- \(g',s') ->
-    refute p (map (appA s') g') >>- \ans -> 
+    refute p (map (normA.(appA s')) g') >>- \ans -> 
     return (s' `comp` ans)
 
 
@@ -203,7 +210,6 @@ pickAtom :: Goal -> RefuteM (Atom, Goal)
 pickAtom []     = fail "Empty goal, cannot select an atom"
 pickAtom (a:as) = return (a,as)
 
--- resol :: Prog -> Goal -> BackTr (Goal,Subst)
 resol p [] = return (emptyGoal,epsilon)
 resol p g  =
     pickAtom g         >>- \(a,rest) ->
@@ -216,7 +222,11 @@ variant c@(h,b) =
     let subst = mapM (\v -> newVar >>= \n -> return (v, (Var n))) (varsC c)
     in do 
         s <- subst
-        return (appA s h, map (appA s) b)
+        return (appA s h, map (normA.(appA s)) b)
+
+-- hackia
+normA (Atom (Con v) tl) = Atom (Pre v) tl
+normA t = t
 
 newVar :: RefuteM Var
 newVar = do

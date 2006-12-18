@@ -62,7 +62,7 @@ main1 = do
     hoprog <- parseFromIO parseProg fileH
     print hoprog
 
-main = main1
+main = main2
 
 transHOPLT :: HoTerm -> Term
 transHOPLT (HoVar v)    = Var v
@@ -70,7 +70,7 @@ transHOPLT (HoConst c)  = Con c
 transHOPLT (HoFun f tl) = Fun f (map transHOPLT tl)
 
 transHOPLA :: HoAtom -> Atom
-transHOPLA (HoAtom v tl) = Atom (Pre v) (map transHOPLT tl)
+transHOPLA (HoAtom v tl) = if isVar v then Atom (Var v) (map transHOPLT tl) else Atom (Pre v) (map transHOPLT tl)
 
 transHOPLP :: HoProg -> Prog
 transHOPLP [] = []

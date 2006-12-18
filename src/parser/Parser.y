@@ -18,6 +18,8 @@ import Data.Char
       ')'       { (L _ TKcparen) }
       '['       { (L _ TKobrak ) }
       ']'       { (L _ TKcbrak ) }
+      '{'       { (L _ TKocurly) }
+      '}'       { (L _ TKccurly) }
       '|'       { (L _ TKvert )  }
       '_'       { (L _ TKwild )  }
       ID        { (L _ (TKid   $$)) }
@@ -64,6 +66,8 @@ term :: { HoTerm }
      | '[' ']'               { hoEmptyList }
      | '[' terms ']'         { homkList (reverse (hoEmptyList:$2)) }
      | '[' terms '|' term ']' { homkList (reverse ($4:$2)) }
+     | '{' '}'               { undefined }
+     | '{' terms '}'         { undefined }
 
 terms  :: { [HoTerm] }
        : terms ',' term     { $3:$1 }
