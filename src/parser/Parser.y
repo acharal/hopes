@@ -8,6 +8,7 @@ import Lexer
 import HOPL
 import IO
 import Data.Char
+import Control.Monad.Error
 }
 
 %token 
@@ -17,6 +18,8 @@ import Data.Char
       '('       { (L _ TKoparen) }
       ')'       { (L _ TKcparen) }
       '['       { (L _ TKobrak ) }
+      '{'       { (L _ TKocurly) }
+      '}'       { (L _ TKccurly) }
       ']'       { (L _ TKcbrak ) }
       '{'       { (L _ TKocurly) }
       '}'       { (L _ TKccurly) }
@@ -28,9 +31,6 @@ import Data.Char
 %lexer { lexer } { (L _ TKEOF) }
 %name parseProg  prog
 %name parseGoal  goal
-%name parseTerm  term
-%name parseTerms terms
-%name parse  prog
 %tokentype { (Located Token) }
 %% 
 
@@ -66,8 +66,6 @@ term :: { HoTerm }
      | '[' ']'               { hoEmptyList }
      | '[' terms ']'         { homkList (reverse (hoEmptyList:$2)) }
      | '[' terms '|' term ']' { homkList (reverse ($4:$2)) }
-     | '{' '}'               { undefined }
-     | '{' terms '}'         { undefined }
 
 terms  :: { [HoTerm] }
        : terms ',' term     { $3:$1 }
@@ -79,14 +77,10 @@ goal :: { HoGoal }
 {
 
 
-happyError :: Parser a
-happyError = P $ \PState{buffer=buf, loc=loc} -> PFailed loc ( (show loc) ++ ": Parse error near " ++ (show (take 10 buf)))
+-- happyError :: Parser a
+happyError = do
+    loc <- getPSrcLoc
+    buf <- getSrcBuf
+    throwError $ strMsg ((show loc) ++ ": Parse error near " ++ (show (take 10 buf))) 
 
-
-testParse str = 
-    case runP parse (mkState str) of
-        POk _ prog -> do
-                putStr (show prog)
-        PFailed _ err -> do
-                printError err
 }

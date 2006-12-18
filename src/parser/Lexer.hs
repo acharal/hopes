@@ -13,8 +13,6 @@ data Token =
     | TKvert
     | TKobrak
     | TKcbrak
-    | TKocurly
-    | TKccurly
     | TKwild
     | TKid String
     | TKEOF
@@ -23,30 +21,32 @@ data Token =
 isNameChar c = isAlpha c || isDigit c || (c == '_')
 isVar str = isUpper (head str)
 
-lexError :: Loc -> String -> Parser a
-lexError loc inp = setPLoc loc >> failP ("unrecognized character near "++show (take 5 inp))
+lexError :: String -> Parser a
+lexError inp = fail ("unrecognized character near "++show (take 5 inp))
 
 lexer :: (Located Token -> Parser a) -> Parser a
 lexer cont = lexToken >>= \tok -> cont tok
 
 lexToken :: Parser (Located Token)
 lexToken = do
-    inp <- getPInput
-    loc <- getPLoc
-    case scanTok inp loc of 
+    inp <- getSrcBuf
+    loc <- getSrcLoc
+    case scanTok inp loc of
         TokEnd -> do
-            return (L (LocSpan loc loc) TKEOF)
+            return (mkLoc loc loc TKEOF)
         TokError loc2 inp2 -> do
-            lexError loc2 inp2
+            lexError inp2
         TokSkip loc2 inp2 -> do
-            setPInput inp2
-            setPLoc loc2
+            setSrcBuf inp2
+            setPSrcLoc loc
+            setSrcLoc loc2
             lexToken
         Tok t len inp2 -> do
             let loc2 = loc{locOffset=(locOffset loc)+len}
-            setPInput inp2
-            setPLoc loc2
-            return (L (LocSpan loc loc2) t)
+            setSrcBuf inp2
+            setPSrcLoc loc
+            setSrcLoc loc2
+            return (mkLoc loc loc2 t)
 
 data ScanResult = 
     Tok Token Int String
@@ -64,8 +64,6 @@ scanTok ('(':cs) loc         = Tok TKoparen 1 cs
 scanTok (')':cs) loc         = Tok TKcparen 1 cs
 scanTok ('[':cs) loc         = Tok TKobrak  1 cs
 scanTok (']':cs) loc         = Tok TKcbrak  1 cs
-scanTok ('{':cs) loc         = Tok TKocurly 1 cs
-scanTok ('}':cs) loc         = Tok TKccurly 1 cs
 scanTok ('|':cs) loc         = Tok TKvert   1 cs
 scanTok (',':cs) loc         = Tok TKcomma  1 cs
 scanTok ('.':cs) loc         = Tok TKdot    1 cs

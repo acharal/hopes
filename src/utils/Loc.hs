@@ -34,6 +34,9 @@ startOfFile filename = Loc filename 1 0
 mkSpan :: Loc -> Loc -> LocSpan
 mkSpan = LocSpan
 
+mkLoc :: Loc -> Loc -> a -> Located a
+mkLoc l1 l2 a = L (mkSpan l1 l2) a
+
 combLoc :: Located a -> Located b -> LocSpan
 combLoc a b = combSpans (getLoc a) (getLoc b)
 

@@ -62,7 +62,7 @@ main1 = do
     hoprog <- parseFromIO parseProg fileH
     print hoprog
 
-main = main2
+main = main1
 
 transHOPLT :: HoTerm -> Term
 transHOPLT (HoVar v)    = Var v
