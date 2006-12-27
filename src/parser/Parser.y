@@ -117,7 +117,7 @@ type :: { LHpType }
 
 types :: {  [LHpType]  }
       : types ',' type          { $3:$1 }
-      | type                    { [$1] }
+      | type                    { [$1]  }
 
 tysig :: { LHpTySig }
       : ID tyann                { L (combLoc $1 $>) $ HpTySig (getName $1) $2 }
