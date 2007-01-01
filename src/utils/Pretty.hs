@@ -1,7 +1,8 @@
-module Ppr (
+module Pretty (
         Pretty(..),
         Message,
         pprint,
+        dcolon, arrow, dot,
         module Text.PrettyPrint
     ) where
 
@@ -14,3 +15,7 @@ class Pretty a where
 
 pprint :: Pretty a => a -> IO ()
 pprint a = print (ppr a)
+
+dcolon = text "::"
+arrow  = text "->"
+dot    = char '.'

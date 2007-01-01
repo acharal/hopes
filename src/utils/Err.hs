@@ -1,24 +1,26 @@
 module Err (
         ErrorT(..), throwError, catchError,
-        HopeError(..)
+        HpError(..)
     ) where
 
 import Loc
-import Ppr
+import Pretty
 
 import Control.Monad.Error
 import Control.Monad.State
 
-data HopeError = 
+data HpError = 
     ParseError Loc Message
+  | TypeError Message
   | Internal Message
 
-instance Error HopeError where
+instance Error HpError where
     strMsg str = Internal (text str)
 
 
-instance Pretty HopeError where
+instance Pretty HpError where
     ppr (Internal msg) = hang (text "Internal Error" <> colon) 4 msg
+    ppr (TypeError msg) = msg
     ppr (ParseError l msg) = hang ((ppr l) <> colon) 4 msg
 
 {-

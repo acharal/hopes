@@ -18,20 +18,21 @@ Main-Is:	Main.hs
 Hs-Source-Dirs:	src
 		src/parser
 		src/utils
-		src/lang
 		src/typecheck
 		src/prover
+		src/syntax
 Other-Modules:	Lexer
 		Parser
 		ParseUtils
-		ErrUtils
+		Utils
+		Err
 		Loc
-		HOPL
-		Types
-		TcUtils
+		Ppr
+		HpSyntax
+		CheckT
+		Tc
 		Refute
 		LogicT
 Extensions:	RankNTypes
-		OverlappingInstances
 Ghc-Options:	-O 
 

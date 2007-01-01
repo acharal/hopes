@@ -1,7 +1,7 @@
 module Loc where
 
 import Numeric (showInt)
-import Ppr
+import Pretty
 
 type Line = Int
 type Col  = Int

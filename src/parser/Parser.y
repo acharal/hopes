@@ -2,9 +2,11 @@
 module Parser where
 
 import Lexer
-import HpSyntax
+import HpSyn
+import Types
 import Utils
 import ParseUtils
+import Control.Monad.State
 
 }
 
@@ -31,12 +33,13 @@ import ParseUtils
 %monad { Parser } { >>= } { return }
 
 %right '->'
-
+%left '::'
+%left ID
 
 %% 
 
 src :: { HpSrc }
-    : stmts                     { HpSrc (reverse $1) }
+    : stmts                     { mkSrc (reverse $1) }
 
 stmt :: { LHpStmt }
      : clause                   { L (getLoc $1)     $ HpCl $1 }
@@ -73,19 +76,24 @@ conj :: { [LHpAtom] }
      | atom                     { [$1] }
 
 atom :: { LHpAtom }
-     : ID                       { L (getLoc $1)     $ HpAtom (getName $1) [] }
-     | ID '(' exps ')'          { L (combLoc $1 $>) $ HpAtom (getName $1) (reverse $3) }
+     : exp                      { L (getLoc $1)     $ HpAtom $1 }
      | '!'                      { L (getLoc $1)     $ HpCut }
 
 exp  :: { LHpExpr }
-     : term                     { L (getLoc $1)     $ HpTerm $1 }
-     | '(' exp ')'              { L (combLoc $1 $>) $ HpPar  $2 }
-     | exp tyann                { L (combLoc $1 $2) $ HpTyExp $1 $2 }
---     | exp term               { undefined } --shift/reduce with `ID ( terms )` rule
+     : '(' exp ')'              { L (combLoc $1 $>) $ HpPar  $2 }
+     | exp tyann                { L (combLoc $1 $>) $ HpTyExp $1 (unLoc $2) }
+     | ID                       { L (getLoc $1)     $ HpPred (getName $1) }
+     | exp '(' exps2 ')'        { L (combLoc $1 $>) $ HpApp $1 (reverse $3) }
+--     | exp ID exp               { L (combLoc $1 $>) $ HpApp (HpPred (getName $2)) ($1:$3:[])  }
 
-exps :: { [LHpExpr] }
-     : exps ',' exp             { $3:$1 }
-     | exp                      { [$1] }
+exp2 :: { LHpExpr }
+     : term                     { L (getLoc $1)     $ HpTerm $1 }
+     | '(' exp2 ')'             { L (combLoc $1 $>) $ HpPar  $2 }
+     | exp2 tyann               { L (combLoc $1 $2) $ HpTyExp $1 (unLoc $2) }
+
+exps2 :: { [LHpExpr] }
+     : exps2 ',' exp2           { $3:$1 }
+     | exp2                     { [$1] }
 
 term :: { LHpTerm }
      : ID                       { L (getLoc $1)     $ HpId (getName $1) }
@@ -120,16 +128,14 @@ types :: {  [LHpType]  }
       | type                    { [$1]  }
 
 tysig :: { LHpTySig }
-      : ID tyann                { L (combLoc $1 $>) $ HpTySig (getName $1) $2 }
+      : ID '/' ID tyann         { L (combLoc $1 $>) $ HpTySig (getName $1) (unLoc $4) }
 
-tyann :: { LHpType }
-      : '::' type               { $2 }
+tyann :: { Located Type }
+      : '::' type               {% mkTyp $2 >>= \t -> return (L (combLoc $1 $>) t) }
 
 {
 happyError = do
-    ltok <- getLastTok
-    tok <- getTok
-    buf <- getSrcBuf
+    tok <- gets cur_tok
     case unLoc tok of
         TKEOF -> throwError $ ParseError (spanBegin (getLoc tok)) (text "Unexpected end of input")
         _     -> throwError $ ParseError (spanBegin (getLoc tok)) (text ("Parse error in input " ++ show (unLoc tok)))

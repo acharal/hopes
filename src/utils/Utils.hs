@@ -1,9 +1,9 @@
 module Utils (
-        module Ppr,
+        module Pretty,
         module Loc,
         module Err
     ) where
 
 import Err
-import Ppr
+import Pretty
 import Loc
