@@ -1,8 +1,6 @@
 module Refute where
 
-import Logic
-import Hopl
-
+-- import HOPL
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Identity
@@ -10,6 +8,7 @@ import LogicT
 
 import List
 
+import Debug.Trace
 -- Syntax of a Higher Order Program
 
 type Var = String
@@ -32,15 +31,21 @@ type Prog = [Clause]
 
 type Goal = [Atom]
 
+
 instance Show Term where
     showsPrec n (Var v) = showString v
     showsPrec n (Pre v) = showString v
     showsPrec n (Con "__lnil") = showString "[]"
     showsPrec n (Con c) = showString c
     showsPrec n t@(Fun "s" [t']) = 
-        let countS (Fun "s" [t]) = 1 + (countS t)
-            countS (Con "0") = 0
-        in  shows (countS t)
+        let countS (Fun "s" [t]) =
+                let (c, t') = countS t
+                in  (c+1, t')
+            countS t = (0, t)
+            (c, t') = countS t
+        in case t' of
+                (Con "0") -> shows c
+                _ -> showsPrec n t' . showString "+" . shows c
     showsPrec n t@(Fun "__l" tl) = 
         let getLElems (Con "__lnil") = []
             getLElems (Fun "__l" [t1,t2]) = t1:(getLElems t2)
@@ -58,6 +63,7 @@ instance Show Term where
 
 instance Show Atom where
     showsPrec n (Atom t tl) = (shows t).(showString "(").(showTerms tl).(showString ")")
+
 
 showTerms []  = id
 showTerms [t] = (shows t)
@@ -176,9 +182,15 @@ listUnify lt lt' = fail ("Atoms " ++ (show lt) ++
 occurCheck :: Var -> Term -> Bool
 occurCheck v t = v `elem` (varsT t)
 
-
 --type RefuteM a = LogicT (StateT Int Identity) a
 type RefuteM a = StateT Int (LogicT Identity) a
+
+instance MonadLogic m => MonadLogic (StateT s m) where
+    msplit (StateT m) = StateT $ \s -> 
+                            msplit (m s) >>= \r ->
+                                case r of 
+                                    Nothing -> return (Nothing, s)
+                                    Just ((a, s'), m') -> return (Just (a, StateT $ \s -> m' ), s')
 
 prove :: Prog -> Goal -> RefuteM Subst
 prove p g = do
@@ -224,5 +236,5 @@ normA t = t
 newVar :: RefuteM Var
 newVar = do
     i <- get
-    modify (+1)
+    put (i+1)
     return ("_G"++(show i))

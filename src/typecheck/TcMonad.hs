@@ -11,6 +11,7 @@ import Loc
 
 import HpSyn
 import Types
+import Pretty
 
 data TcEnv =
     TcEnv { 
@@ -32,9 +33,14 @@ type Constraint = (TyVar, MonoType)
 type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages Identity))
 
 runTc m = 
-    runIdentity $ runErrorT $ runStateT (runReaderT m initEnv) initSt
-    where initSt  = TcState { loc = noLoc, uniq = 0, msgs = emptyMsgs, constr = [] }
+    case run of
+        Left msgs -> (Nothing, msgs)
+        Right (a, st) -> (Just a, msgs st)
+    where run = runIdentity $ runErrorT $ runStateT (runReaderT m initEnv) initSt
+          initSt  = TcState { loc = noLoc, uniq = 0, msgs = emptyMsgs, constr = [] }
           initEnv = TcEnv { tyenv = [], ctxt  = [] }
+
+runTcWithEnv env m = runTc (extendEnv env m)
 
 recoverTc :: Tc a -> Tc a -> Tc a
 recoverTc main recov = 
@@ -48,7 +54,7 @@ failIfErr = do
     when (hasErrs m) $ throwError m
 
 -- typeError :: Desc -> Tc ()
-typeError :: ErrDesc -> Tc ()
+typeError :: ErrDesc -> Tc a
 typeError err = do
     loc <- gets loc
     diagnosis <- asks ctxt
@@ -68,7 +74,7 @@ lookupVar :: HpName -> Tc Type
 lookupVar v = do
     ty_env <- asks tyenv
     case lookup v ty_env of
-        Nothing -> fail ("Variable " ++ show v ++ " out of scope")
+        Nothing -> typeError (sep [text "Variable", quotes (text v), text "out of scope"] )
         Just ty -> return ty
 
 lookupTyVar :: TyVar -> Tc (Maybe MonoType)

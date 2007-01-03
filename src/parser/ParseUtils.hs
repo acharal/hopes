@@ -5,6 +5,7 @@ import Types
 import Utils
 import List
 import Maybe
+import System.IO
 import Control.Monad.State
 import Control.Monad.Identity
 
@@ -43,11 +44,6 @@ data ParseState = PState {
     loc      :: Loc }
     deriving Show
 
-mkState :: String -> ParseState
-mkState inp = PState inp tok tok loc
-    where loc = Loc "unknown" 1 1
-          tok = undefined
-
 
 getSrcBuf :: Parser StringBuffer
 getSrcBuf = gets buffer
@@ -70,7 +66,21 @@ getLastTok = gets last_tok
 getTok :: Parser (Located Token)
 getTok = gets cur_tok
 
-runParser p = runErrorT.(runStateT p)
+runParser p s = runIdentity $ runErrorT $ runStateT p s
+
+parseFromFile p fname = do 
+    file <- openFile fname ReadMode
+    inp <- hGetContents file
+    let result = runParser p (mkStateWithFile inp fname)
+    return result
+
+
+mkStateWithFile inp file = PState inp tok tok loc
+    where loc = Loc file 1 1
+          tok = undefined
+
+mkState :: String -> ParseState
+mkState input = mkStateWithFile input "stdin"
 
 getName :: Located Token -> HpName
 getName (L _ (TKid x)) = x

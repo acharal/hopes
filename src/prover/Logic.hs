@@ -1,10 +1,10 @@
 {-# OPTIONS -fglasgow-exts #-}
 
-module LogicT where
+module Logic where
 
 import Control.Monad
 import Control.Monad.Trans
-import Debug.Trace
+import Control.Monad.State
 
 class MonadPlus m => MonadLogic m where
     msplit :: m a -> m (Maybe (a, m a))
@@ -67,8 +67,17 @@ reflect r = case r of
                 Nothing -> mzero
                 Just (a,tmr) -> return a `mplus` tmr
 
+instance MonadLogic m => MonadLogic (StateT s m) where
+    msplit (StateT m) =
+        StateT $ \s -> 
+            msplit (m s) >>= \r ->
+                case r of 
+                    Nothing -> return (Nothing, s)
+                    Just ((a, s'), m') ->
+                        return (Just (a, StateT $ \s -> m' ), s')
 
-runL:: (Monad m) => Maybe Int -> LogicT m a -> m [a]
+
+runL :: (Monad m) => Maybe Int -> LogicT m a -> m [a]
 runL Nothing (SFKT m) = m (\a fk -> fk >>= (return . (a:))) (return [])
 runL (Just n) (SFKT m) | n <=0 = return []
 runL (Just 1) (SFKT m) = m (\a fk -> return [a]) (return [])

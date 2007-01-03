@@ -8,6 +8,7 @@ import ParseUtils
 import Control.Monad.Identity
 
 import Utils
+import Hopl
 
 --import Tc
 import Tc
@@ -15,18 +16,19 @@ import Tc
 import HpSyn
 
 main = do
-    (a:_) <- getArgs
-    h <- openFile a ReadMode
-    c <- hGetContents h
-    case runIdentity $ runParser parseSrc (mkState c) of
+    (f:_) <- getArgs
+    pres  <- parseFromFile parseSrc f
+    case pres of
 	Right (p,s) -> do
             pprint p
             case runTc (tcSource p) of
-                Right ((p', env),_) -> print $ ppr_env env
-                Left e -> pprint $ vcat (map ppr (processMsgs e))
+                (Just (p', env),msg) -> do
+                    print $ ppr_env env
+                    print $ runSimple (simplifyProg p')
+                (Nothing, msg) -> pprint $ vcat (map ppr (processMsgs msg))
             return ()
-	Left e ->
-            pprint $ vcat (map ppr (processMsgs e))
+	Left msgs ->
+            pprint $ vcat (map ppr (processMsgs msgs))
 
 ppr_env env = vcat (map ppr_aux env)
     where ppr_aux (v, t) = hang ((text v) <+> (text "::")) (length v + 4) (ppr t)
