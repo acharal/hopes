@@ -35,6 +35,9 @@ getLoc (L l _) = l
 mkLoc :: Loc -> Loc -> a -> Located a
 mkLoc l1 l2 a = L (mkSpan l1 l2) a
 
+noLoc :: Loc
+noLoc = Loc "" 0 0
+
 mkSpan :: Loc -> Loc -> LocSpan
 mkSpan l1 l2 =
     if locFile l1  == locFile l2 then
@@ -63,7 +66,7 @@ instance Pretty Loc where
 
 instance Pretty LocSpan where
     ppr (OneLineSpan f l c1 c2) =
-        hcat $ punctuate colon [ text f, int l, int c1 <> char '-' <> int c2 ]
+        hcat $ punctuate colon [ text f, int l, parens $ int c1 <> char '-' <> int c2 ]
     ppr (MultiLineSpan f l1 c1 l2 c2) = 
         hcat $ punctuate colon [ text f, ppr_par l1 c1 <> char '-' <> ppr_par l2 c2 ]
         where ppr_par l c = parens (int l <> comma <> int c)

@@ -1,49 +1,211 @@
-module Tc where
+module Tc (
+        module Tc,
+        module TcMonad
+    ) where
 
-import HpSyn
-import Utils
-import Check
+import TcMonad
 import Types
-import Maybe
-import List 
+import HpSyn
+import Err
+import Loc
+import Pretty
+import Monad    (zipWithM, zipWithM_, when)
+import List     (nub, partition)
+import Maybe    (catMaybes)
 
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Identity
+import Control.Monad.Reader (asks)
+import Control.Monad.State  (gets)
 
 import Debug.Trace
 
-type Constraint = (TyVar, MonoType)
+tcSource :: HpSource -> Tc (HpSource, TypeEnv)
+tcSource src = do
+    let tysign = map (\(L _ (HpTySig v t)) -> (v, t)) (tysigs src)
+    let cls    = clauses src
+    let preds  = nub $ catMaybes $ map (getPred.headC) cls
+    tv <- mapM (\p-> newTyVar >>= generalize >>= \t -> return (p, t)) preds
+    extendEnv tv $ do
+    extendEnv tysign $ do
+        --let clcode x = recoverTc (tcClause x) (return x)
+        let clcode = tcClause
+        let dfcode x = recoverTc (dfClause x) (return ())
+        cls' <- mapM (\x -> wrapLoc x clcode) cls
+        ty_env <- asks tyenv
+        constr <- gets constr
+        failIfErr
+        mapM_ (\x -> wrapLoc x dfcode) cls'
+        failIfErr
+        ty_env' <- normEnv ty_env
+        return (src { clauses = cls' }, ty_env')
 
-type TcCS = [Constraint]            -- constraint set
 
-type TypeEnv = [(HpName, Type)]        -- assumption set
+-- check if HpClause is definitional
+dfClause :: LHpClause -> Tc ()
+dfClause cl@(L loc (HpClaus h b)) = 
+    let argstys (TyFun args_ty res_ty) = argstys' args_ty ++ argstys res_ty
+        argstys t = []
+        argstys' (TyTup tl) = tl
+        argstys' t = [t]
+        onlyHigher (v, t) = isHigh t
+        isHigh (TyFun _ _) = True
+        isHigh _ = False
+        occu [] = []
+        occu (x:xs) =
+            let (same, rest) = partition (==x) (x:xs)
+            in (x, (length same)):(occu rest)
+        takeVars ((L _ (HpTerm (L _ (HpVar v)))):rest) = if isBound v then v:(takeVars rest) else (takeVars rest)
+        takeVars ((L _ _):rest) = takeVars rest
+        takeVars [] = []
+    in do
+    inCtxt (clauseCtxt cl) $ do
+    let args = argsAtom h
+    let free = filter (not.isBound) $ concatMap varsExpr args
+    when (not (null free)) $
+        predInHeadErr free
 
-type Tc = ErrorT HpError (ReaderT TypeEnv (StateT TcState Identity))
+    pred_ty <- normTy =<< lookupVar (predAtom h)
+    let args_tys = argstys pred_ty
+    let hilist   = map fst $ filter onlyHigher $ zip args (args_tys)
+    let occlist  = filter ((>1).snd) $ occu $ takeVars hilist
 
-data TcState = TcState { uniq::Int, cs::TcCS }
+    when (not (null occlist)) $ 
+        manyHigherOccurErr occlist
+    return ()
+
+tcClause, tcClause' :: LHpClause -> Tc LHpClause
+
+tcClause clause =
+    inCtxt (clauseCtxt clause) (tcClause' clause)
+
+tcClause' c@(L loc (HpClaus h b)) = do
+    let vars = boundVarSet c
+    ts <- mapM (\v-> newTyVar >>= generalize >>= \t -> return (v,t)) vars
+    extendEnv ts $ do
+        h' <- tcAtom h
+        b' <- mapM tcAtom b
+        return (L loc (HpClaus h' b'))
+
+tcAtom :: LHpAtom -> Tc LHpAtom
+tcAtom atom = 
+    inCtxt (atomCtxt atom) (tcAtom' atom)
+
+tcAtom' :: LHpAtom -> Tc LHpAtom
+tcAtom' (L loc (HpAtom e)) = do
+    e' <- tcExpr e tyBool
+    return (L loc (HpAtom e'))
+
+tcAtom' e = return e
+
+tiExpr :: LHpExpr -> Tc MonoType
+tiExpr e = do
+    var_ty <- newTyVar
+    tcExpr e var_ty
+    return var_ty
+
+tcExpr :: LHpExpr -> MonoType -> Tc LHpExpr
+
+tcExpr (L loc (HpTerm t)) exp_ty = do
+    t' <- tcTerm t exp_ty
+    return (L loc (HpTerm t'))
+
+tcExpr (L loc (HpPar  e)) exp_ty = do
+    e' <- tcExpr e exp_ty
+    return (L loc (HpPar e'))
+
+tcExpr (L loc (HpAnno e ty)) exp_ty = do
+    ann_ty <- instantiate ty
+    e' <- tcExpr e ann_ty
+    unify ann_ty exp_ty
+    return (L loc (HpAnno e' ty))
+
+tcExpr (L loc (HpApp e args)) exp_ty = do
+    fun_ty <- tiExpr e
+    (args_ty, res_ty) <- unifyFun (length args) fun_ty
+    args' <- zipWithM tcExpr args args_ty
+    unify res_ty exp_ty
+    return (L loc (HpApp e args'))
+
+tcExpr (L loc (HpPred p)) exp_ty = do
+    pred_ty <- instantiate =<< lookupVar p
+    unify pred_ty exp_ty
+    return (L loc (HpPred p))
+
+tcTerm term exp_ty = do
+    inCtxt (termCtxt term) $
+        tcTerm' term exp_ty
+
+tcTerm' (L loc (HpCon c)) exp_ty = do
+    unify tyAll exp_ty
+    return (L loc (HpCon c))
+
+tcTerm' (L loc (HpVar v)) exp_ty = do
+    var_ty <- lookupVar v
+    unify var_ty exp_ty
+    return (L loc (HpVar v))
+
+tcTerm' (L loc (HpFun f tl)) exp_ty = do
+    tl' <- mapM (\t -> tcTerm t tyAll) tl 
+    unify tyAll exp_ty
+    return (L loc (HpFun f tl'))
+
+tcTerm' (L loc (HpList tl maybe_t)) exp_ty = do
+    tl' <- mapM (\t -> tcTerm t tyAll) tl
+    maybe_t' <- case maybe_t of
+                    Nothing -> return Nothing
+                    Just t ->  tcTerm t tyAll >>= return.Just
+    unify tyAll exp_ty
+    return (L loc (HpList tl' maybe_t'))
+
+tcTerm' (L loc (HpTup tl)) exp_ty = do
+    tl' <- mapM (\t -> tcTerm t tyAll) tl
+    unify tyAll exp_ty
+    return (L loc (HpTup tl'))
+
+tcTerm' t@(L loc HpWild) exp_ty = return t
 
 
-newTyVar :: Tc MonoType
-newTyVar = do
-    st <- get
-    let n = uniq st
-    put st{uniq=n+1}
-    return (TyVar n)
+unify :: MonoType -> MonoType -> Tc ()
+unify (TyVar v1) t@(TyVar v2)
+    | v1 == v2    = return ()
+    | otherwise   = unifyVar v1 t
 
-extendEnv l m = local (\r -> l++r) m
+unify (TyVar v) t = unifyVar v t
+unify t (TyVar v) = unifyVar v t
 
-lookupVar v = do
-    env <- ask
-    case lookup v env of
-        Just a  -> return a
-        Nothing -> fail ("Variable "++v++" not in scope")
+unify (TyFun fun1 arg1) (TyFun fun2 arg2) =
+    unify fun1 fun2 >> unify arg1 arg2
 
-lookupTyVar tv = do
-    st <- get
-    return $ lookup tv (cs st)
+unify t@(TyTup tys) t'@(TyTup tys')
+    | length tys == length tys' = zipWithM_ unify tys tys'
+    | otherwise                 = unificationErr t t'
+unify t t'
+    | t == t'     = return ()
+    | otherwise   = unificationErr t t'
 
-addConstraint tv ty = modify (\st -> st{cs=(tv,ty):(cs st)})
+
+unifyFun n t = do
+    arg_tys <- sequence (replicate n newTyVar)
+    res_ty <- newTyVar
+    let args_ty = if n > 1 then TyTup arg_tys else (head arg_tys)
+    unify (TyFun args_ty res_ty) t
+    return (arg_tys, res_ty)
+
+unifyVar v t = do
+    maybe_ty <- lookupTyVar v
+    case maybe_ty of
+        Nothing -> varBind v t
+        Just t' -> unify t' t
+
+varBind  v1 t@(TyVar v2) = do
+    maybe_ty <- lookupTyVar v2
+    case maybe_ty of
+        Nothing -> addConstraint v1 t
+        Just ty -> unify (TyVar v1) ty
+
+varBind v ty = do
+    tvs <- getTyVars ty
+    if (v `elem` tvs) then occurCheckErr v ty else addConstraint v ty
+
 
 instantiate :: Type -> Tc MonoType
 instantiate t = return t
@@ -51,166 +213,72 @@ instantiate t = return t
 generalize :: MonoType -> Tc Type
 generalize t = return t
 
-runTc m = runIdentity $ runStateT (runReaderT (runErrorT m) []) initState
-    where initState = TcState 0 []
-
-tycheckP src =
-    let 
-        cl = map unLoc (clauses src)
-        preds = nub $ catMaybes $ map (getPred.getHead) cl
-    in do
-        tv <- mapM (\p-> newTyVar >>= \t -> return (p, t)) preds
-        env <- extendEnv tv (mapM tycheckC cl >> ask)
-        constraints <- gets cs
-        trace (show constraints ++ show env) $
-            return (env `subst` constraints)
-
-subst [] _ = []
-subst ((v,t):rest) constraints = (v, substT t):(subst rest constraints)
-    where substT (TyFun t t') = TyFun (substT t) (substT t')
-          substT (TyVar tv) =
-                case lookup tv constraints of
-                    Just t -> substT t
-                    Nothing -> TyVar tv
-          substT (TyTup tl) = TyTup (map substT tl)
-          substT t = t
-
-tycheckC c@(HpClaus h b) = do
-    let vars = getBoundedVars c
-    ts <- sequence (replicate (length vars) (newTyVar>>=generalize))
-    extendEnv (zip vars ts) (do { tycheckA (unLoc h); tycheckAL b} )
-
-tycheckA (HpAtom e) = do
-    tycheckE (unLoc e) (TyCon TyBool)
-
-tycheckA (HpCut) = return ()
-
-tycheckAL [] = return ()
-tycheckAL (a:as) = do
-    tycheckA (unLoc a)
-    tycheckAL as
-
-tyinferE expr = do
-    exp_ty <- newTyVar
-    tycheckE expr exp_ty
-    return exp_ty
-
-tycheckE (HpTerm t) exp_ty =
-    tycheckT (unLoc t) exp_ty
-
-tycheckE (HpPar e) exp_ty =
-    tycheckE (unLoc e) exp_ty
-
-tycheckE (HpPred p) exp_ty =
-    tycheckT (HpVar p) exp_ty
-
-tycheckE (HpTyExp e ann_ty) exp_ty = do
-    ann_ty' <- instantiate ann_ty
-    tycheckE (unLoc e) ann_ty'
-    tyunify ann_ty' exp_ty
-    return ()
-
-tycheckE (HpApp exp exps) exp_ty = do
-    fun_ty <- tyinferE (unLoc exp)
-    (arg_ty, res_ty) <- tyunifyFun fun_ty
-    tup_ty <- tyunifyL (length exps) arg_ty
-    -- tycheckE exps arg_ty
-    mapM_ (\(e,t) -> tycheckE (unLoc e) t) (zip exps tup_ty)
-    tyunify res_ty exp_ty
-
-tycheckT (HpCon c)    exp_ty = tyunify (TyCon TyAll) exp_ty
-tycheckT (HpVar v)    exp_ty = do
-    var_ty <- lookupVar v >>= instantiate
-    tyunify var_ty exp_ty
-
-tycheckT (HpId v) exp_ty = tycheckT (HpVar v) exp_ty
-
-tycheckT (HpFun _ tl) exp_ty = do
-    mapM_ (\(e,t) -> tycheckT (unLoc e) t) (zip tl (repeat (TyCon TyAll)))
-    tyunify (TyCon TyAll) exp_ty
-
-tycheckT (HpTup tl) exp_ty = do
-    mapM_ (\(e,t) -> tycheckT (unLoc e) t) (zip tl (repeat (TyCon TyAll)))
-    tyunify (TyCon TyAll) exp_ty
-
-tycheckT (HpList tl maybe_t) exp_ty = do
-    mapM_ (\(e,t) -> tycheckT (unLoc e) t) (zip tl (repeat (TyCon TyAll)))
-    case maybe_t of
-        Just t -> tycheckT (unLoc t) (TyCon TyAll)
-        Nothing -> return ()
-    tyunify (TyCon TyAll) exp_ty
-
-tycheckT (HpWild) exp_ty = return ()
-
-tyunify :: MonoType -> MonoType -> Tc ()
-tyunify (TyFun arg1 res1) (TyFun arg2 res2) = do
-    tyunify arg1 arg2
-    tyunify res1 res2
-
-tyunify (TyTup tl) (TyTup tl') = do
-    check (length tl == length tl') $ (TypeError (text ""))
-    mapM_ (\(t,t') -> tyunify t t') (zip tl tl')
-
-tyunify (TyVar v) (TyVar v')
-    | v == v' = return ()
-
-tyunify (TyVar v) t = tyunifyVar v t
-tyunify t (TyVar v) = tyunifyVar v t
-
-tyunify t t' = 
-    check (t == t') (TypeError (sep [ text "Cannot Unify types:", ppr t, text "and", ppr t']))
-
-tyunifyVar v t = do
-    maybe_ty <- lookupTyVar v
-    case maybe_ty of
-        Nothing -> tyunifyUVar v t
-        Just t' -> tyunify t' t
-
-tyunifyUVar v1 t@(TyVar v2) = do
-    maybe_ty <- lookupTyVar v2
-    case maybe_ty of
-        Nothing -> addConstraint v1 t
-        Just ty -> tyunify (TyVar v1) ty
-
-tyunifyUVar v1 ty = do
-    tvs <- getTyTvs ty
-    check (v1 `notElem` tvs) (TypeError (text "occurcheck"))
-    addConstraint v1 ty
-
-getTyTvs (TyVar v) = do
+getTyVars :: MonoType -> Tc [TyVar]
+getTyVars (TyVar v) = do
     maybe_ty <- lookupTyVar v
     case maybe_ty of
         Nothing -> return [v]
-        Just ty' -> getTyTvs ty' >>= \tvs' -> return (v:tvs')
+        Just ty' -> getTyVars ty' >>= \tvs' -> return (v:tvs')
 
-getTyTvs (TyFun ty1 ty2) = do
-    tvs1 <- getTyTvs ty1
-    tvs2 <- getTyTvs ty2
+getTyVars (TyFun ty1 ty2) = do
+    tvs1 <- getTyVars ty1
+    tvs2 <- getTyVars ty2
     return (tvs1 ++ tvs2)
 
-getTyTvs (TyTup tl) = do
-    l <- mapM getTyTvs tl
+getTyVars (TyTup tl) = do
+    l <- mapM getTyVars tl
     return (concat l)
 
-getTyTvs (TyCon _) = return []
+getTyVars (TyCon _) = return []
 
-tyunifyFun (TyFun arg_ty res_ty) = return (arg_ty, res_ty)
-tyunifyFun ty = do
-    arg_ty <- newTyVar
-    res_ty <- newTyVar
-    tyunify ty (TyFun arg_ty res_ty)
-    return (arg_ty, res_ty)
 
-tyunifyL m t@(TyTup tl) = do
-    check (m == length tl) (TypeError (text "expected type:" <+> ppr t))
-    return tl
+normEnv :: TypeEnv -> Tc TypeEnv
+normEnv [] = return []
+normEnv ((v,t):rest) = do
+    t' <- normTy t
+    r' <- normEnv rest
+    return ((v,t'):r')
 
-tyunifyL 1 t = do
-    t' <- newTyVar
-    tyunify t' t
-    return [t']
+normTy :: MonoType -> Tc MonoType
+normTy (TyFun t1 t2) = do
+    t1' <- normTy t1
+    t2' <- normTy t2
+    return $ TyFun t1' t2'
 
-tyunifyL m t = do
-    tl <- sequence (replicate m newTyVar)
-    tyunify (TyTup tl) t
-    return tl
+normTy (TyVar tv) = do
+    ty <- lookupTyVar tv
+    case ty of
+        Just t -> normTy t
+        Nothing -> return $ TyVar tv
+
+normTy (TyTup tl) = do
+    tl' <- mapM (\t -> normTy t) tl
+    return $ TyTup tl'
+
+normTy t = return t
+
+zonkEnv [] = return []
+zonkTy t = 
+
+unificationErr inf_ty exp_ty = do
+        inf_ty' <- normTy inf_ty
+        exp_ty' <- normTy exp_ty
+        let desc = hang (text "Could not match types:") 4 
+                        (vcat [ text "Inferred:" <+> ppr inf_ty', 
+                                text "Expected:" <+> ppr exp_ty' ])
+        typeError desc
+
+
+occurCheckErr tv ty = typeError (text "Could not construct an infinite type")
+
+predInHeadErr preds = typeError (sep ([text "Predicate variables",
+                                      nest 4 (sep (punctuate comma (map (quotes.text) preds))),
+                                      text "must not occur as arguments in the head of a rule"]))
+
+manyHigherOccurErr occlist = typeError (sep ([text "Higher order bound variables",
+                                              nest 4 (sep (punctuate comma (map (quotes.text.fst) occlist))),
+                                              text "must occur only once as arguments in the head of a rule"]))
+
+clauseCtxt lcl@(L loc cl) = hang (if isFactC lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
+atomCtxt (L loc atom) = hang (text "In atom:") 4 (ppr atom)
+termCtxt (L loc term) = hang (text "In term:") 4 (ppr term)

@@ -32,31 +32,7 @@ data Token =
     | TKEOF
    deriving Eq
 
-instance Show Token where
-    showsPrec n (TKoparen) = showString "("
-    showsPrec n (TKcparen) = showString ")"
-    showsPrec n (TKgets)   = showString ":-"
-    showsPrec n (TKdot)    = showString "."
-    showsPrec n (TKcomma)  = showString ","
-    showsPrec n (TKvert)   = showString "|"
-    showsPrec n (TKobrak)  = showString "["
-    showsPrec n (TKcbrak)  = showString "]"
-    showsPrec n (TKocurly) = showString "{"
-    showsPrec n (TKccurly) = showString "}"
-    showsPrec n (TKwild)   = showString "_"
-    showsPrec n (TKcolcol) = showString "::"
-    showsPrec n (TKsemi)   = showString ";"
-    showsPrec n (TKcut)    = showString "!"
-    showsPrec n (TKslash)  = showString "/"
-    showsPrec n (TKbslash) = showString "\\"
-    showsPrec n (TKarrow)  = showString "->"
-    showsPrec n (TKid s)   = showString s
-
-type LTok = Located Token
-
-mkLTk = mkLoc
-
-type Parser = StateT ParseState (ErrorT HpError Identity)
+type Parser = StateT ParseState (ErrorT Messages Identity)
 --type Parser m = StateT ParseState (ErrorT HopeError m)
 
 data ParseState = PState {
@@ -116,9 +92,9 @@ mkTyp (L _ (HpTyTup tl))   = do
         [t] -> return t 
         _ -> return (TyTup tl')
 
-mkTyp (L l t) = throwError $ ParseError (spanBegin l) (text "Not a valid type")
+mkTyp (L l t) = parseError (spanBegin l) (sep [quotes (ppr t), text "is not a valid type"])
 
-mkSrc :: [LHpStmt] -> HpSrc
+mkSrc :: [LHpStmt] -> HpSource
 mkSrc stmts = 
     let splitStmts (x:xs) = 
             let (cls', tys') = splitStmts xs
@@ -127,7 +103,7 @@ mkSrc stmts =
                   HpCl cl -> (cl:cls', tys')
         splitStmts [] = ([],[])
         (cls, tys) = splitStmts stmts
-        preds = catMaybes $ map (getPred.getHead.unLoc) cls
+        preds = catMaybes $ map (getPred.headC) cls
         cls' = map (processCl preds) cls
         processCl vars (L loc (HpClaus h b)) =
             L loc $ HpClaus (processA vars h) (map (processA vars) b)
@@ -136,7 +112,7 @@ mkSrc stmts =
         processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
         processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
         processE vars (L loc (HpApp e el))  = L loc (HpApp (processE vars e) (map (processE vars) el))
-        processE vars (L loc (HpTyExp e t)) = L loc (HpTyExp (processE vars e) t)
+        processE vars (L loc (HpAnno e t))  = L loc (HpAnno (processE vars e) t)
         processE vars (L loc (HpTerm t))    = L loc (HpTerm (processT vars t))
         processE vars le = le
         processT vars (L loc (HpId v))
@@ -150,8 +126,32 @@ mkSrc stmts =
         processT vars lt = lt
     in  HpSrc { tysigs = tys, clauses = cls' }
 
-{-
 
-prog <- parseProg `catchError` (\e -> print e)
+parseError loc msg = throwError $ mkMsgs $ mkLocErr loc ParseError Failure msg []
 
--}
+instance Show Token where
+    showsPrec n (TKoparen) = showString "("
+    showsPrec n (TKcparen) = showString ")"
+    showsPrec n (TKgets)   = showString ":-"
+    showsPrec n (TKdot)    = showString "."
+    showsPrec n (TKcomma)  = showString ","
+    showsPrec n (TKvert)   = showString "|"
+    showsPrec n (TKobrak)  = showString "["
+    showsPrec n (TKcbrak)  = showString "]"
+    showsPrec n (TKocurly) = showString "{"
+    showsPrec n (TKccurly) = showString "}"
+    showsPrec n (TKwild)   = showString "_"
+    showsPrec n (TKcolcol) = showString "::"
+    showsPrec n (TKsemi)   = showString ";"
+    showsPrec n (TKcut)    = showString "!"
+    showsPrec n (TKslash)  = showString "/"
+    showsPrec n (TKbslash) = showString "\\"
+    showsPrec n (TKarrow)  = showString "->"
+    showsPrec n (TKid s)   = showString s
+
+type LTok = Located Token
+
+mkLTk = mkLoc
+
+instance Pretty Token where
+    ppr t = text (show t)

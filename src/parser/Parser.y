@@ -38,7 +38,7 @@ import Control.Monad.State
 
 %% 
 
-src :: { HpSrc }
+src :: { HpSource }
     : stmts                     { mkSrc (reverse $1) }
 
 stmt :: { LHpStmt }
@@ -49,18 +49,18 @@ stmts :: { [LHpStmt] }
       : stmts stmt              { $2:$1 }
       |                         { [] }
 
-clause :: { LHpClaus }
+clause :: { LHpClause }
        : rule                   { $1 }
        | fact                   { $1 }
 
-clauses :: { [LHpClaus] }
+clauses :: { [LHpClause] }
         : clauses clause        { $2:$1 }
         |                       { [] }
 
-fact :: { LHpClaus }
+fact :: { LHpClause }
      : atom '.'                 { L (combLoc $1 $>) $ HpClaus $1 [] }
 
-rule :: { LHpClaus }
+rule :: { LHpClause }
      : atom ':-' body '.'       { L (combLoc $1 $>) $ HpClaus $1 $3 }
 
 term :: { HoTerm }
@@ -81,7 +81,7 @@ atom :: { LHpAtom }
 
 exp  :: { LHpExpr }
      : '(' exp ')'              { L (combLoc $1 $>) $ HpPar  $2 }
-     | exp tyann                { L (combLoc $1 $>) $ HpTyExp $1 (unLoc $2) }
+     | exp tyann                { L (combLoc $1 $>) $ HpAnno $1 (unLoc $2) }
      | ID                       { L (getLoc $1)     $ HpPred (getName $1) }
      | exp '(' exps2 ')'        { L (combLoc $1 $>) $ HpApp $1 (reverse $3) }
 --     | exp ID exp               { L (combLoc $1 $>) $ HpApp (HpPred (getName $2)) ($1:$3:[])  }
@@ -89,7 +89,7 @@ exp  :: { LHpExpr }
 exp2 :: { LHpExpr }
      : term                     { L (getLoc $1)     $ HpTerm $1 }
      | '(' exp2 ')'             { L (combLoc $1 $>) $ HpPar  $2 }
-     | exp2 tyann               { L (combLoc $1 $2) $ HpTyExp $1 (unLoc $2) }
+     | exp2 tyann               { L (combLoc $1 $2) $ HpAnno $1 (unLoc $2) }
 
 exps2 :: { [LHpExpr] }
      : exps2 ',' exp2           { $3:$1 }
@@ -127,7 +127,7 @@ types :: {  [LHpType]  }
       : types ',' type          { $3:$1 }
       | type                    { [$1]  }
 
-tysig :: { LHpTySig }
+tysig :: { LHpTySign }
       : ID '/' ID tyann         { L (combLoc $1 $>) $ HpTySig (getName $1) (unLoc $4) }
 
 tyann :: { Located Type }
@@ -137,6 +137,6 @@ tyann :: { Located Type }
 happyError = do
     tok <- gets cur_tok
     case unLoc tok of
-        TKEOF -> throwError $ ParseError (spanBegin (getLoc tok)) (text "Unexpected end of input")
-        _     -> throwError $ ParseError (spanBegin (getLoc tok)) (text ("Parse error in input " ++ show (unLoc tok)))
+        TKEOF -> parseError (spanBegin $ getLoc tok) (text "unexpected end of input")
+        _     -> parseError (spanBegin $ getLoc tok) (sep [ text "parse error on input", quotes (ppr (unLoc tok)) ])
 }

@@ -11,20 +11,20 @@ import Pretty
 
 type HpName = String
 
-data HpSrc = HpSrc {
-        tysigs  :: [LHpTySig],
-        clauses :: [LHpClaus]
+data HpSource = HpSrc {
+        tysigs  :: [LHpTySign],
+        clauses :: [LHpClause]
     } deriving Show
 
 data HpStmt   =
-      HpCl LHpClaus      -- clause
-    | HpTS LHpTySig      -- type signature
+      HpCl LHpClause      -- clause
+    | HpTS LHpTySign      -- type signature
   deriving Show
 
-data HpTySig  = HpTySig HpName Type
+data HpTySign = HpTySig HpName Type
   deriving Show
 
-data HpClaus  = HpClaus LHpAtom HpBody
+data HpClause = HpClaus LHpAtom HpBody
   deriving Show
 
 type HpBody   = [LHpAtom]
@@ -37,7 +37,7 @@ data HpAtom   =
 
 data HpExpr   = 
       HpTerm  LHpTerm
-    | HpTyExp LHpExpr Type
+    | HpAnno  LHpExpr Type
     | HpPar   LHpExpr
     | HpApp   LHpExpr [LHpExpr]
     | HpPred  HpName
@@ -63,91 +63,112 @@ data HpType   =
   deriving Show
 
 
-type LHpSrc   = Located HpSrc
-type LHpStmt  = Located HpStmt
-type LHpClaus = Located HpClaus
-type LHpTySig = Located HpTySig
-type LHpExpr  = Located HpExpr
-type LHpAtom  = Located HpAtom
-type LHpTerm  = Located HpTerm
-type LHpType  = Located HpType
-type LHpBody  = Located HpBody
+type LHpSource = Located HpSource
+type LHpStmt   = Located HpStmt
+type LHpClause = Located HpClause
+type LHpTySign = Located HpTySign
+type LHpExpr   = Located HpExpr
+type LHpAtom   = Located HpAtom
+type LHpTerm   = Located HpTerm
+type LHpType   = Located HpType
+type LHpBody   = Located HpBody
 
 isBound :: HpName -> Bool
 isBound = isUpper . head
 
-getVarsT :: HpTerm -> [HpName]
-getVarsT (HpVar v) = [v]
-getVarsT (HpFun f tl) = concatMap (getVarsT.unLoc) tl
-getVarsT (HpList tl mbt) = concatMap (getVarsT.unLoc) tl ++ maybe [] (getVarsT.unLoc) mbt
-getVarsT (HpTup tl) = concatMap (getVarsT.unLoc) tl
-getVarsT (HpSet tl) = concatMap (getVarsT.unLoc) tl
-getVarsT _ = []
 
-getVarsE (HpPar e) = getVarsE (unLoc e)
-getVarsE (HpApp e el) = concatMap (getVarsE.unLoc) (e:el)
-getVarsE (HpPred p) = [p]
-getVarsE (HpTerm t) = getVarsT (unLoc t)
-getVarsE (HpTyExp e t) = getVarsE (unLoc e)
+varsTerm (L _ (HpVar v))  = [v]
+varsTerm (L _ (HpTup tl)) = concatMap varsTerm tl
+varsTerm (L _ (HpSet tl)) = concatMap varsTerm tl
+varsTerm (L _ (HpFun f tl)) = concatMap varsTerm tl
+varsTerm (L _ (HpList tl mbt)) = 
+    concatMap varsTerm tl ++ 
+    maybe [] varsTerm mbt
+varsTerm _ = []
 
-
-getVarsA (HpAtom e) = getVarsE (unLoc e)
-getVarsA _ = []
-
-getVars (HpClaus h b) = concatMap (getVarsA.unLoc) (h:b)
-
-getBoundedVars c = filter isBound (getVars c)
+varsExpr (L _ (HpPar e))    = varsExpr e
+varsExpr (L _ (HpApp e el)) = concatMap varsExpr (e:el)
+varsExpr (L _ (HpPred p))   = [p]
+varsExpr (L _ (HpTerm t))   = varsTerm t
+varsExpr (L _ (HpAnno e t)) = varsExpr e
 
 
-getPred :: HpAtom -> Maybe HpName
-getPred (HpAtom le) = 
+varsAtom (L _ (HpAtom e)) = varsExpr e
+varsAtom _ = []
+
+varsClause (L _ (HpClaus h b)) = concatMap (varsAtom) (h:b)
+
+argsAtom (L _ (HpAtom e)) = go e
+    where go (L _ (HpApp e args)) = go e ++ args
+          go (L _ (HpPred _)) = []
+          go e = [e]
+
+boundVarSet c = filter isBound (varsClause c)
+
+predAtom a =
+    case getPred a of
+        Nothing -> error ("not expected")
+        Just p -> p
+
+getPred :: LHpAtom -> Maybe HpName
+getPred (L _ (HpAtom le)) = 
     let getPE (HpApp e _) = getPE (unLoc e)
         getPE (HpPred p)   = Just p
         getPE _            = Nothing
     in  getPE (unLoc le)
 getPred _ = Nothing
 
-getHead :: HpClaus -> HpAtom
-getHead (HpClaus h b) = unLoc h
+headC :: LHpClause -> LHpAtom
+headC (L _ (HpClaus h b)) = h
+
+bodyC :: LHpClause -> [LHpAtom]
+bodyC (L _ (HpClaus h b)) = b
+
+isFactC :: LHpClause -> Bool
+isFactC cl = null (bodyC cl)
 
 {- pretty printing -}
 
 instance Pretty HpExpr where
     ppr (HpTerm t)     = ppr (unLoc t)
-    ppr (HpTyExp e ty) = hsep [ ppr (unLoc e), dcolon, ppr ty ]
+    ppr (HpAnno e ty) = hsep [ ppr (unLoc e), dcolon, ppr ty ]
     ppr (HpPar e)      = parens (ppr (unLoc e))
     ppr (HpPred n)     = text n
     ppr (HpApp e es)   = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
 
 instance Pretty HpTerm where
     ppr (HpId name)  = text name
-    ppr (HpVar v)  = text "$" <> text v
-    ppr (HpCon v)  = text "#" <> text v
+    ppr (HpVar v)    = text v
+    ppr (HpCon v)    = text v
     ppr (HpFun f tl) = text f <> parens (sep (punctuate comma (map (ppr.unLoc) tl)))
     ppr  HpWild      = char '_'
     ppr (HpTup tl)   = parens (sep (punctuate comma (map (ppr.unLoc) tl)))
     ppr (HpSet tl)   = braces (sep (punctuate comma (map (ppr.unLoc) tl)))
-    ppr (HpList tl tail) = brackets (sep (punctuate comma (map (ppr.unLoc) tl)))
+    ppr (HpList tl tail) = brackets $ sep $ (punctuate comma (map (ppr.unLoc) tl)) ++ ppr_tail
+        where ppr_tail =
+                case tail of
+                    Nothing -> []
+                    Just t  -> [text "|" <+> ppr (unLoc t)]
 
 instance Pretty HpType where
-    ppr (HpTyGrd t)  = text t
+    ppr (HpTyGrd t)    = text t
     ppr (HpTyFun t t') = sep [ ppr (unLoc t) <+> arrow , ppr (unLoc t') ]
-    ppr (HpTyTup tl) = parens (sep (punctuate comma (map (ppr.unLoc) tl)))
-    ppr (HpTyRel t)  = braces (ppr (unLoc t))
+    ppr (HpTyTup tl)   = parens (sep (punctuate comma (map (ppr.unLoc) tl)))
+    ppr (HpTyRel t)    = braces (ppr (unLoc t))
 
 instance Pretty HpAtom where
     ppr (HpAtom e) = ppr (unLoc e)
     ppr  HpCut     = char '!'
 
-instance Pretty HpClaus where
+instance Pretty HpClause where
     ppr (HpClaus h []) = ppr (unLoc h) <> dot
-    ppr (HpClaus h b)  = hang (ppr (unLoc h) <> text ":-") 4 $ 
+    ppr (HpClaus h b)  = hang (ppr (unLoc h) <> entails) 4 $ 
                             sep (punctuate comma (map (ppr.unLoc) b)) <> char '.'
 
-instance Pretty HpTySig where
+instance Pretty HpTySign where
     ppr (HpTySig n lt) = hang (text n <+> dcolon) (length n + 4) (ppr lt)
 
-instance Pretty HpSrc where
+instance Pretty HpSource where
     ppr src = vcat (map (ppr.unLoc) (tysigs src) ++ map (ppr.unLoc) (clauses src))
 
 instance Pretty HpStmt where

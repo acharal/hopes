@@ -18,12 +18,8 @@ data MonoType =
     | TyTup [MonoType]
   deriving (Eq, Show)
 
-tvs :: MonoType -> [TyVar]
-tvs (TyVar v) = [v]
-tvs (TyFun ty1 ty2) = tvs ty1 ++ tvs ty2
-tvs (TyTup tys) = concatMap tvs tys
-tvs _ = []
-
+tyBool = TyCon TyBool
+tyAll  = TyCon TyAll
 
 instance Pretty MonoType where
     ppr (TyCon TyBool) = text "o"
