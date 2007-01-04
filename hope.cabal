@@ -24,15 +24,15 @@ Hs-Source-Dirs:	src
 Other-Modules:	Lexer
 		Parser
 		ParseUtils
-		Utils
 		Err
 		Loc
-		Ppr
-		HpSyntax
-		CheckT
+		Pretty
+		HpSyn
 		Tc
+		TcMonad
+		Hopl
 		Refute
-		LogicT
+		Logic
 Extensions:	RankNTypes
 Ghc-Options:	-O 
 

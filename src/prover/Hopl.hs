@@ -52,7 +52,16 @@ instance Pretty Term where
     ppr (Var v) = text v
     ppr (Pre v) = text v
     ppr (Con c) = text c
-    -- ppr (Fun "[]" tl) = bracket (sep [elems, tail])
+    ppr t@(Fun "[]" tl) = brackets (hsep [ppr_elems, ppr_tail])
+	where elems (Fun "[]" [x,y]) = x:(elems y)
+              elems t = []
+              tails (Fun "[]" [x,y]) = tails y
+              tails (Con "[]") = Nothing
+              tails t = Just t 
+              ppr_elems = sep (punctuate comma (map ppr (elems t)))
+              ppr_tail = case tails t of 
+                              Nothing -> empty
+                              Just t -> text "|" <+> ppr t
     ppr (Fun v tl) = hcat [ text v, parens (sep (punctuate comma (map ppr tl))) ]
     ppr (Set tl)   = braces (sep (punctuate comma (map ppr tl)))
 
