@@ -5,6 +5,7 @@ import ParseUtils
 import Char
 
 
+
 isNameChar c = isAlpha c || isDigit c || (c == '_')
 isVar str = isUpper (head str)
 
