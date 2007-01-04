@@ -13,22 +13,26 @@ import Control.Monad.State
 
 %tokentype { (Located Token) }
 %token 
-      ':-'      { (L _ TKgets)   }
-      '.'       { (L _ TKdot)    }
-      ','       { (L _ TKcomma)  }
-      '('       { (L _ TKoparen) }
-      ')'       { (L _ TKcparen) }
-      '['       { (L _ TKobrak ) }
-      '{'       { (L _ TKocurly) }
-      '}'       { (L _ TKccurly) }
-      ']'       { (L _ TKcbrak ) }
-      '|'       { (L _ TKvert )  }
-      '_'       { (L _ TKwild )  }
-      ID        { (L _ (TKid   $$)) }
+      ':-'      { (L _ TKgets)    }
+      '.'       { (L _ TKdot)     }
+      ','       { (L _ TKcomma)   }
+      '('       { (L _ TKoparen)  }
+      ')'       { (L _ TKcparen)  }
+      '['       { (L _ TKobrak)   }
+      '{'       { (L _ TKocurly)  }
+      '}'       { (L _ TKccurly)  }
+      ']'       { (L _ TKcbrak)   }
+      '|'       { (L _ TKvert)    }
+      '_'       { (L _ TKwild)    }
+      '::'      { (L _ TKcolcol)  }
+      '->'      { (L _ TKarrow)   }
+      '/'       { (L _ TKslash)   }
+      '\\'      { (L _ TKbslash)  }
+      '!'       { (L _ TKcut)     }
+      ';'       { (L _ TKsemi)    }
+      ID        { (L _ (TKid _)) }
 
-%monad { Parser } { >>= } { return }
-%lexer { lexer } { (L _ TKEOF) }
-%name parseProg  prog
+%name parseSrc  src
 %name parseGoal  goal
 %lexer { lexer  } { (L _ TKEOF) }
 %monad { Parser } { >>= } { return }
@@ -64,13 +68,8 @@ fact :: { LHpClause }
 rule :: { LHpClause }
      : atom ':-' body '.'       { L (combLoc $1 $>) $ HpClaus $1 $3 }
 
-term :: { HoTerm }
-     : ID                    { if isVar $1 then HoVar $1 else if (all isDigit $1) then homkNum ((read $1)::Int) else HoConst $1 }
-     | '_'                   { HoVar "_" }
-     | ID '(' terms ')'      { HoFun $1 (reverse $3) }
-     | '[' ']'               { hoEmptyList }
-     | '[' terms ']'         { homkList (reverse (hoEmptyList:$2)) }
-     | '[' terms '|' term ']' { homkList (reverse ($4:$2)) }
+body :: { HpBody }
+     : conj                     { reverse $1 }
 
 conj :: { [LHpAtom] }
      : conj ',' atom            { $3:$1 }
