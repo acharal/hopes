@@ -4,10 +4,11 @@ module Parser where
 import Lexer
 import HpSyn
 import Types
-import Utils
+import Loc
+import Err
+import Pretty
 import ParseUtils
 import Control.Monad.State
-
 }
 
 %tokentype { (Located Token) }

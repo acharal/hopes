@@ -2,7 +2,9 @@ module ParseUtils where
 
 import HpSyn
 import Types
-import Utils
+import Loc
+import Err
+import Pretty
 import List
 import Maybe
 import System.IO

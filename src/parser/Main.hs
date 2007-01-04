@@ -6,11 +6,10 @@ import System.IO
 import Parser
 import ParseUtils
 import Control.Monad.Identity
-
-import Utils
+import Pretty
+import Err
 import Hopl
 
---import Tc
 import Tc
 
 import HpSyn
