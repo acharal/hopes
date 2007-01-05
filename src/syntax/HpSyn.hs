@@ -72,6 +72,7 @@ type LHpAtom   = Located HpAtom
 type LHpTerm   = Located HpTerm
 type LHpType   = Located HpType
 type LHpBody   = Located HpBody
+type LHpGoal   = Located HpGoal
 
 isBound :: HpName -> Bool
 isBound = isUpper . head

@@ -6,8 +6,13 @@ import Hopl
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Identity
+import Control.Monad.Reader
 
 import List
+import Pretty
+import Char
+
+import Debug.Trace
 
 -- Substitutions 
 
@@ -30,10 +35,19 @@ appV ((v',t'):ss) v
 
 appT s (Var v)    = appV s v
 
-appT s (Fun f tl) = Fun f (map (appT s) tl)
-appT s (Set tl)   = Set (map (appT s) tl)
-appT s (Uni t t') = Uni (appT s t) (appT s t')
-appT s t          = t
+appT s (Fun f tl)  = Fun f (map (appT s) tl)
+appT s (Set tl vl) = 
+    let fin1 = map (map (appT s)) tl
+        terms = map (appV s) vl
+        aux (Set tl vl) = (tl, vl)
+        aux (Var v) = ([], [v])
+        aux t = error ("you know")
+        conctup (x, y) (z, w) = (x++z, y++w)
+        (x, y) = foldl conctup ([],[]) (map aux terms)
+        result = (Set (fin1 ++ x) y)
+    in  result
+
+appT s t           = t
 
 appA s (Atom t tl)= Atom (appT s t) (map (appT s) tl)
 
@@ -53,10 +67,7 @@ restrict vl sl = filter (\(v,_) -> v `elem` vl) sl
 
 -- Unification 
 
---unify :: Term -> Term -> Maybe Subst
-unify (Var "_") t = return epsilon
-unify t (Var "_") = return epsilon
-
+unify :: (Monad m) => Term -> Term -> m Subst
 unify (Var v) (Var v')
     | v == v'   = return epsilon
     | otherwise = return [(v, Var v')]
@@ -74,7 +85,7 @@ unify (Fun f tl) (Fun f' tl')
     | f == f'   = listUnify tl tl'
     | otherwise = fail ""
 
-unify (Set tl) (Set tl') = listUnify tl tl'
+unify (Set tl []) (Set tl' []) = listUnify (concat tl) (concat tl')
 
 unify t t' 
     | t == t'   = return epsilon
@@ -104,51 +115,84 @@ occurCheck v t = v `elem` (varsT t)
 
 
 --type RefuteM a = LogicT (StateT Int Identity) a
-type RefuteM a = StateT Int (LogicT Identity) a
+-- type InferM = StateT Int (LogicT Identity)
+type InferM = ReaderT Prog (StateT Int (LogicT Identity))
 
-prove :: Prog -> Goal -> RefuteM Subst
-prove p g = do
-    subst <- refute p g
-    return (restrict (varsAs g) subst)
+runInfer m p = runIdentity $ runL Nothing (evalStateT (runReaderT m p) 0)
 
-refute p [] = return epsilon
-refute p g  =
+isUserVar = isUpper.head
+
+prove :: Goal -> InferM Subst
+prove g = do
+    subst <- refute g
+    let answer = filter (isUserVar.fst) (restrict (varsAs g) subst)
+    return answer
+
+refute [] = return epsilon
+refute g  =
     --trace ("Refute goal " ++ show g) $
-    derive p g                  >>- \(g',s') ->
-    refute p (map (normA.(appA s')) g') >>- \ans -> 
+    derive g                    >>- \(g',s') ->
+    refute (map (appA s') g')   >>- \ans -> 
     return (s' `comp` ans)
 
-
-clauses p (Atom v _) =
+clauses (Atom v _) = do
+    p <- ask
     let l = filter (\((Atom v' _), _) -> v' == v) p
-    in  msum (map return l)
+    msum (map return l)
 
-derive = resol
+derive :: Goal -> InferM (Goal, Subst)
+derive [] = return (emptyGoal, epsilon)
+derive g  =
+    pickAtom g >>- \(a, g') -> 
+    (case a of
+        Atom (Pre _) _ -> resol a
+        _ -> myresol a
+    ) >>- \(g'', s) ->
+    return (g'' ++ g', s) 
 
-pickAtom :: Goal -> RefuteM (Atom, Goal)
+pickAtom :: Goal -> InferM (Atom, Goal)
 pickAtom []     = fail "Empty goal, cannot select an atom"
 pickAtom (a:as) = return (a,as)
 
-resol p [] = return (emptyGoal,epsilon)
-resol p g  =
-    pickAtom g         >>- \(a,rest) ->
-    clauses p a        >>- \c ->
+resol a =
+    clauses a          >>- \c ->
     variant c          >>- \(h',b') ->
     unifyAtoms a h'    >>- \subst ->
-    return (b'++rest, subst)
+    return (b', subst)
+
+myresol (Atom (Var v) args) = myresol (Atom (Set [] [v]) args)
+myresol (Atom (Set tl (v:vl)) args) =
+    basesOf args >>- \base_args -> 
+    newVar >>- \v' -> 
+    unify (Var v) (Set [base_args] [v']) >>- \subst -> 
+    return ([], subst)
+
+myresol a = error ("Not know what to do with atom " ++ show a ++" !")
+
+basesOf [] = return []
+basesOf (t:tl) = 
+    mybases t >>- \b -> 
+    basesOf tl >>- \bl -> 
+    return (b:bl)
+
+mybases t = return t
+mybases (Pre p) = undefined -- refute p(X)
+
 
 variant c@(h,b) =
     let subst = mapM (\v -> newVar >>= \n -> return (v, (Var n))) (varsC c)
     in do 
         s <- subst
-        return (appA s h, map (normA.(appA s)) b)
+        return (appA s h, map (appA s) b)
 
--- hackia
-normA (Atom (Con v) tl) = Atom (Pre v) tl
-normA t = t
-
-newVar :: RefuteM Var
+newVar :: InferM Var
 newVar = do
     i <- get
     modify (+1)
     return ("_G"++(show i))
+
+
+
+instance Pretty Subst where
+    ppr xs = vcat $ map ppr_bind xs
+        where ppr_bind (v,t) = sep [ text v <+> text "=", ppr t ]

@@ -1,5 +1,8 @@
 {
-module Parser where
+module Parser (
+        module Parser,
+        module ParseUtils
+) where
 
 import Lexer
 import HpSyn
@@ -114,8 +117,9 @@ terms2 :: { [LHpTerm] }
        : terms2 ',' term        { $3:$1 }
        | term ',' term          { $3:$1:[] }
 
-goal :: { HpGoal }
-     : conj                     { reverse $1 }
+goal :: { LHpGoal }
+     :                          { L (UselessSpan noLoc noLoc) $ [] }
+     | conj                     { L (UselessSpan noLoc noLoc) $ reverse $1 }
 
 type :: { LHpType }
      : ID                       { L (getLoc $1)     $ HpTyGrd (getName $1) }

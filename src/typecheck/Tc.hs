@@ -87,6 +87,14 @@ tcClause' c@(L loc (HpClaus h b)) = do
         b' <- mapM tcAtom b
         return (L loc (HpClaus h' b'))
 
+tcGoal :: LHpGoal -> Tc LHpGoal
+tcGoal (L loc goal) = do
+    let vars = filter isBound $ concatMap varsAtom goal
+    ts <- mapM (\v-> newTyVar >>= generalize >>= \t -> return (v,t)) vars
+    extendEnv ts $ do
+    goal' <- mapM tcAtom goal
+    return (L loc goal')
+
 tcAtom :: LHpAtom -> Tc LHpAtom
 tcAtom atom = 
     inCtxt (atomCtxt atom) (tcAtom' atom)

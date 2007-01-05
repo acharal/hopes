@@ -5,6 +5,9 @@ module Logic where
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.State
+import Control.Monad.Reader
+
+import Debug.Trace
 
 class MonadPlus m => MonadLogic m where
     msplit :: m a -> m (Maybe (a, m a))
@@ -76,6 +79,13 @@ instance MonadLogic m => MonadLogic (StateT s m) where
                     Just ((a, s'), m') ->
                         return (Just (a, StateT $ \s -> m' ), s')
 
+instance MonadLogic m => MonadLogic (ReaderT r m) where
+    msplit (ReaderT m) = 
+        ReaderT $ \env -> 
+            msplit (m env) >>= \r -> 
+                case r of
+                    Nothing -> return Nothing
+                    Just (a,m') -> return (Just (a, ReaderT $ \env' -> m'))
 
 runL :: (Monad m) => Maybe Int -> LogicT m a -> m [a]
 runL Nothing (SFKT m) = m (\a fk -> fk >>= (return . (a:))) (return [])

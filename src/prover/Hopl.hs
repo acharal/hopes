@@ -5,6 +5,7 @@ import Pretty
 import Loc
 
 import List (nub)
+import Char (isDigit)
 import Control.Monad.State
 import Control.Monad.Identity
 
@@ -15,8 +16,7 @@ data Term =
   | Pre Var             -- predicate
   | Con String          -- constant of type i
   | Fun Var [Term]      -- function symbol
-  | Uni Term Term       -- union of sets
-  | Set [Term]          -- a set of terms
+  | Set [[Term]] [Var]  -- a set of terms
  deriving Eq
 
 data Atom = Atom Term [Term]
@@ -34,8 +34,7 @@ emptyGoal = []
 varsT :: Term -> [Var]
 varsT (Var v)    = [v]
 varsT (Fun _ tl) = nub (concatMap varsT tl)
-varsT (Set tl)   = nub (concatMap varsT tl)
-varsT (Uni t t') = (varsT t) ++ (varsT t')
+varsT (Set tl vl) = nub $ (concatMap varsT (concat tl)) ++ vl
 varsT _          = []
 
 varsA :: Atom -> [Var]
@@ -62,8 +61,18 @@ instance Pretty Term where
               ppr_tail = case tails t of 
                               Nothing -> empty
                               Just t -> text "|" <+> ppr t
+    ppr t@(Fun "s" [x]) = 
+        let countS (Fun "s" [x]) = (1 + a, y)
+                where (a, y) = countS x
+            countS t = (0, t)
+        in case countS t of
+            (s, Con "0") -> int s
+            (s, t) -> hsep [int s, text "+", ppr t]
     ppr (Fun v tl) = hcat [ text v, parens (sep (punctuate comma (map ppr tl))) ]
-    ppr (Set tl)   = braces (sep (punctuate comma (map ppr tl)))
+    ppr (Set tl vl)   = braces (sep (punctuate (text "|") (sep (punctuate comma (map ppr_tup tl)):(map text vl))))
+        where ppr_tup [t] = ppr t
+              ppr_tup [] = empty
+              ppr_tup l = parens $ sep $ punctuate comma (map ppr l)
 
 instance Pretty Atom where
     ppr (Atom t tl) = ppr t <> parens (sep $ punctuate comma (map ppr tl))
@@ -91,10 +100,13 @@ simplifyClause (L _ (HpClaus h b)) = do
     sb <- mapM simplifyAtom b
     return (sh, sb)
 
+simplifyGoal :: LHpGoal -> Simplifier Goal
+simplifyGoal (L _ goal) = mapM simplifyAtom goal
+
 simplifyAtom (L _ (HpAtom e)) =
     let simpleExp2 (L _ (HpPar e)) = simpleExp2 e
         simpleExp2 (L _ (HpAnno e _)) = simpleExp2 e
-        simpleExp2 (L _ (HpPred v)) = return (Pre v)
+        simpleExp2 (L _ (HpPred v)) = if isBound v then return (Var v) else return (Pre v)
         simpleExp2 (L _ (HpTerm t)) = simplifyTerm t
         simpleExp2 (L _ (HpApp _ _)) = error ("unexpected application")
         simpleExp e@(L _ (HpApp _ _)) = 
@@ -117,7 +129,9 @@ simplifyTerm (L _ (HpVar v))
     | isBound v = return (Var v)
     | otherwise = return (Pre v)
 
-simplifyTerm (L _ (HpCon c)) = return (Con c)
+simplifyTerm (L _ (HpCon c))
+    | all isDigit c = let n = read c ::Int in return $ foldr (\x -> \y -> Fun "s" [y]) (Con "0") (replicate n 0)
+    | otherwise = return (Con c)
 simplifyTerm (L _ (HpList [] Nothing)) = return (Con "[]")
 simplifyTerm (L _ (HpList tl maytail)) = do
     ltai <- case maytail of
@@ -136,9 +150,11 @@ simplifyTerm (L _ (HpFun f tl)) = do
 
 simplifyTerm (L _ HpWild) = freshVar
 
+{-
 simplifyTerm (L _ (HpSet tl)) = do
     tl' <- mapM simplifyTerm tl
-    return (Set tl')
+    return (Set tl' [])
+-}
 
 simplifyTerm t = error (show t)
 

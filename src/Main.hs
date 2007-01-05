@@ -4,30 +4,65 @@ import IO
 import System
 import System.IO
 import Parser
-import ParseUtils
-import Control.Monad.Identity
 import Pretty
 import Err
 import Hopl
 
 import Tc
-
 import HpSyn
+import Hopl
+import Refute
+import Logic
 
 main = do
     (f:_) <- getArgs
-    pres  <- parseFromFile parseSrc f
-    case pres of
-	Right (p,s) -> do
-            pprint p
-            case runTc (tcSource p) of
-                (Just (p', env),msg) -> do
-                    print $ ppr_env env
-                    print $ runSimple (simplifyProg p')
-                (Nothing, msg) -> pprint $ vcat (map ppr (processMsgs msg))
-            return ()
-	Left msgs ->
+    (res,msgs) <- loadSource f
+    case res of
+        Just (p, env) -> do
+            g <- takeGoal (p, env)
+            printSol (runInfer (prove g) p)
+        Nothing ->  
             pprint $ vcat (map ppr (processMsgs msgs))
 
 ppr_env env = vcat (map ppr_aux env)
     where ppr_aux (v, t) = hang ((text v) <+> (text "::")) (length v + 4) (ppr t)
+
+
+loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)
+loadSource file = do
+    parse_res <- parseFromFile parseSrc file
+    case parse_res of
+        Right (p, s) -> do
+            case runTc (tcSource p) of
+                (Just (p', env), msgs) -> do
+                    let p'' = runSimple (simplifyProg p')
+                    return (Just (p'', env), msgs)
+                (Nothing, msgs) ->
+                    return (Nothing, msgs)
+        Left msgs -> 
+            return (Nothing, msgs)
+
+takeGoal :: (Prog, TypeEnv) -> IO Goal
+takeGoal (p, env) = do
+    inp <- hGetLine stdin
+    case runParser (parseGoal) (mkState inp) of
+        Right (g, s) -> do
+            case runTcWithEnv env (tcGoal (postParseGoal env g)) of
+                (Just g', msgs) -> do
+                    let g'' = runSimple (simplifyGoal g')
+                    return g''
+                (Nothing, msgs) -> do
+                    pprint (vcat (map ppr (processMsgs msgs)))
+                    takeGoal (p, env)
+        Left msgs -> do
+            pprint $ vcat (map ppr (processMsgs msgs))
+            takeGoal (p, env)
+
+printSol [] = pprint (text "No")
+printSol ([]:xs) = pprint (text "Yes")
+printSol (x:xs) = do
+    pprint x
+    c <- getChar
+    case c of
+        'q' -> pprint (text "Yes")
+        _ -> printSol xs

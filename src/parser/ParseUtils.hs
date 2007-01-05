@@ -106,38 +106,43 @@ mkTyp (L _ (HpTyTup tl))   = do
 
 mkTyp (L l t) = parseError (spanBegin l) (sep [quotes (ppr t), text "is not a valid type"])
 
-mkSrc :: [LHpStmt] -> HpSource
-mkSrc stmts = 
-    let splitStmts (x:xs) = 
+splitStmts (x:xs) = 
             let (cls', tys') = splitStmts xs
             in case unLoc x of 
                   HpTS ts -> (cls', ts:tys')
                   HpCl cl -> (cl:cls', tys')
-        splitStmts [] = ([],[])
-        (cls, tys) = splitStmts stmts
+splitStmts [] = ([],[])
+
+processCl vars (L loc (HpClaus h b)) =
+    L loc $ HpClaus (processA vars h) (map (processA vars) b)
+processA  vars (L loc (HpAtom e)) =
+    L loc $ HpAtom (processE vars e)
+processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
+processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
+processE vars (L loc (HpApp e el))  = L loc (HpApp (processE vars e) (map (processE vars) el))
+processE vars (L loc (HpAnno e t))  = L loc (HpAnno (processE vars e) t)
+processE vars (L loc (HpTerm t))    = L loc (HpTerm (processT vars t))
+processE vars le = le
+processT vars (L loc (HpId v))
+    | isBound v     = L loc (HpVar v)
+    | v `elem` vars = L loc (HpVar v)
+    | otherwise     = L loc (HpCon v)
+processT vars (L loc (HpFun f tl)) = L loc (HpFun f (map (processT vars) tl))
+processT vars (L loc (HpList tl maybetl)) = L loc (HpList (map (processT vars) tl) (maybe maybetl (\x -> Just $ processT vars x) maybetl))
+processT vars (L loc (HpTup tl)) = L loc (HpTup (map (processT vars) tl))
+processT vars (L loc (HpSet tl)) = L loc (HpSet (map (processT vars) tl))
+processT vars lt = lt
+
+mkSrc :: [LHpStmt] -> HpSource
+mkSrc stmts = 
+    let (cls, tys) = splitStmts stmts
         preds = catMaybes $ map (getPred.headC) cls
         cls' = map (processCl preds) cls
-        processCl vars (L loc (HpClaus h b)) =
-            L loc $ HpClaus (processA vars h) (map (processA vars) b)
-        processA  vars (L loc (HpAtom e)) =
-            L loc $ HpAtom (processE vars e)
-        processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
-        processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
-        processE vars (L loc (HpApp e el))  = L loc (HpApp (processE vars e) (map (processE vars) el))
-        processE vars (L loc (HpAnno e t))  = L loc (HpAnno (processE vars e) t)
-        processE vars (L loc (HpTerm t))    = L loc (HpTerm (processT vars t))
-        processE vars le = le
-        processT vars (L loc (HpId v))
-            | isBound v     = L loc (HpVar v)
-            | v `elem` vars = L loc (HpVar v)
-            | otherwise     = L loc (HpCon v)
-        processT vars (L loc (HpFun f tl)) = L loc (HpFun f (map (processT vars) tl))
-        processT vars (L loc (HpList tl maybetl)) = L loc (HpList (map (processT vars) tl) (maybe maybetl (\x -> Just $ processT vars x) maybetl))
-        processT vars (L loc (HpTup tl)) = L loc (HpTup (map (processT vars) tl))
-        processT vars (L loc (HpSet tl)) = L loc (HpSet (map (processT vars) tl))
-        processT vars lt = lt
     in  HpSrc { tysigs = tys, clauses = cls' }
 
+postParseGoal env (L loc goal) = 
+    let preds = map fst env
+    in  L loc (map (processA preds) goal)
 
 parseError loc msg = throwError $ mkMsgs $ mkLocErr loc ParseError Failure msg []
 
