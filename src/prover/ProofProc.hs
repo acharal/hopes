@@ -1,4 +1,4 @@
-module Refute where
+module ProofProc where
 
 import Logic
 import Hopl
@@ -33,7 +33,7 @@ appV ((v',t'):ss) v
     | v' == v   = t'
     | otherwise = appV ss v
 
-appT s (Var v)    = appV s v
+appT s (Var v)     = appV s v
 
 appT s (Fun f tl)  = Fun f (map (appT s) tl)
 appT s (Set tl vl) = 
@@ -49,7 +49,7 @@ appT s (Set tl vl) =
 
 appT s t           = t
 
-appA s (Atom t tl)= Atom (appT s t) (map (appT s) tl)
+appA s (Atom t tl) = Atom (appT s t) (map (appT s) tl)
 
 varS :: Subst -> [Var]
 varS s = map fst s
@@ -61,7 +61,7 @@ comp s s' =
         s2 = filter (\(a,b) -> a `notElem` (varS s)) s'
     in  s1 ++ s2
 
-
+-- restrict substitution to the set vl
 restrict :: [Var] -> Subst -> Subst
 restrict vl sl = filter (\(v,_) -> v `elem` vl) sl
 
@@ -114,8 +114,8 @@ occurCheck :: Var -> Term -> Bool
 occurCheck v t = v `elem` (varsT t)
 
 
---type RefuteM a = LogicT (StateT Int Identity) a
--- type InferM = StateT Int (LogicT Identity)
+-- data InferEnv = InferEnv { prog :: Prog, tyenv :: TypeEnv }
+
 type InferM = ReaderT Prog (StateT Int (LogicT Identity))
 
 runInfer m p = runIdentity $ runL Nothing (evalStateT (runReaderT m p) 0)
@@ -136,30 +136,22 @@ refute g  =
     return (s' `comp` ans)
 
 clauses (Atom v _) = do
-    p <- ask
-    let l = filter (\((Atom v' _), _) -> v' == v) p
+    prog <- ask
+    let l = filter (\((Atom v' _), _) -> v' == v) prog
     msum (map return l)
 
 derive :: Goal -> InferM (Goal, Subst)
 derive [] = return (emptyGoal, epsilon)
 derive g  =
     pickAtom g >>- \(a, g') -> 
-    (case a of
-        Atom (Pre _) _ -> resol a
-        _ -> myresol a
-    ) >>- \(g'', s) ->
+    myresol a  >>- \(g'', s) ->
     return (g'' ++ g', s) 
 
 pickAtom :: Goal -> InferM (Atom, Goal)
 pickAtom []     = fail "Empty goal, cannot select an atom"
 pickAtom (a:as) = return (a,as)
 
-resol a =
-    clauses a          >>- \c ->
-    variant c          >>- \(h',b') ->
-    unifyAtoms a h'    >>- \subst ->
-    return (b', subst)
-
+myresol a@(Atom (Pre _) _)  = resol a
 myresol (Atom (Var v) args) = myresol (Atom (Set [] [v]) args)
 myresol (Atom (Set tl (v:vl)) args) =
     basesOf args >>- \base_args -> 
@@ -169,15 +161,44 @@ myresol (Atom (Set tl (v:vl)) args) =
 
 myresol a = error ("Not know what to do with atom " ++ show a ++" !")
 
+-- the well-known resolution of first order case
+resol a =
+    clauses a          >>- \c ->
+    variant c          >>- \(h',b') ->
+    unifyAtoms a h'    >>- \subst ->
+    return (b', subst)
+
 basesOf [] = return []
 basesOf (t:tl) = 
     mybases t >>- \b -> 
     basesOf tl >>- \bl -> 
     return (b:bl)
 
+mybases (Pre p) = error ("Cannot *yet* enumerate the bases of predicate "++show p) -- refute p(X)
 mybases t = return t
-mybases (Pre p) = undefined -- refute p(X)
 
+
+
+{-
+baseElem :: Term -> [Term]
+baseElem t = return t
+
+baseElem2 :: Term -> InferM Subst -- return one or more substitution such that t `subst` s gives a base element (?)
+baseElem2 (Var v) = 
+baseElem2 (Pre p) = 
+baseElem2 t = return epsilon -- no subst, term is itself base element
+-}
+
+{-
+baseleq :: Term -> Term -> InferM Subst
+baseleq (Var v) (Pre p) = 
+    refute
+baseleq (Var v) (Set tl [v']) =
+    newVar >>- \v'' ->
+    unify (Var v') (Set [(Var v)] [v''])
+baseleq (Var v) t = unify (Var v) t
+baseleq t1 t2 = error ("baseleq: undefined case!")
+-}
 
 variant c@(h,b) =
     let subst = mapM (\v -> newVar >>= \n -> return (v, (Var n))) (varsC c)

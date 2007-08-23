@@ -36,7 +36,6 @@ data Token =
    deriving Eq
 
 type Parser = StateT ParseState (ErrorT Messages Identity)
---type Parser m = StateT ParseState (ErrorT HopeError m)
 
 data ParseState = PState {
     buffer   :: StringBuffer,
@@ -118,13 +117,13 @@ processCl vars (L loc (HpClaus h b)) =
 processA  vars (L loc (HpAtom e)) =
     L loc $ HpAtom (processE vars e)
 processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
-processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
 processE vars (L loc (HpApp e el))  = L loc (HpApp (processE vars e) (map (processE vars) el))
 processE vars (L loc (HpAnno e t))  = L loc (HpAnno (processE vars e) t)
 processE vars (L loc (HpTerm t))    = L loc (HpTerm (processT vars t))
+processE vars le@(L loc (HpPred p)) = if bound p then L loc (HpTerm (L loc (HpVar p))) else le
 processE vars le = le
 processT vars (L loc (HpId v))
-    | isBound v     = L loc (HpVar v)
+    | bound v       = L loc (HpVar v)
     | v `elem` vars = L loc (HpVar v)
     | otherwise     = L loc (HpCon v)
 processT vars (L loc (HpFun f tl)) = L loc (HpFun f (map (processT vars) tl))
@@ -136,7 +135,9 @@ processT vars lt = lt
 mkSrc :: [LHpStmt] -> HpSource
 mkSrc stmts = 
     let (cls, tys) = splitStmts stmts
-        preds = catMaybes $ map (getPred.headC) cls
+        preds = catMaybes $ map (maypred.headA.hLit) cls
+        maypred (L _ (HpPred p)) = Just p
+        maypred _ = Nothing
         cls' = map (processCl preds) cls
     in  HpSrc { tysigs = tys, clauses = cls' }
 
@@ -144,7 +145,8 @@ postParseGoal env (L loc goal) =
     let preds = map fst env
     in  L loc (map (processA preds) goal)
 
-parseError loc msg = throwError $ mkMsgs $ mkLocErr loc ParseError Failure msg []
+parseError loc msg = 
+    throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []
 
 instance Show Token where
     showsPrec n (TKoparen) = showString "("

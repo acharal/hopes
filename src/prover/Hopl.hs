@@ -106,7 +106,8 @@ simplifyGoal (L _ goal) = mapM simplifyAtom goal
 simplifyAtom (L _ (HpAtom e)) =
     let simpleExp2 (L _ (HpPar e)) = simpleExp2 e
         simpleExp2 (L _ (HpAnno e _)) = simpleExp2 e
-        simpleExp2 (L _ (HpPred v)) = if isBound v then return (Var v) else return (Pre v)
+        simpleExp2 (L _ (HpPred v)) =
+            if bound v then return (Var v) else return (Pre v)
         simpleExp2 (L _ (HpTerm t)) = simplifyTerm t
         simpleExp2 (L _ (HpApp _ _)) = error ("unexpected application")
         simpleExp e@(L _ (HpApp _ _)) = 
@@ -126,7 +127,7 @@ simplifyAtom (L _ (HpAtom e)) =
 simplifyAtom (L _ HpCut) = error ("please do not use '!' for now")
 
 simplifyTerm (L _ (HpVar v))
-    | isBound v = return (Var v)
+    | bound v = return (Var v)
     | otherwise = return (Pre v)
 
 simplifyTerm (L _ (HpCon c))

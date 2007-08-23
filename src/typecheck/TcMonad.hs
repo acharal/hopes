@@ -58,7 +58,7 @@ typeError :: ErrDesc -> Tc a
 typeError err = do
     loc <- gets loc
     diagnosis <- asks ctxt
-    throwError $ mkMsgs $ mkLocErr loc TypeError Failure err diagnosis
+    throwError $ mkMsgs $ mkErrWithLoc loc TypeError Failure err diagnosis
 
 newTyVar :: Tc MonoType
 newTyVar = do
@@ -86,15 +86,12 @@ addConstraint :: TyVar -> MonoType -> Tc ()
 addConstraint tv ty =
     modify (\s -> s{constr = (tv,ty):(constr s)})
 
-inCtxt :: Context -> Tc a -> Tc a
-inCtxt c m = local addctxt m 
+tcWithCtxt :: Context -> Tc a -> Tc a
+tcWithCtxt c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}
 
 setLoc :: Loc -> Tc ()
 setLoc l = modify (\s -> s{loc=l})
 
-wrapLoc :: Located a -> (Located a -> Tc b) -> Tc b
-wrapLoc a@(L loc _) f = do
-    setLoc (spanBegin loc)
-    b <- f a 
-    return b
+tcWithLoc :: Located a -> Tc b -> Tc b
+tcWithLoc (L loc _) tc = setLoc (spanBegin loc) >> tc

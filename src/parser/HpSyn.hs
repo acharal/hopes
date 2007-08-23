@@ -8,6 +8,7 @@ import Loc
 import Types
 import Char (isUpper)
 import Pretty
+import List (nub)
 
 type HpName = String
 
@@ -74,65 +75,69 @@ type LHpType   = Located HpType
 type LHpBody   = Located HpBody
 type LHpGoal   = Located HpGoal
 
-isBound :: HpName -> Bool
-isBound = isUpper . head
+
+hpVarsT (L _ (HpVar v))  = [v]
+hpVarsT (L _ (HpTup tl)) = concatMap hpVarsT tl
+hpVarsT (L _ (HpSet tl)) = concatMap hpVarsT tl
+hpVarsT (L _ (HpFun f tl)) = concatMap hpVarsT tl
+hpVarsT (L _ (HpList tl mbt)) = 
+    concatMap hpVarsT tl ++ 
+    maybe [] hpVarsT mbt
+hpVarsT _ = []
+
+hpVarsE (L _ (HpPar e))    = hpVarsE e
+hpVarsE (L _ (HpApp e el)) = concatMap hpVarsE (e:el)
+hpVarsE (L _ (HpPred p))   = []
+hpVarsE (L _ (HpTerm t))   = hpVarsT t
+hpVarsE (L _ (HpAnno e t)) = hpVarsE e
+
+hpVarsA (L _ (HpAtom e)) = hpVarsE e
+hpVarsA _ = []
+
+hpVarsL = concatMap hpVarsA
+
+hpVarsC c = hpVarsL $ lits c
 
 
-varsTerm (L _ (HpVar v))  = [v]
-varsTerm (L _ (HpTup tl)) = concatMap varsTerm tl
-varsTerm (L _ (HpSet tl)) = concatMap varsTerm tl
-varsTerm (L _ (HpFun f tl)) = concatMap varsTerm tl
-varsTerm (L _ (HpList tl mbt)) = 
-    concatMap varsTerm tl ++ 
-    maybe [] varsTerm mbt
-varsTerm _ = []
+argsE (L _ (HpApp e args)) = argsE e ++ args
+argsE (L _ (HpPar e)) = argsE e
+argsE (L _ (HpAnno e t)) = argsE e
+argsE (L _ _) = []
 
-varsExpr (L _ (HpPar e))    = varsExpr e
-varsExpr (L _ (HpApp e el)) = concatMap varsExpr (e:el)
-varsExpr (L _ (HpPred p))   = [p]
-varsExpr (L _ (HpTerm t))   = varsTerm t
-varsExpr (L _ (HpAnno e t)) = varsExpr e
+argsA (L _ (HpAtom e)) = argsE e
+argsA e = []
 
+headE (L _ (HpApp e _))  = headE e
+headE (L _ (HpPar e))    = headE e
+headE (L _ (HpAnno e t)) = headE e
+headE e = e
 
-varsAtom (L _ (HpAtom e)) = varsExpr e
-varsAtom _ = []
+headA (L _ (HpAtom e)) = headE e
+headA e = error ("headA of " ++ show e)
 
-varsClause (L _ (HpClaus h b)) = concatMap (varsAtom) (h:b)
+hLit  (L _ (HpClaus h _)) = h
+bLits (L _ (HpClaus _ b)) = b
+lits c = (hLit c):bLits c
 
-argsAtom (L _ (HpAtom e)) = go e
-    where go (L _ (HpApp e args)) = go e ++ args
-          go (L _ (HpPred _)) = []
-          go e = [e]
+fact c = null (bLits c)
 
-boundVarSet c = filter isBound (varsClause c)
+bound :: HpName -> Bool
+bound = isUpper . head
 
-predAtom a =
-    case getPred a of
-        Nothing -> error ("not expected")
-        Just p -> p
+-- quantified (bounded) variables of a clause
+bvarST = nub.hpVarsT
+bvarSE = nub.hpVarsE
+bvarSA = nub.hpVarsA
+bvarSL = nub.hpVarsL
+bvarSC = nub.hpVarsC
+bvarS  = bvarSC
 
-getPred :: LHpAtom -> Maybe HpName
-getPred (L _ (HpAtom le)) = 
-    let getPE (HpApp e _) = getPE (unLoc e)
-        getPE (HpPred p)   = Just p
-        getPE _            = Nothing
-    in  getPE (unLoc le)
-getPred _ = Nothing
-
-headC :: LHpClause -> LHpAtom
-headC (L _ (HpClaus h b)) = h
-
-bodyC :: LHpClause -> [LHpAtom]
-bodyC (L _ (HpClaus h b)) = b
-
-isFactC :: LHpClause -> Bool
-isFactC cl = null (bodyC cl)
 
 {- pretty printing -}
 
 instance Pretty HpExpr where
     ppr (HpTerm t)     = ppr (unLoc t)
-    ppr (HpAnno e ty) = hsep [ ppr (unLoc e), dcolon, ppr ty ]
+    ppr (HpAnno e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
     ppr (HpPar e)      = parens (ppr (unLoc e))
     ppr (HpPred n)     = text n
     ppr (HpApp e es)   = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))

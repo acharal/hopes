@@ -3,7 +3,7 @@ module Err (
         ErrLevel(..), ErrType(..),
         Message, Messages, processMsgs, mkMsgs, concatMsgs, emptyMsgs,
         Context, ErrDesc,
-        internalErr, mkErr, mkLocErr,
+        internalErr, mkErr, mkErrWithLoc,
         hasErrs, hasWarns, hasMsgs
     ) where
 
@@ -43,7 +43,7 @@ isFail = not.isWarn
 
 mkErr typ lev msg diagn = Msg Nothing typ lev msg diagn
 
-mkLocErr loc typ lev msg diagn = Msg (Just loc) typ lev msg diagn
+mkErrWithLoc loc typ lev msg diagn = Msg (Just loc) typ lev msg diagn
 
 internalErr msg = mkErr Internal Fatal msg []
 

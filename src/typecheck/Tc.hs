@@ -10,98 +10,57 @@ import Err
 import Loc
 import Pretty
 import Monad    (zipWithM, zipWithM_, when)
-import List     (nub, partition)
+import List     (nub)
 import Maybe    (catMaybes)
 
 import Control.Monad.Reader (asks)
 import Control.Monad.State  (gets)
 
-import Debug.Trace
 
 tcSource :: HpSource -> Tc (HpSource, TypeEnv)
 tcSource src = do
     let tysign = map (\(L _ (HpTySig v t)) -> (v, t)) (tysigs src)
     let cls    = clauses src
-    let preds  = nub $ map (predAtom.headC) cls
-    tv <- mapM (\p-> newTyVar >>= generalize >>= \t -> return (p, t)) preds
+    let maybepred (L _ (HpPred p)) = Just p
+        maybepred _ = Nothing
+    let preds  = nub $ catMaybes $ map (maybepred.headA.hLit) cls
+    tv <- mapM initNewTy preds
     extendEnv tv $ do
     extendEnv tysign $ do
-        --let clcode x = recoverTc (tcClause x) (return x)
-        let clcode = tcClause
-        let dfcode x = recoverTc (dfClause x) (return ())
-        cls' <- mapM (\x -> wrapLoc x clcode) cls
-        ty_env <- asks tyenv
-        constr <- gets constr
-        failIfErr
-        mapM_ (\x -> wrapLoc x dfcode) cls'
-        failIfErr
-        ty_env' <- zonkEnv ty_env
-        return (src { clauses = cls' }, ty_env')
+        cls'    <- mapM (\c -> tcWithLoc c (tcClause c)) cls
+        ty_env  <- asks tyenv >>= normEnv
+        return (src { clauses = cls' }, ty_env)
 
 
--- check if HpClause is definitional
-dfClause :: LHpClause -> Tc ()
-dfClause cl@(L loc (HpClaus h b)) = 
-    let argstys (TyFun args_ty res_ty) = argstys' args_ty ++ argstys res_ty
-        argstys t = []
-        argstys' (TyTup tl) = tl
-        argstys' t = [t]
-        onlyHigher (v, t) = isHigh t
-        isHigh (TyFun _ _) = True
-        isHigh _ = False
-        occu [] = []
-        occu (x:xs) =
-            let (same, rest) = partition (==x) (x:xs)
-            in (x, (length same)):(occu rest)
-        takeVars ((L _ (HpTerm (L _ (HpVar v)))):rest) = if isBound v then v:(takeVars rest) else (takeVars rest)
-        takeVars ((L _ _):rest) = takeVars rest
-        takeVars [] = []
-    in do
-    inCtxt (clauseCtxt cl) $ do
-    let args = argsAtom h
-    let free = filter (not.isBound) $ concatMap varsExpr args
-    when (not (null free)) $
-        predInHeadErr free
-
-    pred_ty <- zonkTy =<< lookupVar (predAtom h)
-    let args_tys = argstys pred_ty
-    let hilist   = map fst $ filter onlyHigher $ zip args (args_tys)
-    let occlist  = filter ((>1).snd) $ occu $ takeVars hilist
-
-    when (not (null occlist)) $ 
-        manyHigherOccurErr occlist
-    return ()
 
 -- type checking and inference
 
 tcClause, tcClause' :: LHpClause -> Tc LHpClause
 
 tcClause clause =
-    inCtxt (clauseCtxt clause) (tcClause' clause)
+    tcWithCtxt (clauseCtxt clause) $ tcClause' clause
 
 tcClause' c@(L loc (HpClaus h b)) = do
-    let vars = boundVarSet c
-    ts <- mapM (\v-> newTyVar >>= generalize >>= \t -> return (v,t)) vars
-    extendEnv ts $ do
+    tvs <- mapM initNewTy (bvarS c)
+    extendEnv tvs $ do
         h' <- tcAtom h
         b' <- mapM tcAtom b
         return (L loc (HpClaus h' b'))
 
 tcGoal :: LHpGoal -> Tc LHpGoal
-tcGoal (L loc goal) = do
-    let vars = filter isBound $ concatMap varsAtom goal
-    ts <- mapM (\v-> newTyVar >>= generalize >>= \t -> return (v,t)) vars
-    extendEnv ts $ do
-    goal' <- mapM tcAtom goal
-    return (L loc goal')
+tcGoal (L loc g) = do
+    tvs <- mapM initNewTy (bvarSL g)
+    extendEnv tvs $ do
+        g' <- mapM tcAtom g
+        return (L loc g')
 
 tcAtom :: LHpAtom -> Tc LHpAtom
 tcAtom atom = 
-    inCtxt (atomCtxt atom) (tcAtom' atom)
+    tcWithCtxt (atomCtxt atom) $ tcAtom' atom
 
 tcAtom' :: LHpAtom -> Tc LHpAtom
 tcAtom' (L loc (HpAtom e)) = do
-    e' <- tcExpr e tyBool
+    e' <- tcExpr e tyBool   -- force atom to be of type Bool
     return (L loc (HpAtom e'))
 
 tcAtom' e = return e
@@ -141,8 +100,7 @@ tcExpr (L loc (HpPred p)) exp_ty = do
     return (L loc (HpPred p))
 
 tcTerm term exp_ty = do
-    inCtxt (termCtxt term) $
-        tcTerm' term exp_ty
+    tcWithCtxt (termCtxt term) $ tcTerm' term exp_ty
 
 tcTerm' (L loc (HpCon c)) exp_ty = do
     unify tyAll exp_ty
@@ -195,7 +153,7 @@ unify t t'
 
 
 unifyFun n t = do
-    arg_tys <- sequence (replicate n newTyVar)
+    arg_tys <- sequence $ replicate n newTyVar
     res_ty <- newTyVar
     let args_ty = if n > 1 then TyTup arg_tys else (head arg_tys)
     unify (TyFun args_ty res_ty) t
@@ -246,9 +204,12 @@ getTyVars (TyCon _) = return []
 
 
 normEnv :: TypeEnv -> Tc TypeEnv
-normEnv env = mapM (\(v,t) -> normTy t >>= \t' -> return (v,t')) env
+normEnv env = 
+    let aux (v,t) = do
+            t' <- normTy t
+            return (v, t')
+    in  mapM aux env
 
-normTy :: MonoType -> Tc MonoType
 normTy (TyFun t1 t2) = do
     t1' <- normTy t1
     t2' <- normTy t2
@@ -266,19 +227,9 @@ normTy (TyTup tl) = do
 
 normTy t = return t
 
-zonkEnv env = mapM (\(v,t) -> zonkTy t >>= \t' -> return (v,t')) env
-
-zonkTy t = normTy t >>= zonkTy'
-
-zonkTy' (TyVar _) = return tyAll
-zonkTy' (TyFun t1 t2) = do
-    t1' <- zonkTy' t1
-    t2' <- zonkTy' t2
-    return (TyFun t1' t2')
-zonkTy' (TyTup tl) = do
-    tl' <- mapM zonkTy' tl
-    return (TyTup tl')
-zonkTy' t = return t
+initNewTy v = do
+    ty <- newTyVar >>= generalize
+    return (v, ty)
 
 -- error reporting
 
@@ -294,18 +245,9 @@ unificationErr inf_ty exp_ty = do
 occurCheckErr tv ty = 
     typeError (text "Could not construct an infinite type")
 
-predInHeadErr preds = 
-    typeError (sep ([text "Predicate variables",
-                     nest 4 (sep (punctuate comma (map (quotes.text) preds))),
-                     text "must not occur as arguments in the head of a rule"]))
-
-manyHigherOccurErr occlist =
-    typeError (sep ([text "Higher order bound variables",
-                     nest 4 (sep (punctuate comma (map (quotes.text.fst) occlist))),
-                     text "must occur only once as arguments in the head of a rule"]))
 
 -- error contexts
 clauseCtxt lcl@(L loc cl) = 
-    hang (if isFactC lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
+    hang (if fact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
 atomCtxt (L loc atom) = hang (text "In atom:") 4 (ppr atom)
 termCtxt (L loc term) = hang (text "In term:") 4 (ppr term)

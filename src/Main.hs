@@ -9,9 +9,10 @@ import Err
 import Hopl
 
 import Tc
+import Dfc
 import HpSyn
 import Hopl
-import Refute
+import ProofProc
 import Logic
 
 main = do
@@ -24,16 +25,13 @@ main = do
         Nothing ->  
             pprint $ vcat (map ppr (processMsgs msgs))
 
-ppr_env env = vcat (map ppr_aux env)
-    where ppr_aux (v, t) = hang ((text v) <+> (text "::")) (length v + 4) (ppr t)
-
 
 loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)
 loadSource file = do
     parse_res <- parseFromFile parseSrc file
     case parse_res of
         Right (p, s) -> do
-            case runTc (tcSource p) of
+            case runTc (tcSource p >>= dfcSource) of
                 (Just (p', env), msgs) -> do
                     let p'' = runSimple (simplifyProg p')
                     return (Just (p'', env), msgs)
@@ -66,3 +64,6 @@ printSol (x:xs) = do
     case c of
         'q' -> pprint (text "Yes")
         _ -> printSol xs
+
+ppr_env env = vcat (map ppr_aux env)
+    where ppr_aux (v, t) = hang ((text v) <+> (text "::")) (length v + 4) (ppr t)
