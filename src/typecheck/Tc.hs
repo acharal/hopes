@@ -16,24 +16,17 @@ import Maybe    (catMaybes)
 import Control.Monad.Reader (asks)
 import Control.Monad.State  (gets)
 
-import Debug.Trace
 
 tcSource :: HpSource -> Tc (HpSource, TypeEnv)
 tcSource src = do
     let tysign = map unLoc (tysigs src)
         cls    = clauses src
-        preds  = predicates src
-        symbs  = symbols src
-    tv     <- mapM initNewTy preds
-    tv_sym <- mapM initNewTy symbs
-    extendEnv tv $ do
+    tv_sym <- mapM initNewTy (symbols src)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
         cls'    <- mapM (\c -> tcWithLoc c (tcClause c)) cls
         ty_env  <- asks tyenv >>= normEnv
         return (src { clauses = cls' }, ty_env)
-
-
 
 -- type checking and inference
 
@@ -95,16 +88,6 @@ tcExpr (L loc (HpApp e args)) exp_ty = do
     args' <- zipWithM tcExpr args args_ty
     unify res_ty exp_ty
     return (L loc (HpApp e args'))
-
-tcExpr e@(L loc (HpPre p)) exp_ty = do
-    pred_ty <- instantiate =<< lookupVar p
-    unify pred_ty exp_ty
-    return e
-
-tcExpr e@(L loc (HpVar v)) exp_ty = do
-    var_ty <- lookupVar v
-    unify var_ty exp_ty
-    return e
 
 tcExpr e@(L loc (HpSym s)) exp_ty = do
     sym_ty <- lookupVar s

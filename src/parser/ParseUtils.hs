@@ -132,41 +132,7 @@ collectEither es = (map unL l, map unR r)
 mkSrc :: [HpStmt] -> Parser HpSource
 mkSrc stmts = 
     let (l, r) = collectEither stmts
-        hsymM  = mapM (getId.headOf.hAtom) l
-    in  do
-        hsym <- hsymM
-        l' <- mapM (fixSym (hsym,[])) l
-        return HpSrc { clauses = l',  tysigs = r }
-
-type SymbEnv = ([HpName], [HpName])
-
-fixSym :: SymbEnv -> LHpClause -> Parser LHpClause
-fixSym (ds,bs) (L loc (HpClaus v h b)) = do
-    h' <- fixSymE (ds, bs ++ v) h
-    b' <- mapM (fixSymE (ds, bs ++ v)) b
-    return (L loc (HpClaus v h' b'))
-
-fixSymE :: SymbEnv -> LHpExpr -> Parser LHpExpr
-fixSymE env (L loc (HpPar e)) = do
-    e' <- fixSymE env e
-    return $ L loc (HpPar e')
-fixSymE env (L loc (HpAnn e t)) = do
-    e' <- fixSymE env e
-    return $ L loc (HpAnn e' t)
-fixSymE env (L loc (HpApp e1 e2)) = do
-    e1' <- fixSymE env e1
-    e2' <- mapM (fixSymE env) e2
-    return $ L loc (HpApp e1' e2')
-fixSymE env (L loc (HpTup es)) = do
-    es' <- mapM (fixSymE env) es
-    return (L loc (HpTup es'))
-fixSymE (ds, bs) e@(L loc (HpSym s)) =
-    if s `elem` bs then
-        return (L loc (HpVar s))
-    else if s `elem` ds then
-        return (L loc (HpPre s))
-    else
-        return e
+    in  return HpSrc { clauses = l,  tysigs = r }
 
 quant :: HpName -> Bool
 quant = isUpper.head

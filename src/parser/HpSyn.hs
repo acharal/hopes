@@ -82,9 +82,7 @@ fact = null.bAtoms
 
 
 data HpExpr  = 
-      HpVar HpName              -- variable symbol
-    | HpPre HpName              -- predicate symbol
-    | HpSym HpName              -- symbol (constant or functional symbol)
+      HpSym HpName              -- symbol (constant, functional symbol, variable, predicate)
     | HpApp LHpExpr [LHpExpr]   -- general application (predicate or func sym)
     | HpPar LHpExpr             -- parenthesized expression
     | HpLam [HpName] LHpExpr    -- lambda abstraction
@@ -118,26 +116,6 @@ headOf e =
 
 -- free variables ?? [HpName]
 
-isVar :: LHpExpr -> Bool
-isVar e =
-    case unLoc e of
-        (HpVar _) -> True
-        _ -> False
-
-isPred :: LHpExpr -> Bool
-isPred e = 
-    case unLoc e of
-        (HpPre _) -> True
-        _ -> False
-
-isSym e = 
-    case unLoc e of
-        (HpSym _) -> True
-        _ -> False
-
-predicates :: HpSource -> [HpName]
-predicates src = nub $ catMaybes $ map  getId $ filter isPred $ map (headOf.hAtom) $ clauses src 
-
 symbolsE :: LHpExpr -> [HpName]
 symbolsE le = 
     case unLoc le of
@@ -156,10 +134,8 @@ symbols src = nub $ concatMap symbolsC $ clauses src
 
 getId :: (Monad m) => LHpExpr -> m HpName
 getId = getId'.unLoc
-getId' (HpVar v) = return v
 getId' (HpSym s) = return s
-getId' (HpPre p) = return p
-getId' _ = fail "Expression has no identifiers"
+getId' _ = fail "Expression has no symbols"
 
 -- located syntax 
 
@@ -175,8 +151,6 @@ type LHpGoal   = Located HpGoal
 instance Pretty HpExpr where
     ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
     ppr (HpPar e)     = parens (ppr (unLoc e))
-    ppr (HpPre n)     = text n
-    ppr (HpVar v)     = text v
     ppr (HpSym s)     = text s
     ppr (HpApp e es)  = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
     ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
