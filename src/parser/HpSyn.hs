@@ -4,144 +4,159 @@ module HpSyn where
     Higher order Prolog abstract syntax
 -}
 
-import Loc
-import Types
+import Loc  (Located, unLoc)
 import Char (isUpper)
-import Pretty
 import List (nub)
+import Maybe(catMaybes)
+import Pretty
+import Types(Type)
 
 type HpName = String
 
-data HpSource = HpSrc {
+data HpSource =
+    HpSrc { 
         tysigs  :: [LHpTySign],
         clauses :: [LHpClause]
-    } deriving Show
+    }
 
-data HpStmt   =
-      HpCl LHpClause      -- clause
-    | HpTS LHpTySign      -- type signature
-  deriving Show
+{-
+    Preliminaries
+    1. Symbols
+        1.1. Constants
+        1.2. Function symbols
+        1.3. Predicate symbols
+        1.4  Variables
+    2. Logical connectives (usually builtin)
+        2.1 implication ":-"
+        2.2 conjuction  ","
+        2.3 disjuction  ";"
+    3. Quantifiers (forall, exists)
 
-data HpTySign = HpTySig HpName Type
-  deriving Show
+    Basics
 
-data HpClause = HpClaus LHpAtom HpBody
-  deriving Show
+    1. a term is an expression of type i
+    2. a literal is an expression of type o
+    3. an atom is a positive literal
+    4. a formula is literals connected by logical connectives. Is of type o.
+        4.1 a formula is called closed if has no free variables, namely all
+            variables occurs in the formula, are quantified (or bound by lambda abstraction).
+    5. a clause is either a fact or a rule
+    6. a rule is a *special* formula has only one positive literal, aka A <- B_1, ..., B_n.
+       where A is called the head of the rule and [B_1, ..., B_n] (connected by conjuction)
+       called the body of the rule.
+    7. a fact is a bodyless rule.
+    8. a goal is a *special* formula that has no positive literals, aka <- G_1, ..., G_n.
+       an empty goal is known as *contradiction*.
 
-type HpBody   = [LHpAtom]
-type HpGoal   = HpBody
+    Convensions of Prolog
 
-data HpAtom   =
-      HpAtom LHpExpr
-    | HpCut
-   deriving Show
+    1. variables are denoted by *symbols* where their first letter is capital.
+    2. Every variables (as defined in 1.) that occurs in a clause is implied to be
+       universally quantified.
+-}
 
-data HpExpr   = 
-      HpTerm  LHpTerm
-    | HpAnno  LHpExpr Type
-    | HpPar   LHpExpr
-    | HpApp   LHpExpr [LHpExpr]
-    | HpPred  HpName
---    | HpLam HpName LHpExpr
-  deriving Show
+data HpClause = HpClaus [HpName] LHpAtom [LHpAtom]
 
-data HpTerm   =
-      HpCon  HpName                     -- constant
-    | HpVar  HpName                     -- free variable
-    | HpId   HpName                     -- not yet know wtf this identifier is
-    | HpFun  HpName [LHpTerm]           -- term with function symbol
-    | HpList [LHpTerm] (Maybe LHpTerm)  -- list
-    | HpSet  [LHpTerm]                  -- relation written as set
-    | HpTup  [LHpTerm]                  -- tuple
-    | HpWild                            -- wildcard
-  deriving Show
+hAtom :: LHpClause -> LHpExpr
+hAtom lc = 
+    let (HpClaus _ h _) = unLoc lc
+    in  h
 
-data HpType   =
-      HpTyGrd HpName                    -- ground type
-    | HpTyFun LHpType LHpType           -- type of function
-    | HpTyTup [LHpType]                 -- type of tuple
-    | HpTyRel LHpType                   -- type of relation / isomorfic to a function type
-  deriving Show
+bAtoms :: LHpClause -> [LHpExpr]
+bAtoms lc = 
+    let (HpClaus _ _ b) = unLoc lc
+    in  b
 
+-- the set of the bounded/quantified variables of a clause
+
+boundV :: LHpClause -> [HpName]
+boundV lc = 
+    let (HpClaus vs _ _) = unLoc lc
+    in  vs
+
+fact :: LHpClause -> Bool
+fact = null.bAtoms
+
+
+data HpExpr  = 
+      HpVar HpName              -- variable symbol
+    | HpPre HpName              -- predicate symbol
+    | HpSym HpName              -- symbol (constant or functional symbol)
+    | HpApp LHpExpr [LHpExpr]   -- general application (predicate or func sym)
+    | HpPar LHpExpr             -- parenthesized expression
+    | HpLam [HpName] LHpExpr    -- lambda abstraction
+    | HpAnn LHpExpr Type        -- type annotated expression
+    | HpTup [LHpExpr]           -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
+
+
+type HpTySign  = (HpName,Type)
+
+
+type LHpAtom = LHpExpr
+type LHpTerm = LHpExpr
+
+type HpGoal = [LHpAtom]
+-- get the arguments of an application
+
+argsOf :: LHpExpr -> [LHpExpr]
+argsOf e = 
+    case unLoc e of
+        (HpApp e1 e2) -> argsOf e1 ++ e2
+        _ -> []
+
+-- get a head of an application
+
+headOf :: LHpExpr -> LHpExpr
+headOf e = 
+    case unLoc e of
+        (HpApp e1 _) -> headOf e1
+        _ -> e
+
+
+-- free variables ?? [HpName]
+
+isVar :: LHpExpr -> Bool
+isVar e =
+    case unLoc e of
+        (HpVar _) -> True
+        _ -> False
+
+isPred :: LHpExpr -> Bool
+isPred e = 
+    case unLoc e of
+        (HpPre _) -> True
+        _ -> False
+
+predicates :: HpSource -> [HpName]
+predicates src = catMaybes $ map  getId $ filter isPred $ map hAtom $ clauses src 
+
+getId :: (Monad m) => LHpExpr -> m HpName
+getId = getId'.unLoc
+getId' (HpVar v) = return v
+getId' (HpSym s) = return s
+getId' (HpPre p) = return p
+getId' _ = fail "Expression has no identifiers"
+
+-- located syntax 
 
 type LHpSource = Located HpSource
-type LHpStmt   = Located HpStmt
 type LHpClause = Located HpClause
 type LHpTySign = Located HpTySign
 type LHpExpr   = Located HpExpr
-type LHpAtom   = Located HpAtom
-type LHpTerm   = Located HpTerm
-type LHpType   = Located HpType
-type LHpBody   = Located HpBody
 type LHpGoal   = Located HpGoal
 
 
-hpVarsT (L _ (HpVar v))  = [v]
-hpVarsT (L _ (HpTup tl)) = concatMap hpVarsT tl
-hpVarsT (L _ (HpSet tl)) = concatMap hpVarsT tl
-hpVarsT (L _ (HpFun f tl)) = concatMap hpVarsT tl
-hpVarsT (L _ (HpList tl mbt)) = 
-    concatMap hpVarsT tl ++ 
-    maybe [] hpVarsT mbt
-hpVarsT _ = []
-
-hpVarsE (L _ (HpPar e))    = hpVarsE e
-hpVarsE (L _ (HpApp e el)) = concatMap hpVarsE (e:el)
-hpVarsE (L _ (HpPred p))   = []
-hpVarsE (L _ (HpTerm t))   = hpVarsT t
-hpVarsE (L _ (HpAnno e t)) = hpVarsE e
-
-hpVarsA (L _ (HpAtom e)) = hpVarsE e
-hpVarsA _ = []
-
-hpVarsL = concatMap hpVarsA
-
-hpVarsC c = hpVarsL $ lits c
-
-
-argsE (L _ (HpApp e args)) = argsE e ++ args
-argsE (L _ (HpPar e)) = argsE e
-argsE (L _ (HpAnno e t)) = argsE e
-argsE (L _ _) = []
-
-argsA (L _ (HpAtom e)) = argsE e
-argsA e = []
-
-headE (L _ (HpApp e _))  = headE e
-headE (L _ (HpPar e))    = headE e
-headE (L _ (HpAnno e t)) = headE e
-headE e = e
-
-headA (L _ (HpAtom e)) = headE e
-headA e = error ("headA of " ++ show e)
-
-hLit  (L _ (HpClaus h _)) = h
-bLits (L _ (HpClaus _ b)) = b
-lits c = (hLit c):bLits c
-
-fact c = null (bLits c)
-
-bound :: HpName -> Bool
-bound = isUpper . head
-
--- quantified (bounded) variables of a clause
-bvarST = nub.hpVarsT
-bvarSE = nub.hpVarsE
-bvarSA = nub.hpVarsA
-bvarSL = nub.hpVarsL
-bvarSC = nub.hpVarsC
-bvarS  = bvarSC
-
-
-{- pretty printing -}
+ -- pretty printing 
 
 instance Pretty HpExpr where
-    ppr (HpTerm t)     = ppr (unLoc t)
-    ppr (HpAnno e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
-    ppr (HpPar e)      = parens (ppr (unLoc e))
-    ppr (HpPred n)     = text n
-    ppr (HpApp e es)   = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
-
+    ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
+    ppr (HpPar e)     = parens (ppr (unLoc e))
+    ppr (HpPre n)     = text n
+    ppr (HpVar v)     = text v
+    ppr (HpSym s)     = text s
+    ppr (HpApp e es)  = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
+    ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
+{-
 instance Pretty HpTerm where
     ppr (HpId name)  = text name
     ppr (HpVar v)    = text v
@@ -155,28 +170,13 @@ instance Pretty HpTerm where
                 case tail of
                     Nothing -> []
                     Just t  -> [text "|" <+> ppr (unLoc t)]
-
-instance Pretty HpType where
-    ppr (HpTyGrd t)    = text t
-    ppr (HpTyFun t t') = sep [ ppr (unLoc t) <+> arrow , ppr (unLoc t') ]
-    ppr (HpTyTup tl)   = parens (sep (punctuate comma (map (ppr.unLoc) tl)))
-    ppr (HpTyRel t)    = braces (ppr (unLoc t))
-
-instance Pretty HpAtom where
-    ppr (HpAtom e) = ppr (unLoc e)
-    ppr  HpCut     = char '!'
+-}
 
 instance Pretty HpClause where
-    ppr (HpClaus h []) = ppr (unLoc h) <> dot
-    ppr (HpClaus h b)  = hang (ppr (unLoc h) <> entails) 4 $ 
-                            sep (punctuate comma (map (ppr.unLoc) b)) <> char '.'
-
-instance Pretty HpTySign where
-    ppr (HpTySig n lt) = hang (text n <+> dcolon) (length n + 4) (ppr lt)
+    ppr (HpClaus _ h []) = ppr (unLoc h) <> dot
+    ppr (HpClaus _ h b)  = hang (ppr (unLoc h) <> entails) 4 $ 
+                            sep (punctuate comma (map (ppr.unLoc) b)) <> dot
 
 instance Pretty HpSource where
-    ppr src = vcat (map (ppr.unLoc) (tysigs src) ++ map (ppr.unLoc) (clauses src))
+    ppr src = vcat $ map (ppr.unLoc) (clauses src)
 
-instance Pretty HpStmt where
-    ppr (HpCl lc)  = ppr (unLoc lc)
-    ppr (HpTS lts) = ppr (unLoc lts)

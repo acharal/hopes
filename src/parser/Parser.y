@@ -47,13 +47,13 @@ import Control.Monad.State
 %% 
 
 src :: { HpSource }
-    : stmts                     { mkSrc (reverse $1) }
+    : stmts                     {% mkSrc (reverse $1) }
 
-stmt :: { LHpStmt }
-     : clause                   { L (getLoc $1)     $ HpCl $1 }
-     | tysig                    { L (getLoc $1)     $ HpTS $1 }
+stmt :: { HpStmt }
+     : clause                   { Left  $1 }
+     | tysig                    { Right $1 }
 
-stmts :: { [LHpStmt] }
+stmts :: { [HpStmt] }
       : stmts stmt              { $2:$1 }
       |                         { [] }
 
@@ -66,10 +66,10 @@ clauses :: { [LHpClause] }
         |                       { [] }
 
 fact :: { LHpClause }
-     : atom '.'                 { L (combLoc $1 $>) $ HpClaus $1 [] }
+     : atom '.'                 { L (combLoc $1 $>) $ mkClause $1 [] }
 
 rule :: { LHpClause }
-     : atom ':-' body '.'       { L (combLoc $1 $>) $ HpClaus $1 $3 }
+     : atom ':-' body '.'       { L (combLoc $1 $>) $ mkClause $1 $3 }
 
 body :: { HpBody }
      : conj                     { reverse $1 }
@@ -79,18 +79,18 @@ conj :: { [LHpAtom] }
      | atom                     { [$1] }
 
 atom :: { LHpAtom }
-     : exp                      { L (getLoc $1)     $ HpAtom $1 }
-     | '!'                      { L (getLoc $1)     $ HpCut }
+     : exp                      { L (getLoc $1)     $ $1 }
+     | '!'                      { L (getLoc $1)     $ undefined }
 
 exp  :: { LHpExpr }
      : '(' exp ')'              { L (combLoc $1 $>) $ HpPar  $2 }
      | exp tyann                { L (combLoc $1 $>) $ HpAnno $1 (unLoc $2) }
      | ID                       { L (getLoc $1)     $ HpPred (getName $1) }
      | exp '(' exps2 ')'        { L (combLoc $1 $>) $ HpApp $1 (reverse $3) }
---     | exp ID exp               { L (combLoc $1 $>) $ HpApp (HpPred (getName $2)) ($1:$3:[])  }
+--   | exp ID exp               { L (combLoc $1 $>) $ HpApp (HpPred (getName $2)) ($1:$3:[])  }
 
 exp2 :: { LHpExpr }
-     : term                     { L (getLoc $1)     $ HpTerm $1 }
+     : term                     { L (getLoc $1)     $ $1 }
      | '(' exp2 ')'             { L (combLoc $1 $>) $ HpPar  $2 }
      | exp2 tyann               { L (combLoc $1 $2) $ HpAnno $1 (unLoc $2) }
 
@@ -98,16 +98,28 @@ exps2 :: { [LHpExpr] }
      : exps2 ',' exp2           { $3:$1 }
      | exp2                     { [$1] }
 
+exp :: { LHpExpr }
+    : '(' exp ')'               { L (combLoc $1 $>) $ HpPar $2 }
+    | exp tyann                 { L (combLoc $1 $>) $ HpAnn $1 (unLoc $2) }
+    | ID                        { L (getLoc $1)     $ HpSym (getName $1) }
+    | exp '(' exp2 ')'          { L (combLoc $1 $>) $ HpApp $1 (reverse $3) }
+
+exp2 :: { LHpExpr }
+    : term                      { $1 }
+    |'(' exp2 ')'               { L (combLoc $1 $>) $ HpPar $2 }
+    | exp2 tyann                { L (combLoc $1 $>) $ HpAnn $1 (unLoc $2) }
+
+
 term :: { LHpTerm }
-     : ID                       { L (getLoc $1)     $ HpId (getName $1) }
-     | '_'                      { L (getLoc $1)     $ HpWild }
-     | ID '(' terms ')'         { L (combLoc $1 $>) $ HpFun (getName $1) (reverse $3) }
-     | '(' terms2 ')'           { L (combLoc $1 $>) $ HpTup (reverse $2) }
-     | '[' ']'                  { L (combLoc $1 $>) $ HpList []           Nothing   }
-     | '[' terms ']'            { L (combLoc $1 $>) $ HpList (reverse $2) Nothing   }
-     | '[' terms '|' term ']'   { L (combLoc $1 $>) $ HpList (reverse $2) (Just $4) }
-     | '{' '}'                  { L (combLoc $1 $>) $ HpSet [] }
-     | '{' terms '}'            { L (combLoc $1 $>) $ HpSet $2 }
+    : ID                        { L (getLoc $1)     $ HpSym (getName $1) }
+    | '_'                       { L (getLoc $1)     $ HpSym "_" }
+    | ID '(' terms ')'          { L (combLoc $1 $>) $ HpApp (HpSym (getName $1)) (reverse $3) }
+    | '(' terms2 ')'            { L (combLoc $1 $>) $ HpTup (reverse $2) }
+    | '[' ']'                   { L (combLoc $1 $>) $ HpList []           Nothing   }
+    | '[' terms ']'             { L (combLoc $1 $>) $ HpList (reverse $2) Nothing   }
+    | '[' terms '|' term ']'    { L (combLoc $1 $>) $ HpList (reverse $2) (Just $4) }
+    | '{' '}'                   { L (combLoc $1 $>) $ HpSet [] }
+    | '{' terms '}'             { L (combLoc $1 $>) $ HpSet $2 }
 
 terms :: { [LHpTerm] }
       : terms ',' term          { $3:$1 }
@@ -132,7 +144,7 @@ types :: {  [LHpType]  }
       | type                    { [$1]  }
 
 tysig :: { LHpTySign }
-      : ID '/' ID tyann         { L (combLoc $1 $>) $ HpTySig (getName $1) (unLoc $4) }
+      : ID '/' ID tyann         { L (combLoc $1 $>) $ ((getName $1),(unLoc $4)) }
 
 tyann :: { Located Type }
       : '::' type               {% mkTyp $2 >>= \t -> return (L (combLoc $1 $>) t) }
@@ -141,6 +153,6 @@ tyann :: { Located Type }
 happyError = do
     tok <- gets cur_tok
     case unLoc tok of
-        TKEOF -> parseError (spanBegin $ getLoc tok) (text "unexpected end of input")
-        _     -> parseError (spanBegin $ getLoc tok) (sep [ text "parse error on input", quotes (ppr (unLoc tok)) ])
+        TKEOF -> parseError $ text "unexpected end of input"
+        _     -> parseError $ sep [ text "parse error on input", quotes (ppr (unLoc tok)) ]
 }

@@ -5,8 +5,10 @@ import Types
 import Loc
 import Err
 import Pretty
-import List
-import Maybe
+
+import List (partition)
+import Maybe (catMaybes)
+import Char (isUpper)
 import System.IO
 import Control.Monad.State
 import Control.Monad.Identity
@@ -87,6 +89,15 @@ getName :: Located Token -> HpName
 getName (L _ (TKid x)) = x
 getName _ = error "not a valid token"
 
+
+data HpType   =
+      HpTyGrd HpName                    -- ground type
+    | HpTyFun LHpType LHpType           -- type of function
+    | HpTyTup [LHpType]                 -- type of tuple
+    | HpTyRel LHpType                   -- type of relation / isomorfic to a function type
+
+type LHpType   = Located HpType
+
 mkTyp :: LHpType -> Parser Type
 mkTyp (L _ (HpTyGrd "o"))  = return (TyCon TyBool)
 mkTyp (L _ (HpTyGrd "i"))  = return (TyCon TyAll)
@@ -103,50 +114,74 @@ mkTyp (L _ (HpTyTup tl))   = do
         [t] -> return t 
         _ -> return (TyTup tl')
 
-mkTyp (L l t) = parseError (spanBegin l) (sep [quotes (ppr t), text "is not a valid type"])
+mkTyp (L l t) = parseErrorWithLoc (spanBegin l) (text "Not a valid type")
 
-splitStmts (x:xs) = 
-            let (cls', tys') = splitStmts xs
-            in case unLoc x of 
-                  HpTS ts -> (cls', ts:tys')
-                  HpCl cl -> (cl:cls', tys')
-splitStmts [] = ([],[])
 
-processCl vars (L loc (HpClaus h b)) =
-    L loc $ HpClaus (processA vars h) (map (processA vars) b)
-processA  vars (L loc (HpAtom e)) =
-    L loc $ HpAtom (processE vars e)
-processE vars (L loc (HpPar e))     = L loc (HpPar (processE vars e))
-processE vars (L loc (HpApp e el))  = L loc (HpApp (processE vars e) (map (processE vars) el))
-processE vars (L loc (HpAnno e t))  = L loc (HpAnno (processE vars e) t)
-processE vars (L loc (HpTerm t))    = L loc (HpTerm (processT vars t))
-processE vars le@(L loc (HpPred p)) = if bound p then L loc (HpTerm (L loc (HpVar p))) else le
-processE vars le = le
-processT vars (L loc (HpId v))
-    | bound v       = L loc (HpVar v)
-    | v `elem` vars = L loc (HpVar v)
-    | otherwise     = L loc (HpCon v)
-processT vars (L loc (HpFun f tl)) = L loc (HpFun f (map (processT vars) tl))
-processT vars (L loc (HpList tl maybetl)) = L loc (HpList (map (processT vars) tl) (maybe maybetl (\x -> Just $ processT vars x) maybetl))
-processT vars (L loc (HpTup tl)) = L loc (HpTup (map (processT vars) tl))
-processT vars (L loc (HpSet tl)) = L loc (HpSet (map (processT vars) tl))
-processT vars lt = lt
+type HpStmt   = Either LHpClause LHpTySign
 
-mkSrc :: [LHpStmt] -> HpSource
+collectEither :: [Either a b] -> ([a], [b])
+collectEither es = (map unL l, map unR r)
+    where isLeft (Left _) = True
+          isLeft _ = False
+          unL (Left a)  = a
+          unR (Right a) = a
+          (l, r) = partition isLeft es
+
+mkSrc :: [HpStmt] -> Parser HpSource
 mkSrc stmts = 
-    let (cls, tys) = splitStmts stmts
-        preds = catMaybes $ map (maypred.headA.hLit) cls
-        maypred (L _ (HpPred p)) = Just p
-        maypred _ = Nothing
-        cls' = map (processCl preds) cls
-    in  HpSrc { tysigs = tys, clauses = cls' }
+    let (l, r) = collectEither stmts
+        hsymM  = mapM (getId.headOf.hAtom) l
+    in  do
+        hsym <- hsymM
+        l' <- mapM (fixSym (hsym,[])) l
+        return HpSrc { clauses = l',  tysigs = r }
 
-postParseGoal env (L loc goal) = 
-    let preds = map fst env
-    in  L loc (map (processA preds) goal)
+type SymbEnv = ([HpName], [HpName])
 
-parseError loc msg = 
+fixSym :: SymbEnv -> LHpClause -> Parser LHpClause
+fixSym (ds,bs) (L loc (HpClaus v h b)) = do
+    h' <- fixSymE (ds, bs ++ v) h
+    b' <- mapM (fixSymE (ds, bs ++ v)) b
+    return (L loc (HpClaus v h' b'))
+
+fixSymE :: SymbEnv -> LHpExpr -> Parser LHpExpr
+fixSymE env (L loc (HpPar e)) = do
+    e' <- fixSymE env e
+    return $ L loc (HpPar e')
+fixSymE env (L loc (HpAnn e t)) = do
+    e' <- fixSymE env e
+    return $ L loc (HpAnn e' t)
+fixSymE env (L loc (HpApp e1 e2)) = do
+    e1' <- fixSymE env e1
+    e2' <- mapM (fixSymE env) e2
+    return $ L loc (HpApp e1' e2')
+fixSymE env (L loc (HpTup es)) = do
+    es' <- mapM (fixSymE env) es
+    return (L loc (HpTup es'))
+fixSymE (ds, bs) e@(L loc (HpSym s)) =
+    if s `elem` bs then
+        return (L loc (HpVar s))
+    else if s `elem` bs then
+        return (L loc (HpPre s))
+    else
+        return e
+
+quant :: HpName -> Bool
+quant = isUpper.head
+
+mkClause :: LHpExpr -> [LHpExpr] -> HpClause
+mkClause hd bd = 
+    let vars  = catMaybes $ map getId $ map headOf bd
+        vars' = filter quant vars
+    in  HpClaus vars' hd bd
+
+parseErrorWithLoc loc msg = 
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []
+
+parseError msg = do
+    tok <- gets cur_tok
+    let loc = spanBegin $ getLoc tok
+    parseErrorWithLoc loc msg
 
 instance Show Token where
     showsPrec n (TKoparen) = showString "("
