@@ -43,23 +43,24 @@ tyargs _ = []
 
 tyvarnames :: [String]
 tyvarnames =
-    let letters = [ "a", "b", "c", "e", "f" ]
+    let letters = [ "a", "b", "c", "d", "e", "f" ]
     in  letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
 
-instance Pretty MonoType where
-    ppr (TyCon TyBool)   = text "o"
-    ppr (TyCon TyAll)    = text "i"
-    ppr ty@(TyFun t t')  = 
-        let f = vna ty
-        in  sep [ pprWithV f t , arrow <+> pprWithV f t' ]
-    ppr ty@(TyTup tl)    =
-        parens $ sep (punctuate comma (map (pprWithV (vna ty)) tl))
-    ppr ty@(TyVar t)     = pprWithV (vna ty) ty
 
-pprWithV f (TyTup tl)    = parens $ sep (punctuate comma (map (pprWithV f) tl))
-pprWithV f (TyFun t t')  = sep [ pprWithV f t , arrow <+> pprWithV f t' ]
-pprWithV f (TyVar v)     = text $ f v
-pprWithV _ t             = ppr t
+instance Pretty MonoType where
+    ppr t = pprPrec 1 f t
+        where f = vna t
+
+pprPrec p f (TyTup tl)     = parens $ sep (punctuate comma (map (pprPrec 1 f) tl))
+pprPrec p f (TyCon TyBool) = text "o"
+pprPrec p f (TyCon TyAll)  = text "i"
+pprPrec p f (TyVar v)      = text (f v)
+pprPrec p f ty@(TyFun t t')= 
+    if (p == 0) then 
+        parens (sep [ pprPrec 1 f t , arrow <+> pprPrec p f t' ])
+    else
+        sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ]
+
 
 -- var - name map
 vna ty x = 

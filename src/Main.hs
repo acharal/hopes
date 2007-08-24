@@ -6,32 +6,46 @@ import System.IO
 import Parser
 import Pretty
 import Err
-import Hopl
 
 import Tc
-import Dfc
+--import Dfc
 import HpSyn
-import Hopl
-import ProofProc
-import Logic
+--import Hopl
+--import ProofProc
+--import Logic
 
 main = do
     (f:_) <- getArgs
     (res,msgs) <- loadSource f
+
     case res of
         Just (p, env) -> do
-            g <- takeGoal (p, env)
-            printSol (runInfer (prove g) p)
+            print $ ppr_env env
         Nothing ->  
             pprint $ vcat (map ppr (processMsgs msgs))
 
 
+--loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)
+loadSource file = do
+    parse_res <- parseFromFile parseSrc file
+    case parse_res of
+        Right (p, s) -> do
+            pprint p
+            case runTc (tcSource p) of
+                (Just (p', env), msgs) -> do
+                    return (Just (p', env), msgs)
+                (Nothing, msgs) ->
+                    return (Nothing, msgs)
+        Left msgs -> 
+            return (Nothing, msgs)
+
+{-
 loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)
 loadSource file = do
     parse_res <- parseFromFile parseSrc file
     case parse_res of
         Right (p, s) -> do
-            case runTc (tcSource p >>= dfcSource) of
+            case runTc (tcSource p) of
                 (Just (p', env), msgs) -> do
                     let p'' = runSimple (simplifyProg p')
                     return (Just (p'', env), msgs)
@@ -39,6 +53,7 @@ loadSource file = do
                     return (Nothing, msgs)
         Left msgs -> 
             return (Nothing, msgs)
+
 
 takeGoal :: (Prog, TypeEnv) -> IO Goal
 takeGoal (p, env) = do
@@ -64,6 +79,8 @@ printSol (x:xs) = do
     case c of
         'q' -> pprint (text "Yes")
         _ -> printSol xs
+
+-}
 
 ppr_env env = vcat (map ppr_aux env)
     where ppr_aux (v, t) = hang ((text v) <+> (text "::")) (length v + 4) (ppr t)

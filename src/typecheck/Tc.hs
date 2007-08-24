@@ -16,16 +16,18 @@ import Maybe    (catMaybes)
 import Control.Monad.Reader (asks)
 import Control.Monad.State  (gets)
 
+import Debug.Trace
 
 tcSource :: HpSource -> Tc (HpSource, TypeEnv)
 tcSource src = do
-    let tysign = map (\(L _ (HpTySig v t)) -> (v, t)) (tysigs src)
-    let cls    = clauses src
-    let maybepred (L _ (HpPred p)) = Just p
-        maybepred _ = Nothing
-    let preds  = nub $ catMaybes $ map (maybepred.headA.hLit) cls
-    tv <- mapM initNewTy preds
+    let tysign = map unLoc (tysigs src)
+        cls    = clauses src
+        preds  = predicates src
+        symbs  = symbols src
+    tv     <- mapM initNewTy preds
+    tv_sym <- mapM initNewTy symbs
     extendEnv tv $ do
+    extendEnv tv_sym $ do
     extendEnv tysign $ do
         cls'    <- mapM (\c -> tcWithLoc c (tcClause c)) cls
         ty_env  <- asks tyenv >>= normEnv
@@ -40,30 +42,28 @@ tcClause, tcClause' :: LHpClause -> Tc LHpClause
 tcClause clause =
     tcWithCtxt (clauseCtxt clause) $ tcClause' clause
 
-tcClause' c@(L loc (HpClaus h b)) = do
-    tvs <- mapM initNewTy (bvarS c)
+tcClause' c@(L loc (HpClaus v h b)) = do
+    tvs <- mapM initNewTy v
     extendEnv tvs $ do
         h' <- tcAtom h
         b' <- mapM tcAtom b
-        return (L loc (HpClaus h' b'))
+        return (L loc (HpClaus v h' b'))
 
 tcGoal :: LHpGoal -> Tc LHpGoal
-tcGoal (L loc g) = do
-    tvs <- mapM initNewTy (bvarSL g)
+tcGoal (L loc (HpGoal v g)) = do
+    tvs <- mapM initNewTy v
     extendEnv tvs $ do
         g' <- mapM tcAtom g
-        return (L loc g')
+        return (L loc (HpGoal v g'))
 
 tcAtom :: LHpAtom -> Tc LHpAtom
 tcAtom atom = 
     tcWithCtxt (atomCtxt atom) $ tcAtom' atom
 
 tcAtom' :: LHpAtom -> Tc LHpAtom
-tcAtom' (L loc (HpAtom e)) = do
+tcAtom' e = do
     e' <- tcExpr e tyBool   -- force atom to be of type Bool
-    return (L loc (HpAtom e'))
-
-tcAtom' e = return e
+    return e'
 
 tiExpr :: LHpExpr -> Tc MonoType
 tiExpr e = do
@@ -73,19 +73,21 @@ tiExpr e = do
 
 tcExpr :: LHpExpr -> MonoType -> Tc LHpExpr
 
+{-
 tcExpr (L loc (HpTerm t)) exp_ty = do
     t' <- tcTerm t exp_ty
     return (L loc (HpTerm t'))
+-}
 
 tcExpr (L loc (HpPar  e)) exp_ty = do
     e' <- tcExpr e exp_ty
     return (L loc (HpPar e'))
 
-tcExpr (L loc (HpAnno e ty)) exp_ty = do
+tcExpr (L loc (HpAnn e ty)) exp_ty = do
     ann_ty <- instantiate ty
     e' <- tcExpr e ann_ty
     unify ann_ty exp_ty
-    return (L loc (HpAnno e' ty))
+    return (L loc (HpAnn e' ty))
 
 tcExpr (L loc (HpApp e args)) exp_ty = do
     fun_ty <- tiExpr e
@@ -94,42 +96,27 @@ tcExpr (L loc (HpApp e args)) exp_ty = do
     unify res_ty exp_ty
     return (L loc (HpApp e args'))
 
-tcExpr (L loc (HpPred p)) exp_ty = do
+tcExpr e@(L loc (HpPre p)) exp_ty = do
     pred_ty <- instantiate =<< lookupVar p
     unify pred_ty exp_ty
-    return (L loc (HpPred p))
+    return e
 
-tcTerm term exp_ty = do
-    tcWithCtxt (termCtxt term) $ tcTerm' term exp_ty
-
-tcTerm' (L loc (HpCon c)) exp_ty = do
-    unify tyAll exp_ty
-    return (L loc (HpCon c))
-
-tcTerm' (L loc (HpVar v)) exp_ty = do
+tcExpr e@(L loc (HpVar v)) exp_ty = do
     var_ty <- lookupVar v
     unify var_ty exp_ty
-    return (L loc (HpVar v))
+    return e
 
-tcTerm' (L loc (HpFun f tl)) exp_ty = do
-    tl' <- mapM (\t -> tcTerm t tyAll) tl 
-    unify tyAll exp_ty
-    return (L loc (HpFun f tl'))
+tcExpr e@(L loc (HpSym s)) exp_ty = do
+    sym_ty <- lookupVar s
+    unify sym_ty exp_ty
+    return e
 
-tcTerm' (L loc (HpList tl maybe_t)) exp_ty = do
-    tl' <- mapM (\t -> tcTerm t tyAll) tl
-    maybe_t' <- case maybe_t of
-                    Nothing -> return Nothing
-                    Just t ->  tcTerm t tyAll >>= return.Just
-    unify tyAll exp_ty
-    return (L loc (HpList tl' maybe_t'))
 
-tcTerm' (L loc (HpTup tl)) exp_ty = do
-    tl' <- mapM (\t -> tcTerm t tyAll) tl
-    unify tyAll exp_ty
-    return (L loc (HpTup tl'))
+tcExpr e@(L loc (HpTup es)) exp_ty = do
+    tys <- mapM tiExpr es
+    unify (TyTup tys) exp_ty
+    return e
 
-tcTerm' t@(L loc HpWild) exp_ty = return t
 
 -- unification
 
@@ -242,8 +229,9 @@ unificationErr inf_ty exp_ty = do
         typeError desc
 
 
-occurCheckErr tv ty = 
-    typeError (text "Could not construct an infinite type")
+occurCheckErr tv ty = do
+    let desc = text "Could not construct an infinite type:"
+    typeError desc
 
 
 -- error contexts

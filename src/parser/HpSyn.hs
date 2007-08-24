@@ -67,6 +67,9 @@ bAtoms lc =
     let (HpClaus _ _ b) = unLoc lc
     in  b
 
+atomsOf :: LHpClause -> [LHpExpr]
+atomsOf lc = (hAtom lc):(bAtoms lc)
+
 -- the set of the bounded/quantified variables of a clause
 
 boundV :: LHpClause -> [HpName]
@@ -95,7 +98,7 @@ type HpTySign  = (HpName,Type)
 type LHpAtom = LHpExpr
 type LHpTerm = LHpExpr
 
-type HpGoal = [LHpAtom]
+data HpGoal = HpGoal [HpName] [LHpAtom]
 -- get the arguments of an application
 
 argsOf :: LHpExpr -> [LHpExpr]
@@ -127,8 +130,29 @@ isPred e =
         (HpPre _) -> True
         _ -> False
 
+isSym e = 
+    case unLoc e of
+        (HpSym _) -> True
+        _ -> False
+
 predicates :: HpSource -> [HpName]
-predicates src = catMaybes $ map  getId $ filter isPred $ map hAtom $ clauses src 
+predicates src = nub $ catMaybes $ map  getId $ filter isPred $ map (headOf.hAtom) $ clauses src 
+
+symbolsE :: LHpExpr -> [HpName]
+symbolsE le = 
+    case unLoc le of
+        HpPar e -> symbolsE e
+        HpTup es -> concatMap symbolsE es
+        HpSym s -> [s]
+        HpApp e1 e2 -> symbolsE e1 ++ concatMap symbolsE e2
+        HpAnn e t -> symbolsE e
+        _ -> []
+
+symbolsC :: LHpClause -> [HpName]
+symbolsC c = concatMap symbolsE (atomsOf c)
+
+symbols :: HpSource -> [HpName]
+symbols src = nub $ concatMap symbolsC $ clauses src
 
 getId :: (Monad m) => LHpExpr -> m HpName
 getId = getId'.unLoc
@@ -174,8 +198,9 @@ instance Pretty HpTerm where
 
 instance Pretty HpClause where
     ppr (HpClaus _ h []) = ppr (unLoc h) <> dot
-    ppr (HpClaus _ h b)  = hang (ppr (unLoc h) <> entails) 4 $ 
-                            sep (punctuate comma (map (ppr.unLoc) b)) <> dot
+    ppr (HpClaus _ h b)  = 
+        hang (ppr (unLoc h) <> entails) 4 $ 
+                sep (punctuate comma (map (ppr.unLoc) b)) <> dot
 
 instance Pretty HpSource where
     ppr src = vcat $ map (ppr.unLoc) (clauses src)

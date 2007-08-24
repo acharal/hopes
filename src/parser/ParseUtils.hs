@@ -13,6 +13,8 @@ import System.IO
 import Control.Monad.State
 import Control.Monad.Identity
 
+import Debug.Trace
+
 type StringBuffer = String
 
 data Token =
@@ -161,7 +163,7 @@ fixSymE env (L loc (HpTup es)) = do
 fixSymE (ds, bs) e@(L loc (HpSym s)) =
     if s `elem` bs then
         return (L loc (HpVar s))
-    else if s `elem` bs then
+    else if s `elem` ds then
         return (L loc (HpPre s))
     else
         return e
@@ -171,9 +173,15 @@ quant = isUpper.head
 
 mkClause :: LHpExpr -> [LHpExpr] -> HpClause
 mkClause hd bd = 
-    let vars  = catMaybes $ map getId $ map headOf bd
-        vars' = filter quant vars
+    let sym   = concatMap symbolsE (hd:bd)
+        vars' = filter quant sym
     in  HpClaus vars' hd bd
+
+mkGoal :: [LHpExpr] -> HpGoal
+mkGoal es =
+    let vars  = catMaybes $ map getId $ map headOf es
+        vars' = filter quant vars
+    in  HpGoal vars es
 
 parseErrorWithLoc loc msg = 
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []
