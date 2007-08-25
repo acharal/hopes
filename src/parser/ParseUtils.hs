@@ -6,7 +6,7 @@ import Loc
 import Err
 import Pretty
 
-import List (partition)
+import List (partition, nub)
 import Maybe (catMaybes)
 import Char (isUpper)
 import System.IO
@@ -118,7 +118,6 @@ mkTyp (L _ (HpTyTup tl))   = do
 
 mkTyp (L l t) = parseErrorWithLoc (spanBegin l) (text "Not a valid type")
 
-
 type HpStmt   = Either LHpClause LHpTySign
 
 collectEither :: [Either a b] -> ([a], [b])
@@ -140,7 +139,7 @@ quant = isUpper.head
 mkClause :: LHpExpr -> [LHpExpr] -> HpClause
 mkClause hd bd = 
     let sym   = concatMap symbolsE (hd:bd)
-        vars' = filter quant sym
+        vars' = nub $ filter quant sym
     in  HpClaus vars' hd bd
 
 mkGoal :: [LHpExpr] -> HpGoal

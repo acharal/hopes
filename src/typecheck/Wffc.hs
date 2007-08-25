@@ -2,12 +2,15 @@ module Wffc where
 
 import HpSyn
 import TcMonad
+import Tc
 import Types
 import Err
 import Loc
 import Pretty
 import Monad (when)
 import List (partition)
+
+import Debug.Trace
 
 
 {-
@@ -28,6 +31,7 @@ import List (partition)
     4. if t_i is an application e(t'_1, ... t'_k) then must be of type i and every
        t'_i must be of type i. Applications (or partial applications) of relations e
        must not occur in head.
+        4.1 e must not be bounded variable.
 
     II. Restrictions on the body {L_i}
 
@@ -42,57 +46,80 @@ import List (partition)
 
     1. No polymorfism allowed. If any type variable exist must be set to type i.
 
+    IV. Higher Order Expressions
+
+    1. After the type checking, some expressions are polymorphic, meaning that these
+       expression can be either higher order or zero order.
+
+    V. Strategy
+
+    1. Restrict as much as you can the types. Apply first checks that function
+       symbols must be of type i.
+    2. Do the 3 check. Find all variables that occur more than once in the head and
+       *restrict* them to be of type i (because they can't be higher order)
+    4. Check any higher order expressions occurs other than bounded variables.
+    5. Check no1 can be done whenever.
+
+    VI. Utilities
+
+    1. arguments of an application  - done
+    2. check if an expression is an application - easy
+    3. match expressions with types
+    4. 
 -}
 
-
--- check if Source follow the definitional rules of a wfp
--- and zonk the type Environment (namely no tyvar remain)
-dfcSource :: (HpSource, TypeEnv) -> Tc (HpSource, TypeEnv)
-dfcSource (src,tyenv) = do
-    tyenv' <- zonkEnv tyenv
-    extendEnv tyenv' $ do
-        let doCheck c = recoverTc (dfcClause c) (return ())
-        mapM_ doCheck (clauses src)
+wffcSource :: (HpSource, TypeEnv) -> Tc (HpSource, TypeEnv)
+wffcSource (src, tyenv) = do
+    extendEnv tyenv $ do
+        mapM_ (\c -> tcWithLoc c (wffcClause c)) (clauses src)
+        --mapM_ wffcClause (clauses src)
         failIfErr
-        return (src, tyenv')
+        ty_env' <- zonkEnv tyenv
+        return (src, ty_env')
 
 
--- check if HpClause is definitional
-dfcClause :: LHpClause -> Tc ()
-dfcClause cl@(L loc (HpClaus h b)) = 
-    let takeVars ((L _ (HpTerm (L _ (HpVar v)))):rest) = 
-            if bound v then v:(takeVars rest) else (takeVars rest)
-        takeVars ((L _ _):rest) = takeVars rest
-        takeVars [] = []
-    in
-        tcWithCtxt (clauseCtxt cl) $ dfcLhs cl
+wffcClause :: LHpClause -> Tc ()
+wffcClause cl =
+    tcWithCtxt (clauseCtxt cl) $ do
+        let b = boundV cl
+        tvs <- mapM initNewTy b
+        tvs <- tyargs 
+        extendEnv tvs $ do
+            mapM_ checkApps (atomsOf cl)
+            checkHead b (hAtom cl)
 
--- head must contain distinct higher order variables.
-dfcLhs c =
-    let h  = hLit c
-        ts = argsA h
-        takeVars ((L _ (HpTerm (L _ (HpVar v)))):rest) = 
-            if bound v then v:(takeVars rest) else (takeVars rest)
-        takeVars ((L _ _):rest) = takeVars rest
-        takeVars [] = []
-    in tcWithCtxt ( atomCtxt (hLit c) ) $ do
-       case unLoc (headA h) of 
-            (HpPred p) -> do
-                ty <- lookupVar p
-                let ttys   = tyargs ty
-                let hoargs = map fst $ filter (\(v, t) -> order t > 0) $ zip ts ttys
-                let occlst = filter ((>1).snd) $ occurences $ takeVars hoargs
-                when (not (null occlst)) (multiHoOccurErr occlst)
-            (HpTerm (L _ (HpVar v))) -> do
-                varInHead v
-            _ -> do 
-                fail "unexpected error"
+checkApps :: LHpAtom -> Tc ()
+checkApps e = 
+    let as = argsOf e
+        isapp e = case unLoc e of
+                     HpApp _ _ -> True
+                     _ -> False
+        apps = filter isapp as
+    in  do
+        mapM_ (\e -> tcExpr e tyAll) apps   -- restrict the result type to be i
+        let app_args = concatMap argsOf apps
+        mapM_ (\e -> tcExpr e tyAll) $ app_args -- restrict the arguments of the application to be of type i
+        mapM_ checkApps app_args -- check recursively the arguments for nested applications
 
 
-occurences [] = []
-occurences (x:xs) =
-    let (s, r) = partition (==x) (x:xs)
-    in  (x, (length s)):(occurences r)
+checkHead :: [HpSymbol] -> LHpAtom -> Tc ()
+checkHead bv hd =
+    let [hs] = symbolsE $ headOf hd
+        eqsym (HpSym s) (HpSym s') = s == s'
+        eqsym _ _ = False
+    in do
+        when (hs `elem` bv) $ varInHead hs      --head is bounded. unexcepted
+        ty <- lookupVar hs
+        let etys  = zip (argsOf hd) (tyargs ty)
+        let bvtys = filter ((\((HpSym x), _) -> x `elem` bv).isSymbol.fst) etys -- bounded variables 
+            bvo = occurences (\x -> \y -> (unLoc x) `eqsym` (unLoc y)) bv'
+            morethanonce = filter ((>1).snd) bvo
+        mapM_ (\e -> tcExpr e tyAll) $ map fst $ morethanonce
+
+occurences eq [] = []
+occurences eq (x:xs) =
+    let (s, r) = partition (eq x) (x:xs)
+    in  (x, (length s)):(occurences eq r)
 
 
 -- head must not contain "other than" higher order variables in higher-order arg positions
@@ -115,11 +142,6 @@ zonkTy' (TyTup tl) = do
     return (TyTup tl')
 zonkTy' t = return t
 
-atomCtxt (L loc atom) = hang (text "In atom:") 4 (ppr atom)
-
-clauseCtxt lcl@(L loc cl) = 
-    hang (if fact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
-
 multiHoOccurErr occlist =
     typeError (sep ([text "Higher order bound variables",
                      nest 4 (sep (punctuate comma (map (quotes.text.fst) occlist))),
@@ -132,6 +154,7 @@ predInHeadErr preds =
 
 
 varInHead var = 
-    typeError (sep ([text "Bounded variable", quotes (text var), 
+    typeError (sep ([text "Bounded variable", 
+                     nest 4 (quotes (text var)),
                      text "must not occur at the head of atom when in the lhs of rule"]))
 

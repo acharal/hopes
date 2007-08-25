@@ -1,10 +1,24 @@
-RUNHASKELL=runhaskell
+SETUP=runhaskell ./Setup.hs
 RM=rm
 
 all: build
 
-build:
-	$(RUNHASKELL) ./Setup.hs build
+build: .setup-config
+	$(SETUP) build
 
 clean:
-	$(RUNHASKELL) ./Setup.hs clean
+	$(SETUP) clean
+
+.setup-config:
+	$(SETUP) configure
+
+doc:
+	$(SETUP) haddock
+
+
+dist: build
+	$(SETUP) sdist
+
+
+install: build
+	$(SETUP) install

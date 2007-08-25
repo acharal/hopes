@@ -21,7 +21,7 @@ tcSource :: HpSource -> Tc (HpSource, TypeEnv)
 tcSource src = do
     let tysign = map unLoc (tysigs src)
         cls    = clauses src
-    tv_sym <- mapM initNewTy (symbols src)
+    tv_sym <- mapM initNewTy (freeSymSrc src)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
         mapM_ (\c -> tcWithLoc c (tcClause c)) cls
@@ -59,26 +59,28 @@ tiExpr e = do
     tcExpr e var_ty
     return var_ty
 
-tcExpr :: LHpExpr -> MonoType -> Tc ()
+tcExpr, tcExpr' :: LHpExpr -> MonoType -> Tc ()
 
-tcExpr (L _ (HpPar  e)) exp_ty = tcExpr e exp_ty
+tcExpr e t = tcWithCtxt (exprCtxt e) $ tcExpr' e t
 
-tcExpr (L _ (HpAnn e ty)) exp_ty = do
+tcExpr' (L _ (HpPar  e)) exp_ty = tcExpr e exp_ty
+
+tcExpr' (L _ (HpAnn e ty)) exp_ty = do
     ann_ty <- instantiate ty
     tcExpr e ann_ty
     unify ann_ty exp_ty
 
-tcExpr (L _ (HpApp e args)) exp_ty = do
+tcExpr' (L _ (HpApp e args)) exp_ty = do
     fun_ty <- tiExpr e
     (args_ty, res_ty) <- unifyFun (length args) fun_ty
     args' <- zipWithM tcExpr args args_ty
     unify res_ty exp_ty
 
-tcExpr (L _ (HpSym s)) exp_ty = do
+tcExpr' (L _ (HpSym s)) exp_ty = do
     sym_ty <- lookupVar s
     unify sym_ty exp_ty
 
-tcExpr (L _ (HpTup es)) exp_ty = do
+tcExpr' (L _ (HpTup es)) exp_ty = do
     tys <- mapM tiExpr es
     unify (TyTup tys) exp_ty
 
@@ -203,4 +205,4 @@ occurCheckErr tv ty = do
 clauseCtxt lcl@(L loc cl) = 
     hang (if fact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
 atomCtxt (L loc atom) = hang (text "In atom:") 4 (ppr atom)
-termCtxt (L loc term) = hang (text "In term:") 4 (ppr term)
+exprCtxt (L loc expr) = hang (text "In expr:") 4 (ppr expr)

@@ -62,8 +62,6 @@ scanTok ('!':cs) loc         = Tok TKcut    1 cs
 scanTok (';':cs) loc         = Tok TKsemi   1 cs
 scanTok (':':'-':cs) loc     = Tok TKgets   2 cs
 scanTok (':':':':cs) loc     = Tok TKcolcol 2 cs
-scanTok ('{':cs) loc         = Tok TKocurly 1 cs
-scanTok ('}':cs) loc         = Tok TKccurly 1 cs
 scanTok ('-':'>':cs) loc     = Tok TKarrow  2 cs
 scanTok inp@(c:cs) loc
     | isSpace c              = scanSkip inp loc

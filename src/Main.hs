@@ -8,7 +8,7 @@ import Pretty
 import Err
 
 import Tc
---import Wffc
+import Wffc
 import HpSyn
 --import Hopl
 --import ProofProc
@@ -33,7 +33,7 @@ loadSource file = do
     case parse_res of
         Right (p, s) -> do
             pprint p
-            case runTc (tcSource p) of
+            case runTc (tcSource p >>= wffcSource) of
                 (Just (p', env), msgs) -> do
                     return (Just (p', env), msgs)
                 (Nothing, msgs) ->
