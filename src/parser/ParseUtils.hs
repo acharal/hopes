@@ -87,13 +87,13 @@ mkStateWithFile inp file = PState inp tok tok loc
 mkState :: String -> ParseState
 mkState input = mkStateWithFile input "stdin"
 
-getName :: Located Token -> HpName
+getName :: Located Token -> HpSymbol
 getName (L _ (TKid x)) = x
 getName _ = error "not a valid token"
 
 
 data HpType   =
-      HpTyGrd HpName                    -- ground type
+      HpTyGrd HpSymbol                    -- ground type
     | HpTyFun LHpType LHpType           -- type of function
     | HpTyTup [LHpType]                 -- type of tuple
     | HpTyRel LHpType                   -- type of relation / isomorfic to a function type
@@ -134,7 +134,7 @@ mkSrc stmts =
     let (l, r) = collectEither stmts
     in  return HpSrc { clauses = l,  tysigs = r }
 
-quant :: HpName -> Bool
+quant :: HpSymbol -> Bool
 quant = isUpper.head
 
 mkClause :: LHpExpr -> [LHpExpr] -> HpClause
@@ -145,9 +145,9 @@ mkClause hd bd =
 
 mkGoal :: [LHpExpr] -> HpGoal
 mkGoal es =
-    let vars  = catMaybes $ map getId $ map headOf es
-        vars' = filter quant vars
-    in  HpGoal vars es
+    let sym   = concatMap symbolsE es
+        vars' = filter quant sym
+    in  HpGoal vars' es
 
 parseErrorWithLoc loc msg = 
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []

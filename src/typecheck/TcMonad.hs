@@ -27,7 +27,7 @@ data TcState =
         constr :: [Constraint]
     }
 
-type TypeEnv = [ (HpName, Type) ]
+type TypeEnv = [ (HpSymbol, Type) ]
 type Constraint = (TyVar, MonoType)
 
 type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages Identity))
@@ -66,11 +66,11 @@ newTyVar = do
     modify (\s -> s{uniq = n+1})
     return (TyVar (n+1))
 
-extendEnv :: [(HpName, Type)] -> Tc a -> Tc a
+extendEnv :: [(HpSymbol, Type)] -> Tc a -> Tc a
 extendEnv binds m = local extend m
     where extend env = env{tyenv = binds ++ (tyenv env)}
 
-lookupVar :: HpName -> Tc Type
+lookupVar :: HpSymbol -> Tc Type
 lookupVar v = do
     ty_env <- asks tyenv
     case lookup v ty_env of

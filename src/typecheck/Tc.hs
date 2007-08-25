@@ -24,39 +24,34 @@ tcSource src = do
     tv_sym <- mapM initNewTy (symbols src)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
-        cls'    <- mapM (\c -> tcWithLoc c (tcClause c)) cls
+        mapM_ (\c -> tcWithLoc c (tcClause c)) cls
         ty_env  <- asks tyenv >>= normEnv
-        return (src { clauses = cls' }, ty_env)
+        return (src, ty_env)
 
 -- type checking and inference
 
-tcClause, tcClause' :: LHpClause -> Tc LHpClause
+tcClause, tcClause' :: LHpClause -> Tc ()
 
 tcClause clause =
     tcWithCtxt (clauseCtxt clause) $ tcClause' clause
 
-tcClause' c@(L loc (HpClaus v h b)) = do
-    tvs <- mapM initNewTy v
+tcClause' c = do
+    tvs <- mapM initNewTy (boundV c)
     extendEnv tvs $ do
-        h' <- tcAtom h
-        b' <- mapM tcAtom b
-        return (L loc (HpClaus v h' b'))
+        tcAtom (hAtom c)
+        mapM_ tcAtom (bAtoms c)
 
-tcGoal :: LHpGoal -> Tc LHpGoal
+tcGoal :: LHpGoal -> Tc ()
 tcGoal (L loc (HpGoal v g)) = do
     tvs <- mapM initNewTy v
-    extendEnv tvs $ do
-        g' <- mapM tcAtom g
-        return (L loc (HpGoal v g'))
+    extendEnv tvs $ mapM_ tcAtom g
 
-tcAtom :: LHpAtom -> Tc LHpAtom
+tcAtom, tcAtom' :: LHpAtom -> Tc ()
 tcAtom atom = 
     tcWithCtxt (atomCtxt atom) $ tcAtom' atom
 
-tcAtom' :: LHpAtom -> Tc LHpAtom
-tcAtom' e = do
-    e' <- tcExpr e tyBool   -- force atom to be of type Bool
-    return e'
+tcAtom' e = tcExpr e tyBool   -- force atom to be of type Bool
+
 
 tiExpr :: LHpExpr -> Tc MonoType
 tiExpr e = do
@@ -64,41 +59,28 @@ tiExpr e = do
     tcExpr e var_ty
     return var_ty
 
-tcExpr :: LHpExpr -> MonoType -> Tc LHpExpr
+tcExpr :: LHpExpr -> MonoType -> Tc ()
 
-{-
-tcExpr (L loc (HpTerm t)) exp_ty = do
-    t' <- tcTerm t exp_ty
-    return (L loc (HpTerm t'))
--}
+tcExpr (L _ (HpPar  e)) exp_ty = tcExpr e exp_ty
 
-tcExpr (L loc (HpPar  e)) exp_ty = do
-    e' <- tcExpr e exp_ty
-    return (L loc (HpPar e'))
-
-tcExpr (L loc (HpAnn e ty)) exp_ty = do
+tcExpr (L _ (HpAnn e ty)) exp_ty = do
     ann_ty <- instantiate ty
-    e' <- tcExpr e ann_ty
+    tcExpr e ann_ty
     unify ann_ty exp_ty
-    return (L loc (HpAnn e' ty))
 
-tcExpr (L loc (HpApp e args)) exp_ty = do
+tcExpr (L _ (HpApp e args)) exp_ty = do
     fun_ty <- tiExpr e
     (args_ty, res_ty) <- unifyFun (length args) fun_ty
     args' <- zipWithM tcExpr args args_ty
     unify res_ty exp_ty
-    return (L loc (HpApp e args'))
 
-tcExpr e@(L loc (HpSym s)) exp_ty = do
+tcExpr (L _ (HpSym s)) exp_ty = do
     sym_ty <- lookupVar s
     unify sym_ty exp_ty
-    return e
 
-
-tcExpr e@(L loc (HpTup es)) exp_ty = do
+tcExpr (L _ (HpTup es)) exp_ty = do
     tys <- mapM tiExpr es
     unify (TyTup tys) exp_ty
-    return e
 
 
 -- unification

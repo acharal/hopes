@@ -1,5 +1,4 @@
-module Dfc
-where
+module Wffc where
 
 import HpSyn
 import TcMonad
@@ -8,10 +7,43 @@ import Err
 import Loc
 import Pretty
 import Monad (when)
-
 import List (partition)
 
-import Debug.Trace
+
+{-
+    Well-formated formulas
+
+    1. Well - typed
+    2. Definitional
+
+    I. Restrictions on the head atom A
+
+    Let head A of form A = R( t_1, ..., t_n )
+
+    1. R not a bounded variable
+    2. t_1 | ... | t_n does not contain any ho expression that is not a bounded variable.
+    3. for every t_i and t_j, j != i
+       if t_i and t_j are ho bounded variables then t_i != t_j.
+       In other words bounded variables that occur in the head *must* be distinct.
+    4. if t_i is an application e(t'_1, ... t'_k) then must be of type i and every
+       t'_i must be of type i. Applications (or partial applications) of relations e
+       must not occur in head.
+
+    II. Restrictions on the body {L_i}
+
+    Let L_i an atom in B of form L(t_1, ..., t_n)
+
+    5. if t_i is an application f(t'_1, ..., t'_k) must be of type i. Moreover,
+       t'_i must be of type i. No (partial) application of relations allowed.
+       a function symbol must be of type (i, ..., i) -> i. No ho expressions allowed
+       as arguments of function symbols.
+
+    III. Zonking Environment
+
+    1. No polymorfism allowed. If any type variable exist must be set to type i.
+
+-}
+
 
 -- check if Source follow the definitional rules of a wfp
 -- and zonk the type Environment (namely no tyvar remain)

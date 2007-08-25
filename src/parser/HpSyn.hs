@@ -11,7 +11,7 @@ import Maybe(catMaybes)
 import Pretty
 import Types(Type)
 
-type HpName = String
+type HpSymbol = String
 
 data HpSource =
     HpSrc { 
@@ -55,7 +55,7 @@ data HpSource =
        universally quantified.
 -}
 
-data HpClause = HpClaus [HpName] LHpAtom [LHpAtom]
+data HpClause = HpClaus [HpSymbol] LHpAtom [LHpAtom]
 
 hAtom :: LHpClause -> LHpExpr
 hAtom lc = 
@@ -72,7 +72,7 @@ atomsOf lc = (hAtom lc):(bAtoms lc)
 
 -- the set of the bounded/quantified variables of a clause
 
-boundV :: LHpClause -> [HpName]
+boundV :: LHpClause -> [HpSymbol]
 boundV lc = 
     let (HpClaus vs _ _) = unLoc lc
     in  vs
@@ -82,21 +82,21 @@ fact = null.bAtoms
 
 
 data HpExpr  = 
-      HpSym HpName              -- symbol (constant, functional symbol, variable, predicate)
+      HpSym HpSymbol              -- symbol (constant, functional symbol, variable, predicate)
     | HpApp LHpExpr [LHpExpr]   -- general application (predicate or func sym)
     | HpPar LHpExpr             -- parenthesized expression
-    | HpLam [HpName] LHpExpr    -- lambda abstraction
+    | HpLam [HpSymbol] LHpExpr    -- lambda abstraction
     | HpAnn LHpExpr Type        -- type annotated expression
     | HpTup [LHpExpr]           -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
 
 
-type HpTySign  = (HpName,Type)
+type HpTySign  = (HpSymbol,Type)
 
 
 type LHpAtom = LHpExpr
 type LHpTerm = LHpExpr
 
-data HpGoal = HpGoal [HpName] [LHpAtom]
+data HpGoal = HpGoal [HpSymbol] [LHpAtom]
 -- get the arguments of an application
 
 argsOf :: LHpExpr -> [LHpExpr]
@@ -114,9 +114,9 @@ headOf e =
         _ -> e
 
 
--- free variables ?? [HpName]
+-- free variables ?? [HpSymbol]
 
-symbolsE :: LHpExpr -> [HpName]
+symbolsE :: LHpExpr -> [HpSymbol]
 symbolsE le = 
     case unLoc le of
         HpPar e -> symbolsE e
@@ -126,16 +126,12 @@ symbolsE le =
         HpAnn e t -> symbolsE e
         _ -> []
 
-symbolsC :: LHpClause -> [HpName]
+symbolsC :: LHpClause -> [HpSymbol]
 symbolsC c = concatMap symbolsE (atomsOf c)
 
-symbols :: HpSource -> [HpName]
+symbols :: HpSource -> [HpSymbol]
 symbols src = nub $ concatMap symbolsC $ clauses src
 
-getId :: (Monad m) => LHpExpr -> m HpName
-getId = getId'.unLoc
-getId' (HpSym s) = return s
-getId' _ = fail "Expression has no symbols"
 
 -- located syntax 
 

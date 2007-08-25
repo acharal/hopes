@@ -8,7 +8,7 @@ import Pretty
 import Err
 
 import Tc
---import Dfc
+--import Wffc
 import HpSyn
 --import Hopl
 --import ProofProc
