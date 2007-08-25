@@ -132,6 +132,19 @@ symbolsC c = concatMap symbolsE (atomsOf c)
 symbols :: HpSource -> [HpSymbol]
 symbols src = nub $ concatMap symbolsC $ clauses src
 
+isSymbol :: LHpExpr -> Bool
+isSymbol e = 
+    case unLoc e of 
+        (HpSym _) -> True
+        _ -> False
+
+freeSymC :: LHpClause -> [HpSymbol]
+freeSymC cl = filter (\x-> x `notElem` binds) (symbolsC cl)
+    where binds = boundV cl
+
+freeSymSrc :: HpSource -> [HpSymbol]
+freeSymSrc src = concatMap freeSymC (clauses src)
+
 
 -- located syntax 
 

@@ -83,7 +83,6 @@ wffcClause cl =
     tcWithCtxt (clauseCtxt cl) $ do
         let b = boundV cl
         tvs <- mapM initNewTy b
-        tvs <- tyargs 
         extendEnv tvs $ do
             mapM_ checkApps (atomsOf cl)
             checkHead b (hAtom cl)
@@ -109,12 +108,12 @@ checkHead bv hd =
         eqsym _ _ = False
     in do
         when (hs `elem` bv) $ varInHead hs      --head is bounded. unexcepted
-        ty <- lookupVar hs
-        let etys  = zip (argsOf hd) (tyargs ty)
-        let bvtys = filter ((\((HpSym x), _) -> x `elem` bv).isSymbol.fst) etys -- bounded variables 
-            bvo = occurences (\x -> \y -> (unLoc x) `eqsym` (unLoc y)) bv'
-            morethanonce = filter ((>1).snd) bvo
-        mapM_ (\e -> tcExpr e tyAll) $ map fst $ morethanonce
+        -- ty <- lookupVar hs
+        -- let etys  = zip (argsOf hd) (tyargs ty)
+        -- let bvtys = filter ((\((HpSym x), _) -> x `elem` bv).isSymbol.fst) etys -- bounded variables 
+            --bvo = occurences (\x -> \y -> (unLoc x) `eqsym` (unLoc y)) bv'
+            -- morethanonce = filter ((>1).snd) bvo
+            -- mapM_ (\e -> tcExpr e tyAll) $ map fst $ morethanonce
 
 occurences eq [] = []
 occurences eq (x:xs) =
