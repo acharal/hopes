@@ -46,14 +46,14 @@ import Control.Monad.State
 
 %% 
 
-src :: { HpSource }
+src :: { HpSource HpSymbol }
     : stmts                     {% mkSrc (reverse $1) }
 
-stmt :: { HpStmt }
+stmt :: { HpStmt HpSymbol }
      : clause                   { Left  $1 }
      | tysig                    { Right $1 }
 
-stmts :: { [HpStmt] }
+stmts :: { [HpStmt HpSymbol] }
       : stmts stmt              { $2:$1 }
       |                         { [] }
 
@@ -71,33 +71,33 @@ fact :: { LHpClause HpSymbol }
 rule :: { LHpClause HpSymbol }
      : atom ':-' body '.'       { located ($1,$>) $ mkClause $1 $3 }
 
-body :: { [LHpAtom] }
+body :: { [LHpAtom HpSymbol] }
      : conj                     { reverse $1 }
 
-conj :: { [LHpAtom] }
+conj :: { [LHpAtom HpSymbol] }
      : conj ',' atom            { $3:$1 }
      | atom                     { [$1] }
 
-atom :: { LHpAtom }
+atom :: { LHpAtom HpSymbol}
      : exp                      { $1 }
      | '!'                      { located $1      $ undefined }
 
-exp :: { LHpExpr }
+exp :: { LHpExpr HpSymbol}
     : '(' exp ')'               { located ($1,$>) $ HpPar $2 }
     | exp tyann                 { located ($1,$>) $ HpAnn $1 (unLoc $2) }
     | ID                        { located  $1     $ HpSym (tokSym $1) }
     | exp '(' exps2 ')'         { located ($1,$>) $ HpApp $1 (reverse $3) }
 
-exp2 :: { LHpExpr }
+exp2 :: { LHpExpr HpSymbol}
     : term                      { $1 }
     |'(' exp2 ')'               { located ($1,$>) $ HpPar $2 }
     | exp2 tyann                { located ($1,$>) $ HpAnn $1 (unLoc $2) }
 
-exps2 :: { [LHpExpr] }
+exps2 :: { [LHpExpr HpSymbol] }
      : exps2 ',' exp2           { $3:$1 }
      | exp2                     { [$1] }
 
-term :: { LHpTerm }
+term :: { LHpTerm HpSymbol }
     : ID                        { located $1      $ HpSym (tokSym $1) }
     | '_'                       { located $1      $ HpSym (Sym "_") }
     | ID '(' terms ')'          { located ($1,$>) $ HpApp (located $1 (HpSym (tokSym $1))) (reverse $3) }
@@ -110,11 +110,11 @@ term :: { LHpTerm }
     | '{' terms '}'             { located ($1,$>) $ HpSet $2 }
 -}
 
-terms :: { [LHpTerm] }
+terms :: { [LHpTerm HpSymbol] }
       : terms ',' term          { $3:$1 }
       | term                    { [$1] }
 
-terms2 :: { [LHpTerm] }
+terms2 :: { [LHpTerm HpSymbol] }
        : terms2 ',' term        { $3:$1 }
        | term ',' term          { $3:$1:[] }
 
@@ -132,7 +132,7 @@ types :: {  [LHpType]  }
       : types ',' type          { $3:$1 }
       | type                    { [$1]  }
 
-tysig :: { LHpTySign }
+tysig :: { LHpTySign HpSymbol }
       : ID '/' ID tyann         { located ($1,$>) $ ((tokSym $1),(unLoc $4)) }
 
 tyann :: { Located Type }

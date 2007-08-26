@@ -33,5 +33,5 @@ Other-Modules:	Lexer
 		ProofProc
 		Logic
 Extensions:	RankNTypes
-Ghc-Options:	-O 
+Ghc-Options:	 
 

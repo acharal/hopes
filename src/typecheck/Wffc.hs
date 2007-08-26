@@ -68,7 +68,7 @@ import Debug.Trace
     4. 
 -}
 
-wffcSource :: (HpSource, TypeEnv) -> Tc (HpSource, TypeEnv)
+-- wffcSource :: (HpSource a, TypeEnv) -> Tc (HpSource a, TypeEnv)
 wffcSource (src, tyenv) = do
     extendEnv tyenv $ do
         mapM_ (\c -> withLocation c (wffcClause c)) (clauses src)
@@ -78,7 +78,7 @@ wffcSource (src, tyenv) = do
         return (src, ty_env')
 
 
-wffcClause :: (Binder a HpSymbol) => LHpClause a -> Tc ()
+-- wffcClause :: LHpClause a -> Tc ()
 wffcClause cl =
     tcWithCtxt (clauseCtxt cl) $ do
         let b = map binds $ bindings (unLoc cl)
@@ -87,7 +87,7 @@ wffcClause cl =
             mapM_ checkApps (atomsOf cl)
             checkHead b (hAtom cl)
 
-checkApps :: LHpAtom -> Tc ()
+-- checkApps :: LHpAtom a -> Tc ()
 checkApps e = 
     let as = argsOf e
         isapp e = case unLoc e of
@@ -101,7 +101,7 @@ checkApps e =
         mapM_ checkApps app_args -- check recursively the arguments for nested applications
 
 
-checkHead :: [HpSymbol] -> LHpAtom -> Tc ()
+-- checkHead :: [a] -> LHpAtom a -> Tc ()
 checkHead bv hd =
     let [hs] = symbolsE $ headOf hd
         eqsym (HpSym s) (HpSym s') = s == s'

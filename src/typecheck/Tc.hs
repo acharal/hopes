@@ -17,7 +17,7 @@ import Control.Monad.Reader (asks)
 import Control.Monad.State  (gets)
 
 
-tcSource :: HpSource -> Tc (HpSource, TypeEnv)
+tcSource :: HpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
 tcSource src = do
     let tysign = map unLoc (tysigs src)
         cls    = clauses src
@@ -30,7 +30,7 @@ tcSource src = do
 
 -- type checking and inference
 
-tcClause, tcClause' :: (Binder a HpSymbol) => LHpClause a -> Tc ()
+-- tcClause, tcClause' :: LHpClause a -> Tc ()
 
 tcClause clause =
     tcWithCtxt (clauseCtxt clause) $ tcClause' clause
@@ -41,26 +41,27 @@ tcClause' c = do
         tcAtom (hAtom c)
         mapM_ tcAtom (bAtoms c)
 
-tcGoal :: (Binder a HpSymbol) => LHpGoal a -> Tc ()
+-- tcGoal :: LHpGoal a -> Tc ()
 tcGoal g' = do
     let g = unLoc g'
+        (HpG _ b) = g
     tvs <- mapM initNewTy (map binds (bindings g))
-    extendEnv tvs $ mapM_ tcAtom (unbind g)
+    extendEnv tvs $ mapM_ tcAtom b
 
-tcAtom, tcAtom' :: LHpAtom -> Tc ()
+-- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
 tcAtom atom = 
     tcWithCtxt (atomCtxt atom) $ tcAtom' atom
 
 tcAtom' e = tcExpr e tyBool   -- force atom to be of type Bool
 
 
-tiExpr :: LHpExpr -> Tc MonoType
+-- tiExpr :: LHpExpr a -> Tc MonoType
 tiExpr e = do
     var_ty <- newTyVar
     tcExpr e var_ty
     return var_ty
 
-tcExpr, tcExpr' :: LHpExpr -> MonoType -> Tc ()
+-- tcExpr, tcExpr' :: LHpExpr a -> MonoType -> Tc ()
 
 tcExpr e t = tcWithCtxt (exprCtxt e) $ tcExpr' e t
 

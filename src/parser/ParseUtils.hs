@@ -115,7 +115,7 @@ mkTyp (L _ (HpTyTup tl))   = do
 
 mkTyp (L l t) = parseErrorWithLoc (spanBegin l) (text "Not a valid type")
 
-type HpStmt   = Either (LHpClause HpSymbol) LHpTySign
+type HpStmt a = Either (LHpClause a) (LHpTySign a)
 
 collectEither :: [Either a b] -> ([a], [b])
 collectEither es = (map unL l, map unR r)
@@ -125,7 +125,7 @@ collectEither es = (map unL l, map unR r)
           unR (Right a) = a
           (l, r) = partition isLeft es
 
-mkSrc :: [HpStmt] -> Parser HpSource
+mkSrc :: [HpStmt a] -> Parser (HpSource a)
 mkSrc stmts = 
     let (l, r) = collectEither stmts
     in  return HpSrc { clauses = l,  tysigs = r }
@@ -133,17 +133,17 @@ mkSrc stmts =
 quant :: Symbol a => a -> Bool
 quant = isUpper.head.symbolName
 
-mkClause :: LHpExpr -> [LHpExpr] -> HpClause HpSymbol
+--mkClause :: LHpExpr a -> [LHpExpr a] -> HpClause a
 mkClause hd bd = 
     let sym   = concatMap symbolsE (hd:bd)
-        vars' = nub $ filter quant sym
-    in  (Q vars' (hd,bd))
+        vars' = map HpBind $ nub $ filter quant sym
+    in  (HpC vars' hd bd)
 
-mkGoal :: [LHpExpr] -> HpGoal HpSymbol
+--mkGoal :: [LHpExpr a] -> HpGoal a
 mkGoal es =
     let sym   = concatMap symbolsE es
-        vars' = filter quant sym
-    in  (Q vars' es)
+        vars' = map HpBind $ filter quant sym
+    in  (HpG vars' es)
 
 parseErrorWithLoc loc msg = 
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []

@@ -29,7 +29,7 @@ data TcState =
 
 
 type TypeEnv = [ (HpSymbol, Type) ]
--- type TypeEnv = Map.Map HpSymbol Type
+-- type TypeEnv a = Map.Map a Type
 
 type Constraint = (TyVar, MonoType)
 
@@ -105,4 +105,23 @@ tcWithCtxt c m = local addctxt m
 {-
 withContext :: Context -> Tc a -> Tc a
 withContext c m = withLoc (loc c) $ local (\e -> e{ctxt = c:(ctxt env)) m
+
+
+
+clauseCtxt lcl@(L loc cl) = 
+    hang (if fact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
+atomCtxt (L loc atom) = hang (text "In atom:") 4 (ppr atom)
+exprCtxt (L loc expr) = hang (text "In expr:") 4 (ppr expr)
+
+data Context = 
+      CtxtClause LHpClause
+    | CtxtAtom LHpAtom 
+    | CtxtExpr LHpExpr
+
+
+instance HasLocation Context where
+    locSpan (CtxtClause x)  = locSpan x
+    locSpan (CtxtAtom x)    = locSpan x
+    locSpan (CtxtExpr x)    = locSpan x
+
 -}
