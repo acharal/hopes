@@ -11,14 +11,6 @@ import Maybe(catMaybes)
 import Pretty
 import Types(Type)
 
-type HpSymbol = String
-
-data HpSource =
-    HpSrc { 
-        tysigs  :: [LHpTySign],
-        clauses :: [LHpClause]
-    }
-
 {-
     Preliminaries
     1. Symbols
@@ -55,29 +47,85 @@ data HpSource =
        universally quantified.
 -}
 
-data HpClause = HpClaus [HpSymbol] LHpAtom [LHpAtom]
+newtype HpSymbol = Sym String deriving Eq
 
-hAtom :: LHpClause -> LHpExpr
+class Symbol a where
+    symbolName :: a -> String
+
+instance Symbol HpSymbol where
+    --symbolName :: HpSymbol -> String
+    symbolName (Sym s) = s
+
+{- -fallow-undecidable-instances
+instance Symbol a => Pretty a where
+    ppr a = ppr (text (symbolName a))
+-}
+
+data BuildIn = HpList | HpWild | HpNat | HpSet | HpCut
+
+buildinSymbol :: BuildIn -> HpSymbol
+buildinSymbol HpList = Sym "[]"
+buildinSymbol HpWild = Sym "_"
+buildinSymbol HpNat  = Sym "_s"
+buildinSymbol HpSet  = Sym "{}"
+buildinSymbol HpCut  = Sym "!"
+
+instance Pretty HpSymbol where
+    ppr (Sym s) = text s
+
+instance Show HpSymbol where
+    showsPrec p (Sym s) = showsPrec p s
+
+
+data HpSource =
+    HpSrc { 
+        tysigs  :: [LHpTySign],
+        clauses :: [LHpClause HpSymbol]
+    }
+
+
+data Quantified b a = Q [b] a
+
+class (Symbol s) => Binder a s where
+    binds :: a -> s
+
+newtype VarBind a = VB a
+
+instance (Symbol s) => Binder (VarBind s) s where
+    binds (VB a) = a
+
+instance (Symbol s) => Binder s s where
+    binds s = s
+
+{-
+class (Symbol s, Binder b s) => IsQuantified a b s where
+    bindings :: a -> [b]
+
+instance (Symbol s, Binder b s) => IsQuantified (Quantified b a) b s where
+    bindings (Q b _) = b
+-}
+
+bindings (Q b _) = b
+unbind (Q b a) = a
+bind b (Q b' a) = (Q (b:b') a)
+
+type HpClause b = Quantified b (LHpAtom, [LHpAtom])
+type HpGoal b   = Quantified b [LHpAtom]
+
+hAtom :: LHpClause a -> LHpExpr
 hAtom lc = 
-    let (HpClaus _ h _) = unLoc lc
+    let (Q _ (h,_)) = unLoc lc
     in  h
 
-bAtoms :: LHpClause -> [LHpExpr]
+bAtoms :: LHpClause a -> [LHpExpr]
 bAtoms lc = 
-    let (HpClaus _ _ b) = unLoc lc
+    let (Q _ (_,b)) = unLoc lc
     in  b
 
-atomsOf :: LHpClause -> [LHpExpr]
+atomsOf :: LHpClause a -> [LHpExpr]
 atomsOf lc = (hAtom lc):(bAtoms lc)
 
--- the set of the bounded/quantified variables of a clause
-
-boundV :: LHpClause -> [HpSymbol]
-boundV lc = 
-    let (HpClaus vs _ _) = unLoc lc
-    in  vs
-
-fact :: LHpClause -> Bool
+fact :: LHpClause a -> Bool
 fact = null.bAtoms
 
 
@@ -96,8 +144,6 @@ type HpTySign  = (HpSymbol,Type)
 type LHpAtom = LHpExpr
 type LHpTerm = LHpExpr
 
-data HpGoal = HpGoal [HpSymbol] [LHpAtom]
--- get the arguments of an application
 
 argsOf :: LHpExpr -> [LHpExpr]
 argsOf e = 
@@ -126,7 +172,7 @@ symbolsE le =
         HpAnn e t -> symbolsE e
         _ -> []
 
-symbolsC :: LHpClause -> [HpSymbol]
+symbolsC :: LHpClause a -> [HpSymbol]
 symbolsC c = concatMap symbolsE (atomsOf c)
 
 symbols :: HpSource -> [HpSymbol]
@@ -138,9 +184,9 @@ isSymbol e =
         (HpSym _) -> True
         _ -> False
 
-freeSymC :: LHpClause -> [HpSymbol]
-freeSymC cl = filter (\x-> x `notElem` binds) (symbolsC cl)
-    where binds = boundV cl
+freeSymC :: Binder a HpSymbol => LHpClause a -> [HpSymbol]
+freeSymC cl = filter (\x-> x `notElem` b) (symbolsC cl)
+    where b = map binds (bindings (unLoc cl))
 
 freeSymSrc :: HpSource -> [HpSymbol]
 freeSymSrc src = concatMap freeSymC (clauses src)
@@ -148,11 +194,11 @@ freeSymSrc src = concatMap freeSymC (clauses src)
 
 -- located syntax 
 
-type LHpSource = Located HpSource
-type LHpClause = Located HpClause
+type LHpClause a = Located (HpClause a)
+type LHpGoal a   = Located (HpGoal a)
 type LHpTySign = Located HpTySign
 type LHpExpr   = Located HpExpr
-type LHpGoal   = Located HpGoal
+
 
 
  -- pretty printing 
@@ -160,7 +206,7 @@ type LHpGoal   = Located HpGoal
 instance Pretty HpExpr where
     ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
     ppr (HpPar e)     = parens (ppr (unLoc e))
-    ppr (HpSym s)     = text s
+    ppr (HpSym s)     = text (symbolName s)
     ppr (HpApp e es)  = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
     ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
 {-
@@ -179,9 +225,9 @@ instance Pretty HpTerm where
                     Just t  -> [text "|" <+> ppr (unLoc t)]
 -}
 
-instance Pretty HpClause where
-    ppr (HpClaus _ h []) = ppr (unLoc h) <> dot
-    ppr (HpClaus _ h b)  = 
+instance Pretty (HpClause b) where
+    ppr (Q _ (h,[])) = ppr (unLoc h) <> dot
+    ppr (Q _ (h,b))  = 
         hang (ppr (unLoc h) <> entails) 4 $ 
                 sep (punctuate comma (map (ppr.unLoc) b)) <> dot
 

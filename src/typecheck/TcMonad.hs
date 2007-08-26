@@ -22,22 +22,34 @@ data TcEnv =
 data TcState = 
     TcState {
         uniq   :: Int,
-        loc    :: Loc,
+        l      :: Loc,
         msgs   :: Messages,
-        constr :: [Constraint]
+        constr :: ConstrEnv
     }
 
+
 type TypeEnv = [ (HpSymbol, Type) ]
+-- type TypeEnv = Map.Map HpSymbol Type
+
 type Constraint = (TyVar, MonoType)
 
+type ConstrEnv = [ (TyVar, MonoType) ]
+-- type ConstrEnv = Map.Map TyVar MonoType
+
 type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages Identity))
+
+instance MonadLoc Tc where
+    getLoc = gets l
+
+instance MonadSetLoc Tc where
+    withLoc l' m = modify (\x -> x{l = l'}) >> m
 
 runTc m = 
     case run of
         Left msgs -> (Nothing, msgs)
         Right (a, st) -> (Just a, msgs st)
     where run = runIdentity $ runErrorT $ runStateT (runReaderT m initEnv) initSt
-          initSt  = TcState { loc = noLoc, uniq = 0, msgs = emptyMsgs, constr = [] }
+          initSt  = TcState { l = bogusLoc, uniq = 0, msgs = emptyMsgs, constr = [] }
           initEnv = TcEnv { tyenv = [], ctxt  = [] }
 
 runTcWithEnv env m = runTc (extendEnv env m)
@@ -56,9 +68,9 @@ failIfErr = do
 -- typeError :: Desc -> Tc ()
 typeError :: ErrDesc -> Tc a
 typeError err = do
-    loc <- gets loc
+    l <- getLoc
     diagnosis <- asks ctxt
-    throwError $ mkMsgs $ mkErrWithLoc loc TypeError Failure err diagnosis
+    throwError $ mkMsgs $ mkErrWithLoc l TypeError Failure err diagnosis
 
 newTyVar :: Tc MonoType
 newTyVar = do
@@ -74,7 +86,7 @@ lookupVar :: HpSymbol -> Tc Type
 lookupVar v = do
     ty_env <- asks tyenv
     case lookup v ty_env of
-        Nothing -> typeError (sep [text "Variable", quotes (text v), text "out of scope"] )
+        Nothing -> typeError (sep [text "Variable", quotes (ppr v), text "out of scope"] )
         Just ty -> return ty
 
 lookupTyVar :: TyVar -> Tc (Maybe MonoType)
@@ -90,8 +102,3 @@ tcWithCtxt :: Context -> Tc a -> Tc a
 tcWithCtxt c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}
 
-setLoc :: Loc -> Tc ()
-setLoc l = modify (\s -> s{loc=l})
-
-tcWithLoc :: Located a -> Tc b -> Tc b
-tcWithLoc (L loc _) tc = setLoc (spanBegin loc) >> tc

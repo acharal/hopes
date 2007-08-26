@@ -71,17 +71,17 @@ import Debug.Trace
 wffcSource :: (HpSource, TypeEnv) -> Tc (HpSource, TypeEnv)
 wffcSource (src, tyenv) = do
     extendEnv tyenv $ do
-        mapM_ (\c -> tcWithLoc c (wffcClause c)) (clauses src)
+        mapM_ (\c -> withLocation c (wffcClause c)) (clauses src)
         --mapM_ wffcClause (clauses src)
         failIfErr
         ty_env' <- zonkEnv tyenv
         return (src, ty_env')
 
 
-wffcClause :: LHpClause -> Tc ()
+wffcClause :: (Binder a HpSymbol) => LHpClause a -> Tc ()
 wffcClause cl =
     tcWithCtxt (clauseCtxt cl) $ do
-        let b = boundV cl
+        let b = map binds $ bindings (unLoc cl)
         tvs <- mapM initNewTy b
         extendEnv tvs $ do
             mapM_ checkApps (atomsOf cl)
@@ -154,6 +154,6 @@ predInHeadErr preds =
 
 varInHead var = 
     typeError (sep ([text "Bounded variable", 
-                     nest 4 (quotes (text var)),
+                     nest 4 (quotes (ppr var)),
                      text "must not occur at the head of atom when in the lhs of rule"]))
 

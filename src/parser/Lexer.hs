@@ -16,23 +16,25 @@ lexer :: (Located Token -> Parser a) -> Parser a
 lexer cont = lexToken >>= \tok -> setLastTok tok >> cont tok
 
 lexToken :: Parser (Located Token)
+
 lexToken = do
     inp <- getSrcBuf
-    loc <- getSrcLoc
-    case scanTok inp loc of
+    ls <- getLocSpan
+    lexToken' inp (spanEnd ls)
+
+lexToken' :: StringBuffer -> Loc -> Parser (Located Token)
+lexToken' inp l = do
+    case scanTok inp l of
         TokEnd -> do
-            return (mkLTk loc loc TKEOF)
-        TokError loc2 inp2 -> do
+            return $ located l TKEOF
+        TokError l2 inp2 -> do
             lexError inp2
-        TokSkip loc2 inp2 -> do
-            setSrcBuf inp2
-            setSrcLoc loc2
-            lexToken
+        TokSkip l2 inp2 -> do
+            lexToken' inp2 l2
         Tok t len inp2 -> do
-            let loc2 = loc{locOffset=(locOffset loc)+len}
+            let l2 = l{locOffset=(locOffset l)+len}
             setSrcBuf inp2
-            setSrcLoc loc2
-            return (mkLTk loc loc2 t)
+            return $ located (l,l2) t
 
 data ScanResult = 
     Tok Token Int String
@@ -63,26 +65,26 @@ scanTok (';':cs) loc         = Tok TKsemi   1 cs
 scanTok (':':'-':cs) loc     = Tok TKgets   2 cs
 scanTok (':':':':cs) loc     = Tok TKcolcol 2 cs
 scanTok ('-':'>':cs) loc     = Tok TKarrow  2 cs
-scanTok inp@(c:cs) loc
-    | isSpace c              = scanSkip inp loc
-    | isUpper c              = scanName TKid inp loc
-    | isLower c || isDigit c = scanName TKid inp loc
+scanTok inp@(c:cs) l
+    | isSpace c              = scanSkip inp l
+    | isUpper c              = scanName TKid inp l
+    | isLower c || isDigit c = scanName TKid inp l
 scanTok inp loc              = TokError loc inp
 
 scanName :: (String -> Token) -> ScanAction
-scanName cstr cs loc = Tok (cstr name) (length name) rest
+scanName cstr cs l   = Tok (cstr name) (length name) rest
    where (name,rest) = span isNameChar cs
 
 scanSkip :: ScanAction
-scanSkip inp loc = 
-    let scanSkip_aux o l (c:cs) loc
-                 | c == '\n'              = scanSkip_aux 1 (l+1) cs loc
-                 | isSpace c              = scanSkip_aux (o+1) l cs loc
-                 | otherwise              = TokSkip loc{locOffset=o, locLine=l} (c:cs)
-        scanSkip_aux o l [] loc           = TokEnd
-    in scanSkip_aux (locOffset loc) (locLine loc) inp loc
+scanSkip inp lo = 
+    let scanSkip_aux o l (c:cs) lo
+                 | c == '\n'              = scanSkip_aux 1 (l+1) cs lo
+                 | isSpace c              = scanSkip_aux (o+1) l cs lo
+                 | otherwise              = TokSkip lo{locOffset=o, locLine=l} (c:cs)
+        scanSkip_aux o l [] lo            = TokEnd
+    in scanSkip_aux (locOffset lo) (locLine lo) inp lo
 
 scanSkipLine :: ScanAction
-scanSkipLine inp loc = scanSkip inp2 loc{locOffset=1, locLine=(locLine loc) + 1}
+scanSkipLine inp lo = scanSkip inp2 lo{locOffset=1, locLine=(locLine lo) + 1}
     where (com, ('\n':inp2)) = span (/='\n') inp
 

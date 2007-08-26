@@ -37,17 +37,20 @@ data Token =
     | TKarrow
     | TKid String
     | TKEOF
+    | TKBOF
    deriving Eq
 
 type Parser = StateT ParseState (ErrorT Messages Identity)
 
 data ParseState = PState {
     buffer   :: StringBuffer,
-    --last_loc :: Loc,
     last_tok :: Located Token,
-    cur_tok  :: Located Token,
-    loc      :: Loc }
-    deriving Show
+    cur_tok  :: Located Token
+    }
+
+
+instance MonadLoc Parser where
+    getLocSpan = gets (locSpan.cur_tok)
 
 
 getSrcBuf :: Parser StringBuffer
@@ -56,20 +59,11 @@ getSrcBuf = gets buffer
 setSrcBuf :: StringBuffer -> Parser ()
 setSrcBuf inp = modify (\s -> s{buffer=inp})
 
-getSrcLoc :: Parser Loc
-getSrcLoc = gets loc
-
-setSrcLoc :: Loc -> Parser ()
-setSrcLoc l = modify (\s -> s{loc=l})
-
 setLastTok :: Located Token -> Parser ()
 setLastTok t = modify (\s -> s{cur_tok=t, last_tok = (cur_tok s)})
 
 getLastTok :: Parser (Located Token)
 getLastTok = gets last_tok
-
-getTok :: Parser (Located Token)
-getTok = gets cur_tok
 
 runParser p s = runIdentity $ runErrorT $ runStateT p s
 
@@ -80,20 +74,23 @@ parseFromFile p fname = do
     return result
 
 
-mkStateWithFile inp file = PState inp tok tok loc
-    where loc = Loc file 1 1
-          tok = undefined
+mkStateWithFile inp file = PState inp tok tok
+    where l   = Loc file 1 1
+          tok = located l TKBOF
 
 mkState :: String -> ParseState
 mkState input = mkStateWithFile input "stdin"
 
-getName :: Located Token -> HpSymbol
-getName (L _ (TKid x)) = x
-getName _ = error "not a valid token"
+tokSym :: Located Token -> HpSymbol
+tokSym t = Sym (tokId t)
+
+tokId :: Located Token -> String
+tokId (L _ (TKid x)) = x
+tokId _ = error "not a valid token"
 
 
 data HpType   =
-      HpTyGrd HpSymbol                    -- ground type
+      HpTyGrd String                    -- ground type
     | HpTyFun LHpType LHpType           -- type of function
     | HpTyTup [LHpType]                 -- type of tuple
     | HpTyRel LHpType                   -- type of relation / isomorfic to a function type
@@ -118,7 +115,7 @@ mkTyp (L _ (HpTyTup tl))   = do
 
 mkTyp (L l t) = parseErrorWithLoc (spanBegin l) (text "Not a valid type")
 
-type HpStmt   = Either LHpClause LHpTySign
+type HpStmt   = Either (LHpClause HpSymbol) LHpTySign
 
 collectEither :: [Either a b] -> ([a], [b])
 collectEither es = (map unL l, map unR r)
@@ -133,28 +130,27 @@ mkSrc stmts =
     let (l, r) = collectEither stmts
     in  return HpSrc { clauses = l,  tysigs = r }
 
-quant :: HpSymbol -> Bool
-quant = isUpper.head
+quant :: Symbol a => a -> Bool
+quant = isUpper.head.symbolName
 
-mkClause :: LHpExpr -> [LHpExpr] -> HpClause
+mkClause :: LHpExpr -> [LHpExpr] -> HpClause HpSymbol
 mkClause hd bd = 
     let sym   = concatMap symbolsE (hd:bd)
         vars' = nub $ filter quant sym
-    in  HpClaus vars' hd bd
+    in  (Q vars' (hd,bd))
 
-mkGoal :: [LHpExpr] -> HpGoal
+mkGoal :: [LHpExpr] -> HpGoal HpSymbol
 mkGoal es =
     let sym   = concatMap symbolsE es
         vars' = filter quant sym
-    in  HpGoal vars' es
+    in  (Q vars' es)
 
 parseErrorWithLoc loc msg = 
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []
 
 parseError msg = do
-    tok <- gets cur_tok
-    let loc = spanBegin $ getLoc tok
-    parseErrorWithLoc loc msg
+    l <- getLoc
+    parseErrorWithLoc l msg
 
 instance Show Token where
     showsPrec n (TKoparen) = showString "("
@@ -176,9 +172,6 @@ instance Show Token where
     showsPrec n (TKarrow)  = showString "->"
     showsPrec n (TKid s)   = showString s
 
-type LTok = Located Token
-
-mkLTk = mkLoc
 
 instance Pretty Token where
     ppr t = text (show t)

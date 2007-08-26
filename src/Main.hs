@@ -85,4 +85,4 @@ printSol (x:xs) = do
 -}
 
 ppr_env env = vcat (map ppr_aux env)
-    where ppr_aux (v, t) = hang ((text v) <+> (text "::")) (length v + 4) $ sep [(ppr t), text "order", int (order t)]
+    where ppr_aux (v, t) = hang ((ppr v) <+> (text "::")) (length (symbolName v) + 4) $ sep [(ppr t), text "order", int (order t)]

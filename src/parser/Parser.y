@@ -57,19 +57,19 @@ stmts :: { [HpStmt] }
       : stmts stmt              { $2:$1 }
       |                         { [] }
 
-clause :: { LHpClause }
+clause :: { LHpClause HpSymbol }
        : rule                   { $1 }
        | fact                   { $1 }
 
-clauses :: { [LHpClause] }
+clauses :: { [LHpClause HpSymbol] }
         : clauses clause        { $2:$1 }
         |                       { [] }
 
-fact :: { LHpClause }
-     : atom '.'                 { L (combLoc $1 $>) $ mkClause $1 [] }
+fact :: { LHpClause HpSymbol }
+     : atom '.'                 { located ($1,$>) $ mkClause $1 [] }
 
-rule :: { LHpClause }
-     : atom ':-' body '.'       { L (combLoc $1 $>) $ mkClause $1 $3 }
+rule :: { LHpClause HpSymbol }
+     : atom ':-' body '.'       { located ($1,$>) $ mkClause $1 $3 }
 
 body :: { [LHpAtom] }
      : conj                     { reverse $1 }
@@ -80,34 +80,34 @@ conj :: { [LHpAtom] }
 
 atom :: { LHpAtom }
      : exp                      { $1 }
-     | '!'                      { L (getLoc $1)     $ undefined }
+     | '!'                      { located $1      $ undefined }
 
 exp :: { LHpExpr }
-    : '(' exp ')'               { L (combLoc $1 $>) $ HpPar $2 }
-    | exp tyann                 { L (combLoc $1 $>) $ HpAnn $1 (unLoc $2) }
-    | ID                        { L (getLoc $1)     $ HpSym (getName $1) }
-    | exp '(' exps2 ')'         { L (combLoc $1 $>) $ HpApp $1 (reverse $3) }
+    : '(' exp ')'               { located ($1,$>) $ HpPar $2 }
+    | exp tyann                 { located ($1,$>) $ HpAnn $1 (unLoc $2) }
+    | ID                        { located  $1     $ HpSym (tokSym $1) }
+    | exp '(' exps2 ')'         { located ($1,$>) $ HpApp $1 (reverse $3) }
 
 exp2 :: { LHpExpr }
     : term                      { $1 }
-    |'(' exp2 ')'               { L (combLoc $1 $>) $ HpPar $2 }
-    | exp2 tyann                { L (combLoc $1 $>) $ HpAnn $1 (unLoc $2) }
+    |'(' exp2 ')'               { located ($1,$>) $ HpPar $2 }
+    | exp2 tyann                { located ($1,$>) $ HpAnn $1 (unLoc $2) }
 
 exps2 :: { [LHpExpr] }
      : exps2 ',' exp2           { $3:$1 }
      | exp2                     { [$1] }
 
 term :: { LHpTerm }
-    : ID                        { L (getLoc $1)     $ HpSym (getName $1) }
-    | '_'                       { L (getLoc $1)     $ HpSym "_" }
-    | ID '(' terms ')'          { L (combLoc $1 $>) $ HpApp (L (getLoc $1) (HpSym (getName $1))) (reverse $3) }
-    | '(' terms2 ')'            { L (combLoc $1 $>) $ HpTup (reverse $2) }
+    : ID                        { located $1      $ HpSym (tokSym $1) }
+    | '_'                       { located $1      $ HpSym (Sym "_") }
+    | ID '(' terms ')'          { located ($1,$>) $ HpApp (located $1 (HpSym (tokSym $1))) (reverse $3) }
+    | '(' terms2 ')'            { located ($1,$>) $ HpTup (reverse $2) }
 {-
-    | '[' ']'                   { L (combLoc $1 $>) $ HpList []           Nothing   }
-    | '[' terms ']'             { L (combLoc $1 $>) $ HpList (reverse $2) Nothing   }
-    | '[' terms '|' term ']'    { L (combLoc $1 $>) $ HpList (reverse $2) (Just $4) }
-    | '{' '}'                   { L (combLoc $1 $>) $ HpSet [] }
-    | '{' terms '}'             { L (combLoc $1 $>) $ HpSet $2 }
+    | '[' ']'                   { located ($1,$>) $ HpList []           Nothing   }
+    | '[' terms ']'             { located ($1,$>) $ HpList (reverse $2) Nothing   }
+    | '[' terms '|' term ']'    { located ($1,$>) $ HpList (reverse $2) (Just $4) }
+    | '{' '}'                   { located ($1,$>) $ HpSet [] }
+    | '{' terms '}'             { located ($1,$>) $ HpSet $2 }
 -}
 
 terms :: { [LHpTerm] }
@@ -118,25 +118,25 @@ terms2 :: { [LHpTerm] }
        : terms2 ',' term        { $3:$1 }
        | term ',' term          { $3:$1:[] }
 
-goal :: { LHpGoal }
-     :                          { L (UselessSpan noLoc noLoc) $ mkGoal [] }
-     | conj                     { L (UselessSpan noLoc noLoc) $ mkGoal (reverse $1) }
+goal :: { LHpGoal HpSymbol }
+     :                          { located bogusLoc $ mkGoal [] }
+     | conj                     { located bogusLoc $ mkGoal (reverse $1) }
 
 type :: { LHpType }
-     : ID                       { L (getLoc $1)     $ HpTyGrd (getName $1) }
-     | type '->' type           { L (combLoc $1 $>) $ HpTyFun $1 $3 }
-     | '(' types ')'            { L (combLoc $1 $>) $ HpTyTup (reverse $2) }
-     | '{' type '}'             { L (combLoc $1 $>) $ HpTyRel $2 }
+     : ID                       { located $1      $ HpTyGrd (tokId $1) }
+     | type '->' type           { located ($1,$>) $ HpTyFun $1 $3 }
+     | '(' types ')'            { located ($1,$>) $ HpTyTup (reverse $2) }
+     | '{' type '}'             { located ($1,$>) $ HpTyRel $2 }
 
 types :: {  [LHpType]  }
       : types ',' type          { $3:$1 }
       | type                    { [$1]  }
 
 tysig :: { LHpTySign }
-      : ID '/' ID tyann         { L (combLoc $1 $>) $ ((getName $1),(unLoc $4)) }
+      : ID '/' ID tyann         { located ($1,$>) $ ((tokSym $1),(unLoc $4)) }
 
 tyann :: { Located Type }
-      : '::' type               {% mkTyp $2 >>= \t -> return (L (combLoc $1 $>) t) }
+      : '::' type               {% mkTyp $2 >>= \t -> return $ located ($1,$>) t }
 
 {
 happyError = do

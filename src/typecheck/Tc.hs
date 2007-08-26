@@ -24,27 +24,28 @@ tcSource src = do
     tv_sym <- mapM initNewTy (freeSymSrc src)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
-        mapM_ (\c -> tcWithLoc c (tcClause c)) cls
+        mapM_ (\c -> withLocation c (tcClause c)) cls
         ty_env  <- asks tyenv >>= normEnv
         return (src, ty_env)
 
 -- type checking and inference
 
-tcClause, tcClause' :: LHpClause -> Tc ()
+tcClause, tcClause' :: (Binder a HpSymbol) => LHpClause a -> Tc ()
 
 tcClause clause =
     tcWithCtxt (clauseCtxt clause) $ tcClause' clause
 
 tcClause' c = do
-    tvs <- mapM initNewTy (boundV c)
+    tvs <- mapM initNewTy (map binds (bindings (unLoc c)))
     extendEnv tvs $ do
         tcAtom (hAtom c)
         mapM_ tcAtom (bAtoms c)
 
-tcGoal :: LHpGoal -> Tc ()
-tcGoal (L loc (HpGoal v g)) = do
-    tvs <- mapM initNewTy v
-    extendEnv tvs $ mapM_ tcAtom g
+tcGoal :: (Binder a HpSymbol) => LHpGoal a -> Tc ()
+tcGoal g' = do
+    let g = unLoc g'
+    tvs <- mapM initNewTy (map binds (bindings g))
+    extendEnv tvs $ mapM_ tcAtom (unbind g)
 
 tcAtom, tcAtom' :: LHpAtom -> Tc ()
 tcAtom atom = 
@@ -176,7 +177,7 @@ normTy (TyVar tv) = do
         Nothing -> return $ TyVar tv
 
 normTy (TyTup tl) = do
-    tl' <- mapM (\t -> normTy t) tl
+    tl' <- mapM normTy tl
     return $ TyTup tl'
 
 normTy t = return t
