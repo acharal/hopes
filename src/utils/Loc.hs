@@ -11,15 +11,15 @@ type Line = Int
 type Col  = Int
 
 data Loc = Loc {
-    locFile   :: !String,
+    locFile   :: !FilePath,
     locLine   :: !Line,
     locOffset :: !Col }
  deriving Eq
 
 data LocSpan = 
       LocSpan Loc Loc
-    | OneLineSpan   String Line Col Col
-    | MultiLineSpan String Line Col Line Col
+    | OneLineSpan   FilePath Line Col Col
+    | MultiLineSpan FilePath Line Col Line Col
   deriving (Eq, Show)
 
 bogusLoc  = Loc "bogus" (-1) (-1)

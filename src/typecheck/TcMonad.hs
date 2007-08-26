@@ -102,3 +102,7 @@ tcWithCtxt :: Context -> Tc a -> Tc a
 tcWithCtxt c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}
 
+{-
+withContext :: Context -> Tc a -> Tc a
+withContext c m = withLoc (loc c) $ local (\e -> e{ctxt = c:(ctxt env)) m
+-}

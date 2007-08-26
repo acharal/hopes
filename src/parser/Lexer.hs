@@ -3,14 +3,15 @@ module Lexer where
 import Loc
 import ParseUtils
 import Char
+import Pretty
 
 
 
 isNameChar c = isAlpha c || isDigit c || (c == '_')
 isVar str = isUpper (head str)
 
-lexError :: String -> Parser a
-lexError inp = fail ("Unrecognized character")
+lexError :: String -> Loc -> Parser a
+lexError inp l = parseErrorWithLoc l (sep [text "Unexpected character", quotes (char (head inp))])
 
 lexer :: (Located Token -> Parser a) -> Parser a
 lexer cont = lexToken >>= \tok -> setLastTok tok >> cont tok
@@ -28,7 +29,7 @@ lexToken' inp l = do
         TokEnd -> do
             return $ located l TKEOF
         TokError l2 inp2 -> do
-            lexError inp2
+            lexError inp2 l2
         TokSkip l2 inp2 -> do
             lexToken' inp2 l2
         Tok t len inp2 -> do
