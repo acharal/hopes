@@ -1,37 +1,32 @@
-Name:		hope
-Version:	0.0.1
-License:	GPL
-License-File:	COPYING
-Author:		Angelos Charalambidis
-Maintainer:	a.charalambidis@di.uoa.gr
-Stability:	Experimental
-Synopsis:	Higher Order Prolog with Extensionality
-Description:	Not yet available
-Category:       Intepreter
-Package-Url:	http://www.ajn.awmn.net/hope
+Name:           hope
+Version:        0.0.1
+License:        GPL
+License-File:   COPYING
+Author:         Angelos Charalambidis
+Maintainer:     a.charalambidis@di.uoa.gr
+Stability:      Experimental
+Synopsis:       Higher Order Prolog with Extensionality
+Description:    Not yet available
+Category:       intepreter
+Package-Url:    http://www.ajn.awmn.net/hope
 Build-Depends:  base, haskell98, mtl
 Extra-Source-Files:
-		Makefile
+                Makefile
 
 Executable:     hope
 Main-Is:	Main.hs
-Hs-Source-Dirs:	src
-		src/parser
-		src/utils
-		src/typecheck
-		src/prover
-Other-Modules:	Lexer
-		Parser
-		ParseUtils
-		Err
-		Loc
-		Pretty
-		HpSyn
-		Tc
-		TcMonad
-		Hopl
-		ProofProc
-		Logic
-Extensions:	RankNTypes
-Ghc-Options:	 
+Hs-Source-Dirs: src
+                src/parser
+                src/utils
+                src/typecheck
+                src/prover
+Other-Modules:	Lexer, Parser, ParseUtils
+                Tc, TcMonad
+                Err
+                Loc
+                Pretty
+                HpSyn, Hopl
+                ProofProc, Logic
+Extensions:     RankNTypes
+Ghc-Options:    
 

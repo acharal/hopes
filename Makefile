@@ -5,6 +5,7 @@ SETUPFILE=./Setup.hs
 SETUP=runhaskell $(SETUPFILE)
 RM=rm
 GHC=ghc
+DARCS=darcs
 
 all: build
 
@@ -13,6 +14,8 @@ build: configure
 
 clean:
 	$(SETUP) clean
+	$(RM) -rf dist
+	$(RM) -f *.hi *.o
 
 configure: .setup-config
 
@@ -22,13 +25,15 @@ configure: .setup-config
 doc:
 	$(SETUP) haddock
 
-
 dist: build
 	$(SETUP) sdist
+
+darcs-dist: 
+	$(DARCS) dist
 
 install: build
 	$(SETUP) install
 
-setup:  $(SETUPFILE)
+buildsetup:  $(SETUPFILE)
 	$(GHC) --make $(SETUPFILE) -o setup
 
