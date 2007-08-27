@@ -8,7 +8,7 @@ import Pretty
 import Err
 
 import Tc
-import Wffc
+--import Wffc
 import HpSyn
 --import Hopl
 --import ProofProc
@@ -33,7 +33,7 @@ loadSource file = do
     case parse_res of
         Right (p, s) -> do
             pprint p
-            case runTc (tcSource p >>= wffcSource) of
+            case runTc (tcSource p) of
                 (Just (p', env), msgs) -> do
                     return (Just (p', env), msgs)
                 (Nothing, msgs) ->
@@ -85,4 +85,4 @@ printSol (x:xs) = do
 -}
 
 ppr_env env = vcat (map ppr_aux env)
-    where ppr_aux (v, t) = hang ((ppr v) <+> (text "::")) (length (symbolName v) + 4) $ sep [(ppr t), text "order", int (order t)]
+    where ppr_aux (v, t) = hang ((ppr v) <+> (text "::")) (length (show v) + 4) $ sep [(ppr t), text "order", int (order t)]

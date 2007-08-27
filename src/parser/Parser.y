@@ -46,7 +46,7 @@ import Control.Monad.State
 
 %% 
 
-src :: { HpSource HpSymbol }
+src :: { PHpSource }
     : stmts                     {% mkSrc (reverse $1) }
 
 stmt :: { HpStmt HpSymbol }
@@ -57,47 +57,47 @@ stmts :: { [HpStmt HpSymbol] }
       : stmts stmt              { $2:$1 }
       |                         { [] }
 
-clause :: { LHpClause HpSymbol }
+clause :: { PLHpClause }
        : rule                   { $1 }
        | fact                   { $1 }
 
-clauses :: { [LHpClause HpSymbol] }
+clauses :: { [PLHpFormula] }
         : clauses clause        { $2:$1 }
         |                       { [] }
 
-fact :: { LHpClause HpSymbol }
+fact :: { PLHpFormula }
      : atom '.'                 { located ($1,$>) $ mkClause $1 [] }
 
-rule :: { LHpClause HpSymbol }
+rule :: { PLHpFormula }
      : atom ':-' body '.'       { located ($1,$>) $ mkClause $1 $3 }
 
-body :: { [LHpAtom HpSymbol] }
+body :: { [PLHpAtom] }
      : conj                     { reverse $1 }
 
-conj :: { [LHpAtom HpSymbol] }
+conj :: { [PLHpAtom] }
      : conj ',' atom            { $3:$1 }
      | atom                     { [$1] }
 
-atom :: { LHpAtom HpSymbol}
+atom :: { PLHpAtom }
      : exp                      { $1 }
      | '!'                      { located $1      $ undefined }
 
-exp :: { LHpExpr HpSymbol}
+exp :: { PLHpExpr }
     : '(' exp ')'               { located ($1,$>) $ HpPar $2 }
     | exp tyann                 { located ($1,$>) $ HpAnn $1 (unLoc $2) }
     | ID                        { located  $1     $ HpSym (tokSym $1) }
     | exp '(' exps2 ')'         { located ($1,$>) $ HpApp $1 (reverse $3) }
 
-exp2 :: { LHpExpr HpSymbol}
+exp2 :: { PLHpExpr }
     : term                      { $1 }
     |'(' exp2 ')'               { located ($1,$>) $ HpPar $2 }
     | exp2 tyann                { located ($1,$>) $ HpAnn $1 (unLoc $2) }
 
-exps2 :: { [LHpExpr HpSymbol] }
+exps2 :: { [PLHpExpr] }
      : exps2 ',' exp2           { $3:$1 }
      | exp2                     { [$1] }
 
-term :: { LHpTerm HpSymbol }
+term :: { PLHpTerm }
     : ID                        { located $1      $ HpSym (tokSym $1) }
     | '_'                       { located $1      $ HpSym (Sym "_") }
     | ID '(' terms ')'          { located ($1,$>) $ HpApp (located $1 (HpSym (tokSym $1))) (reverse $3) }
@@ -110,15 +110,15 @@ term :: { LHpTerm HpSymbol }
     | '{' terms '}'             { located ($1,$>) $ HpSet $2 }
 -}
 
-terms :: { [LHpTerm HpSymbol] }
+terms :: { [PLHpTerm] }
       : terms ',' term          { $3:$1 }
       | term                    { [$1] }
 
-terms2 :: { [LHpTerm HpSymbol] }
+terms2 :: { [PLHpTerm] }
        : terms2 ',' term        { $3:$1 }
        | term ',' term          { $3:$1:[] }
 
-goal :: { LHpGoal HpSymbol }
+goal :: { PLHpFormula }
      :                          { located bogusLoc $ mkGoal [] }
      | conj                     { located bogusLoc $ mkGoal (reverse $1) }
 
@@ -132,7 +132,7 @@ types :: {  [LHpType]  }
       : types ',' type          { $3:$1 }
       | type                    { [$1]  }
 
-tysig :: { LHpTySign HpSymbol }
+tysig :: { PLHpTySign }
       : ID '/' ID tyann         { located ($1,$>) $ ((tokSym $1),(unLoc $4)) }
 
 tyann :: { Located Type }

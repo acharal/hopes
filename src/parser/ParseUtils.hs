@@ -115,7 +115,7 @@ mkTyp (L _ (HpTyTup tl))   = do
 
 mkTyp (L l t) = parseErrorWithLoc (spanBegin l) (text "Not a valid type")
 
-type HpStmt a = Either (LHpClause a) (LHpTySign a)
+type HpStmt a = Either (LHpFormula a) (LHpTySign a)
 
 collectEither :: [Either a b] -> ([a], [b])
 collectEither es = (map unL l, map unR r)
@@ -130,20 +130,23 @@ mkSrc stmts =
     let (l, r) = collectEither stmts
     in  return HpSrc { clauses = l,  tysigs = r }
 
-quant :: Symbol a => a -> Bool
-quant = isUpper.head.symbolName
+quant :: HpSymbol -> Bool
+quant (Sym s) = isUpper $ head s
+
+bogusType :: Type
+bogusType = error ("This type must not be evaluated")
 
 --mkClause :: LHpExpr a -> [LHpExpr a] -> HpClause a
 mkClause hd bd = 
-    let sym   = concatMap symbolsE (hd:bd)
-        vars' = map HpBind $ nub $ filter quant sym
-    in  (HpC vars' hd bd)
+    let sym   = concatMap symbols (hd:bd)
+        vars' = map (\x-> HpBind x bogusType) $ nub $ filter quant sym
+    in  (HpForm vars' [hd] bd)
 
 --mkGoal :: [LHpExpr a] -> HpGoal a
 mkGoal es =
-    let sym   = concatMap symbolsE es
-        vars' = map HpBind $ filter quant sym
-    in  (HpG vars' es)
+    let sym   = concatMap symbols es
+        vars' = map (\x-> HpBind x bogusType) $ filter quant sym
+    in  (HpForm vars' [] es)
 
 parseErrorWithLoc loc msg = 
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []

@@ -98,15 +98,13 @@ addConstraint :: TyVar -> MonoType -> Tc ()
 addConstraint tv ty =
     modify (\s -> s{constr = (tv,ty):(constr s)})
 
-tcWithCtxt :: Context -> Tc a -> Tc a
-tcWithCtxt c m = local addctxt m
+enterContext :: Context -> Tc a -> Tc a
+enterContext c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}
 
 {-
 withContext :: Context -> Tc a -> Tc a
 withContext c m = withLoc (loc c) $ local (\e -> e{ctxt = c:(ctxt env)) m
-
-
 
 clauseCtxt lcl@(L loc cl) = 
     hang (if fact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)

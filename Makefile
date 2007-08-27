@@ -1,13 +1,20 @@
-SETUP=runhaskell ./Setup.hs
+
+BUILDARGS=
+
+SETUPFILE=./Setup.hs
+SETUP=runhaskell $(SETUPFILE)
 RM=rm
+GHC=ghc
 
 all: build
 
-build: .setup-config
-	$(SETUP) build
+build: configure
+	$(SETUP) build $(BUILDARGS)
 
 clean:
 	$(SETUP) clean
+
+configure: .setup-config
 
 .setup-config:
 	$(SETUP) configure
@@ -19,6 +26,9 @@ doc:
 dist: build
 	$(SETUP) sdist
 
-
 install: build
 	$(SETUP) install
+
+setup:  $(SETUPFILE)
+	$(GHC) --make $(SETUPFILE) -o setup
+

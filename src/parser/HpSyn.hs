@@ -47,15 +47,8 @@ import Types(Type)
        universally quantified.
 -}
 
-newtype HpSymbol = Sym String deriving Eq
-
-class Symbol a where
-    symbolName :: a -> String
-
-instance Symbol HpSymbol where
-    --symbolName :: HpSymbol -> String
-    symbolName (Sym s) = s
-
+newtype HpSymbol = Sym String
+    deriving Eq
 
 
 {- -fallow-undecidable-instances
@@ -63,14 +56,14 @@ instance Symbol a => Pretty a where
     ppr a = ppr (text (symbolName a))
 -}
 
-data BuildIn = HpList | HpWild | HpNat | HpSet | HpCut
+data HpBuildin = 
+      HpBList
+    | HpBWild 
+    | HpBNat 
+    | HpBSet 
+    | HpBCut
+    deriving (Eq, Show)
 
-buildinSymbol :: BuildIn -> HpSymbol
-buildinSymbol HpList = Sym "[]"
-buildinSymbol HpWild = Sym "_"
-buildinSymbol HpNat  = Sym "_s"
-buildinSymbol HpSet  = Sym "{}"
-buildinSymbol HpCut  = Sym "!"
 
 instance Pretty HpSymbol where
     ppr (Sym s) = text s
@@ -79,30 +72,51 @@ instance Show HpSymbol where
     showsPrec p (Sym s) = showsPrec p s
 
 
-data HpBinding id = HpBind id
+data HpBinding  id = HpBind { symbolBind:: id,  postType::Type }
 type HpBindings id = [HpBinding id]
-
-binds (HpBind x) = x
 
 data HpSource id =
     HpSrc { 
-        clauses :: [LHpClause id],
+        clauses :: [LHpFormula id],
         tysigs  :: [LHpTySign id]
     }
 
 
-data HpClause a = HpC (HpBindings a) (LHpAtom a) [LHpAtom a]
-data HpGoal a   = HpG (HpBindings a) [LHpAtom a]
+-- normalized formula :  
+-- forall x1 ... xk. (A1, ..., An <- B1, ..., Bm)
+-- rule or clause has exactly one A an more than one B
+-- fact has exactly one A and no B
+-- goal has no A and no or more B
+-- contradiction (False) has no A and no B
 
-class HasBindings a b where
+data HpFormula id = HpForm (HpBindings id) [LHpExpr id] [LHpExpr id]
+
+data HpExpr id = 
+      HpSym id                             -- symbol (constant, functional symbol, variable, predicate)
+    | HpApp (LHpExpr id) [LHpExpr id]      -- general application (predicate or func sym)
+    | HpPar (LHpExpr id)                   -- parenthesized expression
+    | HpLam (HpBindings id) (LHpExpr id)   -- lambda abstraction
+    | HpAnn (LHpExpr id) Type              -- type annotated expression
+    | HpTup [LHpExpr id]                   -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
+
+type HpTySign id = (id,Type)
+
+class Eq b => HasBindings a b where
     bindings :: a -> HpBindings b
+    isBind :: a -> b -> Bool
+    isBind a s = any (s==) $ map symbolBind (bindings a)
 
-instance HasBindings (HpClause a) a where
-    bindings (HpC b _ _) = b
+instance Eq a => HasBindings (HpFormula a) a where
+    bindings (HpForm b _ _) = b
 
-instance HasBindings (HpGoal a) a where
-    bindings (HpG b _) = b
+instance Eq a => HasBindings (HpExpr a) a where
+    bindings (HpLam b _) = b
+    bindings _ = []
 
+instance (Eq b, HasBindings a b) => HasBindings (Located a) b where
+    bindings = bindings . unLoc 
+
+{-
 hAtom :: LHpClause a -> LHpExpr a
 hAtom le = let (HpC _ h _) = unLoc le in h
 
@@ -114,22 +128,17 @@ atomsOf lc = (hAtom lc):(bAtoms lc)
 
 fact :: LHpClause a -> Bool
 fact = null.bAtoms
+-}
 
+isFact e = 
+    case unLoc e of
+        (HpForm _ [h] []) -> True
+        _ -> False
 
-data HpExpr id = 
-      HpSym id                          -- symbol (constant, functional symbol, variable, predicate)
-    | HpApp (LHpExpr id) [LHpExpr id]   -- general application (predicate or func sym)
-    | HpPar (LHpExpr id)                -- parenthesized expression
-    | HpLam (HpBindings id) (LHpExpr id)   -- lambda abstraction
-    | HpAnn (LHpExpr id) Type           -- type annotated expression
-    | HpTup [LHpExpr id]                -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
-
-
-type HpTySign id = (id,Type)
-
-
-type LHpAtom a = LHpExpr a
-type LHpTerm a = LHpExpr a
+lits :: LHpFormula a -> [LHpExpr a]
+lits lf = 
+    case unLoc lf of
+        (HpForm _ hs bs) -> hs ++ bs
 
 
 argsOf :: LHpExpr a -> [LHpExpr a]
@@ -146,9 +155,45 @@ headOf e =
         (HpApp e1 _) -> headOf e1
         _ -> e
 
+class HasSymbols a s where
+    symbols :: a -> [s]
 
--- free variables ?? [HpSymbol]
+instance HasSymbols (HpExpr a) a where
+    symbols (HpPar e)  = symbols e
+    symbols (HpTup es) = concatMap symbols es
+    symbols (HpSym s)  = [s]
+    symbols (HpApp e1 e2) = symbols e1 ++ concatMap symbols e2
+    symbols (HpAnn e _) = symbols e
+    symbols (HpLam _ e) = symbols e
 
+instance HasSymbols (HpFormula a) a where
+    symbols (HpForm _ as bs) = concatMap symbols as ++ concatMap symbols bs
+
+instance HasSymbols a s => HasSymbols (Located a) s where
+    symbols = symbols . unLoc 
+
+instance HasSymbols (HpSource a) a where
+    symbols (HpSrc forms _) = concatMap symbols forms
+
+{-- every symbol that is not bound by qualifiers (or lambda)
+freeSym :: (Eq s, HasSymbols a s, HasBindings a s) => a -> [s]
+freeSym e = filter (isBind e) (symbols e)
+-}
+
+class (Eq s, HasSymbols a s) => HasFreeSyms a s where
+    freeSym :: a -> [s]
+
+instance (Eq s) => HasFreeSyms (HpExpr s) s where
+    freeSym e@(HpLam _ e') = filter (not.isBind e) (freeSym e)
+    freeSym e = symbols e
+
+instance (Eq s) => HasFreeSyms (HpFormula s) s where
+    freeSym e@(HpForm _ hs bs) = nub $ filter (not.isBind e) (concatMap (freeSym.unLoc) (hs++bs))
+
+instance (Eq s) => HasFreeSyms (HpSource s) s where
+    freeSym e@(HpSrc forms _) = nub $ concatMap (freeSym.unLoc) forms
+
+{-
 symbolsE :: LHpExpr a -> [a]
 symbolsE le = 
     case unLoc le of
@@ -165,6 +210,8 @@ symbolsC c = concatMap symbolsE (atomsOf c)
 symbols :: Eq a =>  HpSource a -> [a]
 symbols src = nub $ concatMap symbolsC $ clauses src
 
+
+
 isSymbol :: LHpExpr a -> Bool
 isSymbol e = 
     case unLoc e of 
@@ -177,15 +224,25 @@ freeSymC cl = filter (\x-> x `notElem` b) (symbolsC cl)
 
 freeSymSrc :: Eq a => HpSource a -> [a]
 freeSymSrc src = concatMap freeSymC (clauses src)
+-}
 
 
 -- located syntax 
+type LHpExpr a    = Located (HpExpr a)
+type LHpFormula a = Located (HpFormula a)
+type LHpTySign a  = Located (HpTySign a)
 
-type LHpClause a = Located (HpClause a)
-type LHpGoal a   = Located (HpGoal a)
-type LHpTySign a = Located (HpTySign a)
-type LHpExpr a   = Located (HpExpr a)
+-- parsed located syntax 
 
+type PLHpExpr    = LHpExpr    HpSymbol
+type PLHpFormula = LHpFormula HpSymbol
+type PLHpTySign  = LHpTySign  HpSymbol
+type PHpSource   = HpSource   HpSymbol
+
+type PLHpAtom   = PLHpExpr
+type PLHpTerm   = PLHpExpr
+type PLHpGoal   = PLHpFormula
+type PLHpClause = PLHpFormula
 
 
  -- pretty printing 
@@ -198,11 +255,12 @@ instance Pretty a => Pretty (HpExpr a) where
     ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
 
 
-instance Pretty a => Pretty (HpClause a) where
-    ppr (HpC _ h []) = ppr (unLoc h) <> dot
-    ppr (HpC _ h b)  = 
-        hang (ppr (unLoc h) <> entails) 4 $ 
-                sep (punctuate comma (map (ppr.unLoc) b)) <> dot
+instance Pretty a => Pretty (HpFormula a) where
+    ppr (HpForm _ [h] []) = ppr (unLoc h) <> dot
+    ppr (HpForm _ h b)  = 
+        hang (  sep (punctuate comma (map (ppr.unLoc)  h)) <> entails) 4 $ 
+                sep (punctuate comma (map (ppr.unLoc)  b)) <> dot
+
 
 instance Pretty a => Pretty (HpSource a) where
     ppr src = vcat $ map (ppr.unLoc) (clauses src)

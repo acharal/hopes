@@ -73,7 +73,6 @@ wffcSource (src, tyenv) = do
     extendEnv tyenv $ do
         mapM_ (\c -> withLocation c (wffcClause c)) (clauses src)
         --mapM_ wffcClause (clauses src)
-        failIfErr
         ty_env' <- zonkEnv tyenv
         return (src, ty_env')
 

@@ -10,28 +10,28 @@ import Err
 import Loc
 import Pretty
 import Monad    (zipWithM, zipWithM_, when)
-import List     (nub)
-import Maybe    (catMaybes)
+
 
 import Control.Monad.Reader (asks)
 import Control.Monad.State  (gets)
 
 
-tcSource :: HpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
+-- tcSource :: PHpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
 tcSource src = do
     let tysign = map unLoc (tysigs src)
         cls    = clauses src
-    tv_sym <- mapM initNewTy (freeSymSrc src)
+    tv_sym <- mapM initNewTy (freeSym src)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
-        mapM_ (\c -> withLocation c (tcClause c)) cls
+        mapM_ (\c -> withLocation c (tcForm c)) cls
+        let cls' = cls
         ty_env  <- asks tyenv >>= normEnv
-        return (src, ty_env)
+        return (src{ clauses = cls }, ty_env)
 
 -- type checking and inference
 
 -- tcClause, tcClause' :: LHpClause a -> Tc ()
-
+{-
 tcClause clause =
     tcWithCtxt (clauseCtxt clause) $ tcClause' clause
 
@@ -47,15 +47,21 @@ tcGoal g' = do
         (HpG _ b) = g
     tvs <- mapM initNewTy (map binds (bindings g))
     extendEnv tvs $ mapM_ tcAtom b
+-}
+tcForm f = do
+    enterContext (clauseCtxt f) $ do
+    tvs <- mapM (initNewTy.symbolBind) (bindings (unLoc f))
+    extendEnv tvs $ do
+        mapM_ tcAtom (lits f)
 
 -- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
 tcAtom atom = 
-    tcWithCtxt (atomCtxt atom) $ tcAtom' atom
+    enterContext (atomCtxt atom) $ tcAtom' atom
 
 tcAtom' e = tcExpr e tyBool   -- force atom to be of type Bool
 
 
--- tiExpr :: LHpExpr a -> Tc MonoType
+-- tiExpr :: LHpExpr a -> Tc (MonoType, LHpExpr)
 tiExpr e = do
     var_ty <- newTyVar
     tcExpr e var_ty
@@ -63,7 +69,7 @@ tiExpr e = do
 
 -- tcExpr, tcExpr' :: LHpExpr a -> MonoType -> Tc ()
 
-tcExpr e t = tcWithCtxt (exprCtxt e) $ tcExpr' e t
+tcExpr e t = enterContext (exprCtxt e) $ tcExpr' e t
 
 tcExpr' (L _ (HpPar  e)) exp_ty = tcExpr e exp_ty
 
@@ -205,6 +211,6 @@ occurCheckErr tv ty = do
 
 -- error contexts
 clauseCtxt lcl@(L loc cl) = 
-    hang (if fact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
+    hang (if isFact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
 atomCtxt (L loc atom) = hang (text "In atom:") 4 (ppr atom)
 exprCtxt (L loc expr) = hang (text "In expr:") 4 (ppr expr)
