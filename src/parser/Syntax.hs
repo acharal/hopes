@@ -1,4 +1,4 @@
-module HpSyn where
+module Syntax where
 
 {-
     Higher order Prolog abstract syntax

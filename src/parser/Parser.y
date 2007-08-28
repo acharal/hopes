@@ -5,7 +5,7 @@ module Parser (
 ) where
 
 import Lexer
-import HpSyn
+import Syntax
 import Types
 import Loc
 import Err

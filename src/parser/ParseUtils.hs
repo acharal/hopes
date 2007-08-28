@@ -1,6 +1,6 @@
 module ParseUtils where
 
-import HpSyn
+import Syntax
 import Types
 import Loc
 import Err

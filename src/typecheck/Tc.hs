@@ -5,7 +5,7 @@ module Tc (
 
 import TcMonad
 import Types
-import HpSyn
+import Syntax
 import Err
 import Loc
 import Pretty

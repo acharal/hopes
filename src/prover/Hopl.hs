@@ -1,6 +1,6 @@
 module Hopl where
 
-import HpSyn
+import Syntax
 import Pretty
 import Loc
 

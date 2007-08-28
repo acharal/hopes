@@ -9,7 +9,7 @@ import Control.Monad.Identity
 import Err
 import Loc
 
-import HpSyn
+import Syntax (HpSymbol)
 import Types
 import Pretty
 

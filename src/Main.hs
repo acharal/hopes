@@ -9,7 +9,7 @@ import Err
 
 import Tc
 --import Wffc
-import HpSyn
+import Syntax
 --import Hopl
 --import ProofProc
 --import Logic

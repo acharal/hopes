@@ -20,13 +20,12 @@ Hs-Source-Dirs: src
                 src/utils
                 src/typecheck
                 src/prover
-Other-Modules:	Lexer, Parser, ParseUtils
+Other-Modules:	Lexer, Parser, ParseUtils, Syntax
                 Tc, TcMonad
                 Err
                 Loc
                 Pretty
-                HpSyn, Hopl
-                ProofProc, Logic
+                ProofProc, Logic, Hopl
 Extensions:     RankNTypes
 Ghc-Options:    
 
