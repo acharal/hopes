@@ -9,8 +9,7 @@ import Syntax
 import Err
 import Loc
 import Pretty
-import Monad    (zipWithM, zipWithM_, when)
-import Control.Monad.Reader (asks)
+import Monad    (zipWithM_, when)
 import Data.Monoid
 
 {-
@@ -41,12 +40,11 @@ import Data.Monoid
 -}
 
 -- tcSource :: PHpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
-tcSource src = do
+tcProg src = do
     let tysign = map unLoc (tysigs src)
         cls    = clauses src
         sigma  = sig src
-        rgds   = rigids sigma
-    tv_sym <- mapM initNewTy rgds
+    tv_sym <- mapM initNewTy (rigids sigma)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
         mapM_ tcForm cls
@@ -128,7 +126,7 @@ unify t t'
 
 
 unifyFun t = do
-    arg_ty <- newTyVar
+    arg_ty  <- newTyVar
     res_ty  <- newTyVar
     unify (TyFun arg_ty res_ty) t
     return (arg_ty, res_ty)
@@ -147,7 +145,8 @@ varBind  v1 t@(TyVar v2) = do
 
 varBind v ty = do
     tvs <- getTyVars ty
-    if (v `elem` tvs) then occurCheckErr v ty else addConstraint v ty
+    when (v `elem` tvs) (occurCheckErr v ty)
+    addConstraint v ty
 
 
 -- utilities
@@ -182,20 +181,18 @@ normEnv =
     let aux (v,t) = do
             t' <- normType t
             return (v, t')
-    in do
-        env <- asks tyenv
-        mapM aux env
+    in  getTypeEnv >>= mapM aux
 
 normType (TyFun t1 t2) = do
     t1' <- normType t1
     t2' <- normType t2
     return $ TyFun t1' t2'
 
-normType (TyVar tv) = do
+normType tvy@(TyVar tv) = do
     ty <- lookupTyVar tv
     case ty of
-        Just t -> normType t
-        Nothing -> return $ TyVar tv
+        Just t  -> normType t
+        Nothing -> return tvy
 
 normType (TyTup tl) = do
     tl' <- mapM normType tl

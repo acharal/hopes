@@ -32,7 +32,7 @@ loadSource file = do
     parse_res <- parseFromFile parseSrc file
     case parse_res of
         Right (p, s) -> do
-            (p', msgs) <- runTc (tcSource p)
+            (p', msgs) <- runTc (tcProg p)
             return (p', msgs)
         Left msgs -> 
             return (Nothing, msgs)

@@ -45,7 +45,7 @@ import Control.Monad.State
 
 %% 
 
-src :: { PHpSource }
+src :: { PHpProg }
     : stmts                     {% mkSrc (reverse $1) }
 
 stmt :: { HpStmt HpSymbol }

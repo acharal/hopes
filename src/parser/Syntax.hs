@@ -69,13 +69,13 @@ data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
 type HpBindings a = [HpBinding a]
 -- type HpBindings a = Set.Set (HpBinding a)
 
-data HpSource a =
-    HpSrc { 
+data HpProg a =
+    HpProg { 
         clauses :: [LHpFormula a],
         tysigs' :: [LHpTySign a]
     }
 
-tysigs src = tysigs' src `mappend` buildinsigs
+tysigs p = tysigs' p `mappend` buildinsigs
     where buildinsigs = map (located bogusLoc) $ zip (buildinSym) (map buildinTyp buildinSym)
 
 type HpSignature a = (Set.Set a, Set.Set a)
@@ -83,9 +83,9 @@ type HpSignature a = (Set.Set a, Set.Set a)
 class HasSignature a s where
     sig :: a -> HpSignature s
 
-instance (Eq a, Ord a) => HasSignature (HpSource a) a where
-    sig src = (a, mempty)
-        where (a, b) = mconcat (map sig (clauses src))
+instance (Eq a, Ord a) => HasSignature (HpProg a) a where
+    sig p = (a, mempty)
+        where (a, b) = mconcat (map sig (clauses p))
 
 instance (Eq a, Ord a) => HasSignature (HpFormula a) a where
     sig f@(HpForm b xs ys) = (Set.filter (not.isBind f) as, bs `mappend` (Set.fromList (map symbolBind b)))
@@ -173,12 +173,6 @@ isApp e =
         (HpApp _ _) -> True
         _ -> False
 
-lits :: LHpFormula a -> [LHpExpr a]
-lits lf = 
-    case unLoc lf of
-        (HpForm _ hs bs) -> hs ++ bs
-
-
 argsOf :: LHpExpr a -> [LHpExpr a]
 argsOf e = 
     case unLoc e of
@@ -211,7 +205,7 @@ type LHpTySign a  = Located (HpTySign a)
 type PLHpExpr    = LHpExpr    HpSymbol
 type PLHpFormula = LHpFormula HpSymbol
 type PLHpTySign  = LHpTySign  HpSymbol
-type PHpSource   = HpSource   HpSymbol
+type PHpProg     = HpProg     HpSymbol
 
 type PLHpAtom   = PLHpExpr
 type PLHpTerm   = PLHpExpr
@@ -246,6 +240,6 @@ instance Pretty a => Pretty (HpFormula a) where
                 sep (punctuate comma (map (ppr.unLoc)  b)) <> dot
 
 
-instance Pretty a => Pretty (HpSource a) where
-    ppr src = vcat $ map (ppr.unLoc) (clauses src)
+instance Pretty a => Pretty (HpProg a) where
+    ppr p = vcat $ map (ppr.unLoc) (clauses p)
 

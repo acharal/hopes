@@ -57,6 +57,9 @@ failIfErr = do
     m <- gets msgs
     when (hasErrs m) $ throwError m
 
+getTypeEnv  :: Tc TypeEnv
+getTypeEnv = asks tyenv
+
 extendEnv :: [(HpSymbol, Type)] -> Tc a -> Tc a
 extendEnv binds m = local extend m
     where extend env = env{tyenv = binds ++ (tyenv env)}
