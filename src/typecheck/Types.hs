@@ -42,6 +42,7 @@ tyvars t = nub $ tyvars' t
 
 order :: Type -> Int
 order (TyFun t t') = max (1 + (order t)) (order t')
+order (TyTup tys)  = maximum (map order tys)
 order _ = 0
 
 arity :: Type -> Int
