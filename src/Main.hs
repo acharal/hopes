@@ -22,7 +22,8 @@ main = do
 
     case res of
         Just (p, env) -> do
-            print $ ppr_env env
+            pprint p
+            --print $ ppr_env env
         Nothing ->  
             pprint $ vcat (map ppr (processMsgs msgs))
 

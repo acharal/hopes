@@ -51,7 +51,7 @@ import qualified Data.Set as Set
 newtype HpSymbol = Sym String
     deriving (Eq, Ord)
 
-data TcSymbol = TcS String Int Type
+data TcSymbol = TcS HpSymbol Int Type
 
 
 consSym = HpSym $ Sym ":"
@@ -72,7 +72,7 @@ type HpBindings a = [HpBinding a]
 data HpProg a =
     HpProg { 
         clauses :: [LHpFormula a],
-        tysigs' :: [LHpTySign a]
+        tysigs' :: [LHpTySign HpSymbol]
     }
 
 tysigs p = tysigs' p `mappend` buildinsigs
@@ -222,7 +222,7 @@ instance Show HpSymbol where
     showsPrec p (Sym s) = showsPrec p s
 
 instance Pretty TcSymbol where
-    ppr (TcS s i ty) = hcat [ text s, char '/', int i, char '_', char '{', ppr ty, char '}' ]
+    ppr (TcS s i ty) = hcat [ ppr s, char '/', int i, char '_', char '{', ppr ty, char '}' ]
 
 instance Pretty a => Pretty (HpExpr a) where
     ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]

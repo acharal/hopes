@@ -47,21 +47,28 @@ tcProg src = do
     tv_sym <- mapM initNewTy (rigids sigma)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
-        mapM_ tcForm cls
-        let cls' = cls
+        cls' <- mapM tcForm cls
         ty_env  <- normEnv
         return (src{ clauses = cls' }, ty_env)
 
 -- type checking and inference
 
 -- tcForm :: LHpFormula a -> Tc (LHpFormula b)
-tcForm f@(L _ (HpForm b xs ys)) =
+tcForm f@(L l (HpForm b xs ys)) =
     enterContext (CtxtForm f) $ do
     tvs <- mapM (initNewTy.symbolBind) (binds f)
     extendEnv tvs $ do
-        mapM_ tcAtom xs
-        mapM_ tcAtom ys
+        xs' <- mapM tcAtom xs
+        ys' <- mapM tcAtom ys
+        b' <- tyBinds b
+        return (L l (HpForm b' xs' ys'))
 
+tyBinds = mapM tyBind
+    where tyBind (HpBind s oldty) = do
+            ty <- lookupVar s
+            ty <- normType ty
+            s' <- annoSym s
+            return (HpBind s' ty)
 
 -- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
 tcAtom a = enterContext (CtxtAtom a) $ tcExpr a tyBool
@@ -69,8 +76,8 @@ tcAtom a = enterContext (CtxtAtom a) $ tcExpr a tyBool
 -- tiExpr :: LHpExpr a -> Tc (MonoType, LHpExpr)
 tiExpr e = do
     var_ty <- newTyVar
-    tcExpr e var_ty
-    return var_ty
+    e' <- tcExpr e var_ty
+    return (var_ty, e')
 
 -- tcExpr, tcExpr' :: LHpExpr a -> MonoType -> Tc ()
 
@@ -80,29 +87,34 @@ tcExpr' (L _ (HpPar  e)) exp_ty = tcExpr e exp_ty
 
 tcExpr' (L _ (HpAnn e ty)) exp_ty = do
     ann_ty <- instantiate ty
-    tcExpr e ann_ty
+    e' <- tcExpr e ann_ty
     unify ann_ty exp_ty
+    return e'
 
-tcExpr' (L _ (HpApp e args)) exp_ty = do
-    fun_ty  <- tiExpr e
-    args_ty <- mapM tiExpr args
+tcExpr' (L l (HpApp e args)) exp_ty = do
+    (fun_ty, e')     <- tiExpr e
+    (args_ty, args') <- mapAndUnzipM tiExpr args
     let tup_ty = case args_ty of
                      [x] -> x
                      tys -> TyTup tys
     (arg_ty, res_ty) <- unifyFun fun_ty
     unify arg_ty tup_ty
     unify res_ty exp_ty
+    return (L l (HpApp e' args'))
 
-tcExpr' (L _ (HpSym s)) exp_ty = do
+tcExpr' (L l (HpSym s)) exp_ty = do
     sym_ty <- lookupVar s
     unify sym_ty exp_ty
+    s' <- annoSym s
+    return (L l (HpSym s'))
 
-tcExpr' (L _ (HpTup es)) exp_ty = do
-    tys <- mapM tiExpr es
+tcExpr' (L l (HpTup es)) exp_ty = do
+    (tys, es') <- mapAndUnzipM tiExpr es
     unify (TyTup tys) exp_ty
+    return (L l (HpTup es'))
 
 
-tcExpr' (L _ (HpWildcat)) _ = return ()
+tcExpr' (L l HpWildcat) _ = return (L l HpWildcat)
 
 -- unification
 
@@ -176,39 +188,15 @@ getTyVars (TyTup tl) = do
 getTyVars (TyCon _) = return mempty
 
 
-normEnv :: Tc TypeEnv
-normEnv = 
-    let aux (v,t) = do
-            t' <- normType t
-            return (v, t')
-    in  getTypeEnv >>= mapM aux
-
-normType (TyFun t1 t2) = do
-    t1' <- normType t1
-    t2' <- normType t2
-    return $ TyFun t1' t2'
-
-normType tvy@(TyVar tv) = do
-    ty <- lookupTyVar tv
-    case ty of
-        Just t  -> normType t
-        Nothing -> return tvy
-
-normType (TyTup tl) = do
-    tl' <- mapM normType tl
-    return $ TyTup tl'
-
-normType t = return t
-
 initNewTy v = do
     ty <- newTyVar >>= generalize
     return (v, ty)
 
 annoSym :: HpSymbol -> Tc TcSymbol
-annoSym sym@(Sym s) = do
+annoSym sym = do
     ty' <- lookupVar sym
     ty <- normType ty'
-    return (TcS s (arity ty) ty)
+    return (TcS sym (arity ty) ty)
 
 -- error reporting
 

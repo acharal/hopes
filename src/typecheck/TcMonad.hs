@@ -88,6 +88,34 @@ addConstraint (Tv i r) ty = do
         Just ty' -> typeError (sep [text "tyvar", quotes (int i), text "already bind with type", ppr ty'])
         Nothing ->  liftIO $ writeIORef r (Just ty)
 
+normEnv :: Tc TypeEnv
+normEnv = 
+    let aux (v,t) = do
+            t' <- normType t
+            return (v, t')
+    in  getTypeEnv >>= mapM aux
+
+normType (TyFun t1 t2) = do
+    t1' <- normType t1
+    t2' <- normType t2
+    return $ TyFun t1' t2'
+
+normType tvy@(TyVar tv) = do
+    ty <- lookupTyVar tv
+    case ty of
+        Just t  -> do 
+            ty' <- normType t
+            let (Tv _ r) = tv
+            liftIO $ writeIORef r (Just ty')
+            return ty'
+        Nothing -> return tvy
+
+normType (TyTup tl) = do
+    tl' <- mapM normType tl
+    return $ TyTup tl'
+
+normType t = return t
+
 -- typeError :: Desc -> Tc ()
 typeError :: ErrDesc -> Tc a
 typeError err = do

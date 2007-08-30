@@ -63,7 +63,7 @@ import List (partition)
     1. arguments of an application  - done
     2. check if an expression is an application - easy
     3. match expressions with types
-    4. 
+
 -}
 
 -- wffcSource :: (HpSource a, TypeEnv) -> Tc (HpSource a, TypeEnv)

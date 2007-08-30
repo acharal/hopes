@@ -114,7 +114,7 @@ tokId _ = error "not a valid token"
 
 type HpStmt a = Either (LHpFormula a) (LHpTySign a)
 
-mkSrc :: [HpStmt a] -> Parser (HpProg a)
+--mkSrc :: [HpStmt a] -> Parser (HpProg a)
 mkSrc stmts = 
     let (l, r) = collectEither stmts
     in  return HpProg { clauses = l,  tysigs' = r }
