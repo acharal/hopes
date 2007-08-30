@@ -2,8 +2,18 @@ module Types where
 
 import Pretty
 import List (nub)
+import Data.IORef
 
-type TyVar = Int
+data TyVar = Tv Int (IORef (Maybe Type))
+
+instance Eq TyVar where
+    (Tv i _) == (Tv j _) = i==j
+
+instance Ord TyVar where
+    compare (Tv i _) (Tv j _) = compare i j
+
+instance Show TyVar where
+    showsPrec p (Tv i _) = showsPrec p i
 
 -- if language supports polymorphism then Type can be MonoType or PolyType (with quantified tyvars)
 type Type  = MonoType

@@ -85,7 +85,7 @@ setTok :: Located Token -> Parser ()
 setTok tok = modify (\s -> s{ ptok = tok })
 
 parseErrorWithLoc loc msg = 
-    throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg []
+    throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg
 
 parseError msg = do
     l <- getLoc
@@ -117,7 +117,7 @@ type HpStmt a = Either (LHpFormula a) (LHpTySign a)
 mkSrc :: [HpStmt a] -> Parser (HpSource a)
 mkSrc stmts = 
     let (l, r) = collectEither stmts
-    in  return HpSrc { clauses = l,  tysigs = r }
+    in  return HpSrc { clauses = l,  tysigs' = r }
 
 collectEither :: [Either a b] -> ([a], [b])
 collectEither es = (map unL l, map unR r)

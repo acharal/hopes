@@ -11,8 +11,8 @@ import Loc
 import Pretty
 import Monad    (zipWithM, zipWithM_, when)
 import Control.Monad.Reader (asks)
+import Data.Monoid
 
-import Debug.Trace
 {-
     Strategy of type checking
 
@@ -40,17 +40,16 @@ import Debug.Trace
 
 -}
 
-
 -- tcSource :: PHpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
 tcSource src = do
     let tysign = map unLoc (tysigs src)
         cls    = clauses src
         sigma  = sig src
         rgds   = rigids sigma
-    tv_sym <- trace (show (length rgds)) $ mapM initNewTy rgds
+    tv_sym <- mapM initNewTy rgds
     extendEnv tv_sym $ do
     extendEnv tysign $ do
-        mapM_ (\c -> withLocation c (tcForm c)) cls
+        mapM_ tcForm cls
         let cls' = cls
         ty_env  <- normEnv
         return (src{ clauses = cls' }, ty_env)
@@ -58,18 +57,16 @@ tcSource src = do
 -- type checking and inference
 
 -- tcForm :: LHpFormula a -> Tc (LHpFormula b)
-tcForm f = do
-    enterContext (clauseCtxt f) $ do
-    tvs <- mapM (initNewTy.symbolBind) (binds (unLoc f))
+tcForm f@(L _ (HpForm b xs ys)) =
+    enterContext (CtxtForm f) $ do
+    tvs <- mapM (initNewTy.symbolBind) (binds f)
     extendEnv tvs $ do
-        mapM_ tcAtom (lits f)
+        mapM_ tcAtom xs
+        mapM_ tcAtom ys
+
 
 -- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
-tcAtom atom = 
-    enterContext (atomCtxt atom) $ tcAtom' atom
-
-tcAtom' e = tcExpr e tyBool   -- force atom to be of type Bool
-
+tcAtom a = enterContext (CtxtAtom a) $ tcExpr a tyBool
 
 -- tiExpr :: LHpExpr a -> Tc (MonoType, LHpExpr)
 tiExpr e = do
@@ -79,7 +76,7 @@ tiExpr e = do
 
 -- tcExpr, tcExpr' :: LHpExpr a -> MonoType -> Tc ()
 
-tcExpr e t = enterContext (exprCtxt e) $ tcExpr' e t
+tcExpr e t = enterContext (CtxtExpr e) $ tcExpr' e t
 
 tcExpr' (L _ (HpPar  e)) exp_ty = tcExpr e exp_ty
 
@@ -89,22 +86,23 @@ tcExpr' (L _ (HpAnn e ty)) exp_ty = do
     unify ann_ty exp_ty
 
 tcExpr' (L _ (HpApp e args)) exp_ty = do
-    fun_ty <- tiExpr e
-    (args_ty, res_ty) <- unifyFun (length args) fun_ty
-    args' <- zipWithM tcExpr args args_ty
+    fun_ty  <- tiExpr e
+    args_ty <- mapM tiExpr args
+    let tup_ty = case args_ty of
+                     [x] -> x
+                     tys -> TyTup tys
+    (arg_ty, res_ty) <- unifyFun fun_ty
+    unify arg_ty tup_ty
     unify res_ty exp_ty
 
 tcExpr' (L _ (HpSym s)) exp_ty = do
     sym_ty <- lookupVar s
     unify sym_ty exp_ty
 
-{-
 tcExpr' (L _ (HpTup es)) exp_ty = do
     tys <- mapM tiExpr es
     unify (TyTup tys) exp_ty
--}
-tcExpr' (L _ (HpTup es)) exp_ty = do
-    mapM_ (\x -> tcExpr' x tyAll) es
+
 
 tcExpr' (L _ (HpWildcat)) _ = return ()
 
@@ -129,12 +127,11 @@ unify t t'
     | otherwise   = unificationErr t t'
 
 
-unifyFun n t = do
-    arg_tys <- sequence $ replicate n newTyVar
-    res_ty <- newTyVar
-    let args_ty = if n > 1 then TyTup arg_tys else (head arg_tys)
-    unify (TyFun args_ty res_ty) t
-    return (arg_tys, res_ty)
+unifyFun t = do
+    arg_ty <- newTyVar
+    res_ty  <- newTyVar
+    unify (TyFun arg_ty res_ty) t
+    return (arg_ty, res_ty)
 
 unifyVar v t = do
     maybe_ty <- lookupTyVar v
@@ -161,23 +158,23 @@ instantiate t = return t
 generalize :: MonoType -> Tc Type
 generalize t = return t
 
-getTyVars :: MonoType -> Tc [TyVar]
+-- getTyVars :: MonoType -> Tc [TyVar]
 getTyVars (TyVar v) = do
     maybe_ty <- lookupTyVar v
     case maybe_ty of
         Nothing  -> return [v]
-        Just ty' -> getTyVars ty' >>= \tvs' -> return (v:tvs')
+        Just ty' -> getTyVars ty' >>= \tvs' -> return $ v:tvs'
 
 getTyVars (TyFun ty1 ty2) = do
     tvs1 <- getTyVars ty1
     tvs2 <- getTyVars ty2
-    return (tvs1 ++ tvs2)
+    return (tvs1 `mappend` tvs2)
 
 getTyVars (TyTup tl) = do
     l <- mapM getTyVars tl
-    return (concat l)
+    return (mconcat l)
 
-getTyVars (TyCon _) = return []
+getTyVars (TyCon _) = return mempty
 
 
 normEnv :: Tc TypeEnv
@@ -210,6 +207,12 @@ initNewTy v = do
     ty <- newTyVar >>= generalize
     return (v, ty)
 
+annoSym :: HpSymbol -> Tc TcSymbol
+annoSym sym@(Sym s) = do
+    ty' <- lookupVar sym
+    ty <- normType ty'
+    return (TcS s (arity ty) ty)
+
 -- error reporting
 
 unificationErr inf_ty exp_ty = do
@@ -224,10 +227,3 @@ unificationErr inf_ty exp_ty = do
 occurCheckErr tv ty = do
     let desc = text "Could not construct an infinite type:"
     typeError desc
-
-
--- error contexts
-clauseCtxt lcl@(L loc cl) = 
-    hang (if isFact lcl then text "In fact:" else text "In rule:") 4 (ppr cl)
-atomCtxt (L loc atom) = hang (text "In atom:") 4 (ppr atom)
-exprCtxt (L loc expr) = hang (text "In expr:") 4 (ppr expr)

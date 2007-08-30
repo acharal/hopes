@@ -4,12 +4,12 @@ module Syntax where
     Higher order Prolog abstract syntax
 -}
 
-import Loc  (Located, unLoc)
+import Loc
 import Char (isUpper)
 import List (nub)
 import Maybe(catMaybes)
 import Pretty
-import Types(Type)
+import Types
 import Data.Monoid
 import qualified Data.Set as Set
 {-
@@ -51,16 +51,19 @@ import qualified Data.Set as Set
 newtype HpSymbol = Sym String
     deriving (Eq, Ord)
 
-newtype TcSymbol = TcS (String, Int, Type)
+data TcSymbol = TcS String Int Type
 
-{- -fallow-undecidable-instances
-instance Symbol a => Pretty a where
-    ppr a = ppr (text (symbolName a))
--}
 
 consSym = HpSym $ Sym ":"
 nilSym  = HpSym $ Sym "[]"
 cutSym  = HpSym $ Sym "!"
+
+buildinSym = [ Sym ":", Sym "[]", Sym "!" , Sym "s"]
+
+buildinTyp (Sym ":")  = TyFun (TyTup [tyAll, tyAll]) tyAll
+buildinTyp (Sym "[]") = tyAll
+buildinTyp (Sym "!" ) = tyBool
+buildinTyp (Sym "s" ) = TyFun tyAll tyAll
 
 data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
 type HpBindings a = [HpBinding a]
@@ -69,8 +72,11 @@ type HpBindings a = [HpBinding a]
 data HpSource a =
     HpSrc { 
         clauses :: [LHpFormula a],
-        tysigs  :: [LHpTySign a]
+        tysigs' :: [LHpTySign a]
     }
+
+tysigs src = tysigs' src `mappend` buildinsigs
+    where buildinsigs = map (located bogusLoc) $ zip (buildinSym) (map buildinTyp buildinSym)
 
 type HpSignature a = (Set.Set a, Set.Set a)
 
@@ -220,6 +226,9 @@ instance Pretty HpSymbol where
 
 instance Show HpSymbol where
     showsPrec p (Sym s) = showsPrec p s
+
+instance Pretty TcSymbol where
+    ppr (TcS s i ty) = hcat [ text s, char '/', int i, char '_', char '{', ppr ty, char '}' ]
 
 instance Pretty a => Pretty (HpExpr a) where
     ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]

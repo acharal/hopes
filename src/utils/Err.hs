@@ -1,29 +1,25 @@
 module Err (
-        ErrorT(..), throwError, catchError,
-        ErrLevel(..), ErrType(..),
-        Message, Messages, processMsgs, mkMsgs, concatMsgs, emptyMsgs,
-        Context, ErrDesc,
-        internalErr, mkErr, mkErrWithLoc,
-        hasErrs, hasWarns, hasMsgs
-    ) where
+    module Err,
+    module Control.Monad.Error
+) where
 
 import Loc
 import Pretty
-
+import Syntax
 import Control.Monad.Error
 
-
 type ErrDesc = Doc
-type Context = Doc
 
 data Message =
    Msg { 
-        errloc :: (Maybe Loc),
-        errtyp :: ErrType,
-        level  :: ErrLevel,
-        desc   :: ErrDesc,
-        ctxt   :: [Context]
+        errloc  :: Loc,
+        errtyp  :: ErrType,
+        level   :: ErrLevel,
+        desc    :: ErrDesc
     }
+
+instance HasLocation Message where
+    loc (Msg l _ _ _) = l
 
 type Messages = ([Message], [Message])
 
@@ -37,12 +33,6 @@ data ErrType =
       ParseError
     | TypeError
     | Internal
-
-instance HasLocation Message where
-    loc m =
-        case errloc m of
-            Nothing -> bogusLoc
-            Just l  -> l
 
 instance Error Message where
     strMsg str = internalErr (text str)
@@ -58,13 +48,13 @@ class Monad m => MonadWarn m w where
 
 
 isWarn msg = level msg == Warning
-isFail = not.isWarn
+isFail = not . isWarn
 
-mkErr typ lev msg diagn = Msg Nothing typ lev msg diagn
+mkErr typ lev msg = Msg bogusLoc typ lev msg
 
-mkErrWithLoc l typ lev msg diagn = Msg (Just l) typ lev msg diagn
+mkErrWithLoc l typ lev msg = Msg l typ lev msg
 
-internalErr msg = mkErr Internal Fatal msg []
+internalErr msg = mkErr Internal Fatal msg
 
 processMsgs :: Messages -> [Message]
 processMsgs (errs,warns) = (reverse errs) ++ (reverse warns)
@@ -84,8 +74,5 @@ hasMsgs _ = True
 
 
 instance Pretty Message where
-    ppr err =
-        case errloc err of
-            Nothing -> vcat [ desc err, ppr_ctxt ]
-            Just l  -> hang (ppr l<>colon) 4 (vcat [desc err, ppr_ctxt])
-        where ppr_ctxt = vcat $ map ppr (ctxt err)
+    ppr err | errloc err == bogusLoc = desc err
+            | otherwise              = hang (ppr (errloc err) <>colon) 4 (desc err)
