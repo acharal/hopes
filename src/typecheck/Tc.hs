@@ -10,47 +10,57 @@ import Err
 import Loc
 import Pretty
 import Monad    (zipWithM, zipWithM_, when)
-
-
 import Control.Monad.Reader (asks)
-import Control.Monad.State  (gets)
+
+import Debug.Trace
+{-
+    Strategy of type checking
+
+    Alternative I.
+
+    1. tc functions just type checks the source without annotate the syntax tree with types.
+    2. tc functions just collect Constraints and fail if cannot satisfy constraints.
+    3. The main problem is that local bindings does not exist in the global type environment.
+       As a result after the type check of a quantified formula (or lambda expression) we have to
+       store somewhere the types (or tyvars) of those bindings.
+
+    Alternative II.
+
+    1. tc functions check and if succeed annotate the source with types.
+    2. syntax tree is already parametrized with the symbol type, so the new syntax tree must have
+       a new symbol type that can hold other info about the symbol such as type and arity.
+    3. The annotation of the tree cannot be performed before the type checking completes. Types of
+       symbols (and therefore local bindings) are not fixed during the type checking.
+       As a result, the real annotation must happen *after* the type checking.
+
+    Ugly thinks
+    1. Location information (helps on error messagings but it is not part of the logic of type checking)
+    2. Context information (as in 1)
+    3. Bindings and annotation (annotation helps next stages but it's checking not annotating)
+
+-}
 
 
 -- tcSource :: PHpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
 tcSource src = do
     let tysign = map unLoc (tysigs src)
         cls    = clauses src
-    tv_sym <- mapM initNewTy (freeSym src)
+        sigma  = sig src
+        rgds   = rigids sigma
+    tv_sym <- trace (show (length rgds)) $ mapM initNewTy rgds
     extendEnv tv_sym $ do
     extendEnv tysign $ do
         mapM_ (\c -> withLocation c (tcForm c)) cls
         let cls' = cls
-        ty_env  <- asks tyenv >>= normEnv
-        return (src{ clauses = cls }, ty_env)
+        ty_env  <- normEnv
+        return (src{ clauses = cls' }, ty_env)
 
 -- type checking and inference
 
--- tcClause, tcClause' :: LHpClause a -> Tc ()
-{-
-tcClause clause =
-    tcWithCtxt (clauseCtxt clause) $ tcClause' clause
-
-tcClause' c = do
-    tvs <- mapM initNewTy (map binds (bindings (unLoc c)))
-    extendEnv tvs $ do
-        tcAtom (hAtom c)
-        mapM_ tcAtom (bAtoms c)
-
--- tcGoal :: LHpGoal a -> Tc ()
-tcGoal g' = do
-    let g = unLoc g'
-        (HpG _ b) = g
-    tvs <- mapM initNewTy (map binds (bindings g))
-    extendEnv tvs $ mapM_ tcAtom b
--}
+-- tcForm :: LHpFormula a -> Tc (LHpFormula b)
 tcForm f = do
     enterContext (clauseCtxt f) $ do
-    tvs <- mapM (initNewTy.symbolBind) (bindings (unLoc f))
+    tvs <- mapM (initNewTy.symbolBind) (binds (unLoc f))
     extendEnv tvs $ do
         mapM_ tcAtom (lits f)
 
@@ -88,10 +98,15 @@ tcExpr' (L _ (HpSym s)) exp_ty = do
     sym_ty <- lookupVar s
     unify sym_ty exp_ty
 
+{-
 tcExpr' (L _ (HpTup es)) exp_ty = do
     tys <- mapM tiExpr es
     unify (TyTup tys) exp_ty
+-}
+tcExpr' (L _ (HpTup es)) exp_ty = do
+    mapM_ (\x -> tcExpr' x tyAll) es
 
+tcExpr' (L _ (HpWildcat)) _ = return ()
 
 -- unification
 
@@ -150,7 +165,7 @@ getTyVars :: MonoType -> Tc [TyVar]
 getTyVars (TyVar v) = do
     maybe_ty <- lookupTyVar v
     case maybe_ty of
-        Nothing -> return [v]
+        Nothing  -> return [v]
         Just ty' -> getTyVars ty' >>= \tvs' -> return (v:tvs')
 
 getTyVars (TyFun ty1 ty2) = do
@@ -165,29 +180,31 @@ getTyVars (TyTup tl) = do
 getTyVars (TyCon _) = return []
 
 
-normEnv :: TypeEnv -> Tc TypeEnv
-normEnv env = 
+normEnv :: Tc TypeEnv
+normEnv = 
     let aux (v,t) = do
-            t' <- normTy t
+            t' <- normType t
             return (v, t')
-    in  mapM aux env
+    in do
+        env <- asks tyenv
+        mapM aux env
 
-normTy (TyFun t1 t2) = do
-    t1' <- normTy t1
-    t2' <- normTy t2
+normType (TyFun t1 t2) = do
+    t1' <- normType t1
+    t2' <- normType t2
     return $ TyFun t1' t2'
 
-normTy (TyVar tv) = do
+normType (TyVar tv) = do
     ty <- lookupTyVar tv
     case ty of
-        Just t -> normTy t
+        Just t -> normType t
         Nothing -> return $ TyVar tv
 
-normTy (TyTup tl) = do
-    tl' <- mapM normTy tl
+normType (TyTup tl) = do
+    tl' <- mapM normType tl
     return $ TyTup tl'
 
-normTy t = return t
+normType t = return t
 
 initNewTy v = do
     ty <- newTyVar >>= generalize
@@ -196,8 +213,8 @@ initNewTy v = do
 -- error reporting
 
 unificationErr inf_ty exp_ty = do
-        inf_ty' <- normTy inf_ty
-        exp_ty' <- normTy exp_ty
+        inf_ty' <- normType inf_ty
+        exp_ty' <- normType exp_ty
         let desc = hang (text "Could not match types:") 4 
                         (vcat [ text "Inferred:" <+> ppr inf_ty', 
                                 text "Expected:" <+> ppr exp_ty' ])

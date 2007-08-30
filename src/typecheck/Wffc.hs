@@ -10,8 +10,6 @@ import Pretty
 import Monad (when)
 import List (partition)
 
-import Debug.Trace
-
 
 {-
     Well-formated formulas

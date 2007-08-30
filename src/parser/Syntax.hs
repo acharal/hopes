@@ -10,7 +10,8 @@ import List (nub)
 import Maybe(catMaybes)
 import Pretty
 import Types(Type)
-
+import Data.Monoid
+import qualified Data.Set as Set
 {-
     Preliminaries
     1. Symbols
@@ -48,39 +49,62 @@ import Types(Type)
 -}
 
 newtype HpSymbol = Sym String
-    deriving Eq
+    deriving (Eq, Ord)
 
+newtype TcSymbol = TcS (String, Int, Type)
 
 {- -fallow-undecidable-instances
 instance Symbol a => Pretty a where
     ppr a = ppr (text (symbolName a))
 -}
 
-data HpBuildin = 
-      HpBList
-    | HpBWild 
-    | HpBNat 
-    | HpBSet 
-    | HpBCut
-    deriving (Eq, Show)
+consSym = HpSym $ Sym ":"
+nilSym  = HpSym $ Sym "[]"
+cutSym  = HpSym $ Sym "!"
 
+data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
+type HpBindings a = [HpBinding a]
+-- type HpBindings a = Set.Set (HpBinding a)
 
-instance Pretty HpSymbol where
-    ppr (Sym s) = text s
-
-instance Show HpSymbol where
-    showsPrec p (Sym s) = showsPrec p s
-
-
-data HpBinding  id = HpBind { symbolBind:: id,  postType::Type }
-type HpBindings id = [HpBinding id]
-
-data HpSource id =
+data HpSource a =
     HpSrc { 
-        clauses :: [LHpFormula id],
-        tysigs  :: [LHpTySign id]
+        clauses :: [LHpFormula a],
+        tysigs  :: [LHpTySign a]
     }
 
+type HpSignature a = (Set.Set a, Set.Set a)
+
+class HasSignature a s where
+    sig :: a -> HpSignature s
+
+instance (Eq a, Ord a) => HasSignature (HpSource a) a where
+    sig src = (a, mempty)
+        where (a, b) = mconcat (map sig (clauses src))
+
+instance (Eq a, Ord a) => HasSignature (HpFormula a) a where
+    sig f@(HpForm b xs ys) = (Set.filter (not.isBind f) as, bs `mappend` (Set.fromList (map symbolBind b)))
+        where (as, bs) = mconcat (map sig (xs ++ ys))
+
+instance (Eq a, Ord a) => HasSignature (HpExpr a) a where
+    sig (HpSym s)    = (Set.fromList [s], mempty)
+    sig (HpApp e es) = mconcat (map sig (e:es))
+    sig (HpPar e)    = sig e
+    sig (HpAnn e _)  = sig e
+    sig (HpTup es)   = mconcat (map sig es)
+    sig a@(HpLam b e)= (Set.filter (not.isBind a) as, bs `mappend` (Set.fromList (map symbolBind b)))
+        where (as, bs) = sig e
+    sig (HpWildcat)  = (mempty, mempty)
+
+instance HasSignature a s => HasSignature (Located a) s where
+    sig = sig . unLoc
+
+symbols :: (Ord s) =>  HpSignature s -> [s]
+symbols (as, bs) = Set.toList $ as `mappend` bs
+vars    (as, bs) = Set.toList bs
+rigids  (as, bs) = Set.toList as
+
+
+-- returns the signature of a program
 
 -- normalized formula :  
 -- forall x1 ... xk. (A1, ..., An <- B1, ..., Bm)
@@ -89,32 +113,35 @@ data HpSource id =
 -- goal has no A and no or more B
 -- contradiction (False) has no A and no B
 
-data HpFormula id = HpForm (HpBindings id) [LHpExpr id] [LHpExpr id]
+data HpFormula a = HpForm (HpBindings a) [LHpExpr a] [LHpExpr a]
 
-data HpExpr id = 
-      HpSym id                             -- symbol (constant, functional symbol, variable, predicate)
-    | HpApp (LHpExpr id) [LHpExpr id]      -- general application (predicate or func sym)
-    | HpPar (LHpExpr id)                   -- parenthesized expression
-    | HpLam (HpBindings id) (LHpExpr id)   -- lambda abstraction
-    | HpAnn (LHpExpr id) Type              -- type annotated expression
-    | HpTup [LHpExpr id]                   -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
+data HpExpr a = 
+      HpSym a                              -- symbol (constant, functional symbol, variable, predicate)
+    | HpApp (LHpExpr a) [LHpExpr a]        -- general application (predicate or func sym)
+    | HpPar (LHpExpr a)                    -- parenthesized expression
+    | HpLam (HpBindings a) (LHpExpr a)     -- lambda abstraction
+    | HpAnn (LHpExpr a) Type               -- type annotated expression
+    | HpTup [LHpExpr a]                    -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
+    | HpWildcat                            -- wildcat
+    deriving Eq
 
-type HpTySign id = (id,Type)
+type HpTySign a  = (a,Type)
+
 
 class Eq b => HasBindings a b where
-    bindings :: a -> HpBindings b
+    binds :: a -> HpBindings b
     isBind :: a -> b -> Bool
-    isBind a s = any (s==) $ map symbolBind (bindings a)
+    isBind a s = any (s==) $ map symbolBind (binds a)
 
 instance Eq a => HasBindings (HpFormula a) a where
-    bindings (HpForm b _ _) = b
+    binds (HpForm b _ _) = b
 
 instance Eq a => HasBindings (HpExpr a) a where
-    bindings (HpLam b _) = b
-    bindings _ = []
+    binds (HpLam b _) = b
+    binds _ = []
 
 instance (Eq b, HasBindings a b) => HasBindings (Located a) b where
-    bindings = bindings . unLoc 
+    binds = binds . unLoc 
 
 {-
 hAtom :: LHpClause a -> LHpExpr a
@@ -133,6 +160,11 @@ fact = null.bAtoms
 isFact e = 
     case unLoc e of
         (HpForm _ [h] []) -> True
+        _ -> False
+
+isApp e =
+    case unLoc e of
+        (HpApp _ _) -> True
         _ -> False
 
 lits :: LHpFormula a -> [LHpExpr a]
@@ -155,76 +187,12 @@ headOf e =
         (HpApp e1 _) -> headOf e1
         _ -> e
 
-class HasSymbols a s where
-    symbols :: a -> [s]
-
-instance HasSymbols (HpExpr a) a where
-    symbols (HpPar e)  = symbols e
-    symbols (HpTup es) = concatMap symbols es
-    symbols (HpSym s)  = [s]
-    symbols (HpApp e1 e2) = symbols e1 ++ concatMap symbols e2
-    symbols (HpAnn e _) = symbols e
-    symbols (HpLam _ e) = symbols e
-
-instance HasSymbols (HpFormula a) a where
-    symbols (HpForm _ as bs) = concatMap symbols as ++ concatMap symbols bs
-
-instance HasSymbols a s => HasSymbols (Located a) s where
-    symbols = symbols . unLoc 
-
-instance HasSymbols (HpSource a) a where
-    symbols (HpSrc forms _) = concatMap symbols forms
-
-{-- every symbol that is not bound by qualifiers (or lambda)
-freeSym :: (Eq s, HasSymbols a s, HasBindings a s) => a -> [s]
-freeSym e = filter (isBind e) (symbols e)
--}
-
-class (Eq s, HasSymbols a s) => HasFreeSyms a s where
-    freeSym :: a -> [s]
-
-instance (Eq s) => HasFreeSyms (HpExpr s) s where
-    freeSym e@(HpLam _ e') = filter (not.isBind e) (freeSym e)
-    freeSym e = symbols e
-
-instance (Eq s) => HasFreeSyms (HpFormula s) s where
-    freeSym e@(HpForm _ hs bs) = nub $ filter (not.isBind e) (concatMap (freeSym.unLoc) (hs++bs))
-
-instance (Eq s) => HasFreeSyms (HpSource s) s where
-    freeSym e@(HpSrc forms _) = nub $ concatMap (freeSym.unLoc) forms
-
-{-
-symbolsE :: LHpExpr a -> [a]
-symbolsE le = 
-    case unLoc le of
-        HpPar e -> symbolsE e
-        HpTup es -> concatMap symbolsE es
-        HpSym s -> [s]
-        HpApp e1 e2 -> symbolsE e1 ++ concatMap symbolsE e2
-        HpAnn e t -> symbolsE e
-        _ -> []
-
-symbolsC :: LHpClause a -> [a]
-symbolsC c = concatMap symbolsE (atomsOf c)
-
-symbols :: Eq a =>  HpSource a -> [a]
-symbols src = nub $ concatMap symbolsC $ clauses src
-
-
 
 isSymbol :: LHpExpr a -> Bool
 isSymbol e = 
     case unLoc e of 
         (HpSym _) -> True
         _ -> False
-
-freeSymC :: Eq a => LHpClause a -> [a]
-freeSymC cl = filter (\x-> x `notElem` b) (symbolsC cl)
-    where b = map binds (bindings (unLoc cl))
-
-freeSymSrc :: Eq a => HpSource a -> [a]
-freeSymSrc src = concatMap freeSymC (clauses src)
--}
 
 
 -- located syntax 
@@ -247,12 +215,19 @@ type PLHpClause = PLHpFormula
 
  -- pretty printing 
 
+instance Pretty HpSymbol where
+    ppr (Sym s) = text s
+
+instance Show HpSymbol where
+    showsPrec p (Sym s) = showsPrec p s
+
 instance Pretty a => Pretty (HpExpr a) where
     ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
     ppr (HpPar e)     = parens (ppr (unLoc e))
     ppr (HpSym s)     = ppr s
     ppr (HpApp e es)  = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
     ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
+    ppr (HpWildcat)   = text "_"
 
 
 instance Pretty a => Pretty (HpFormula a) where

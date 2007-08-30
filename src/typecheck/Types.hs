@@ -5,6 +5,7 @@ import List (nub)
 
 type TyVar = Int
 
+-- if language supports polymorphism then Type can be MonoType or PolyType (with quantified tyvars)
 type Type  = MonoType
 
 data TyCon =
@@ -32,6 +33,10 @@ tyvars t = nub $ tyvars' t
 order :: Type -> Int
 order (TyFun t t') = max (1 + (order t)) (order t')
 order _ = 0
+
+arity :: Type -> Int
+arity (TyFun t t') = 1 + arity t'
+arity _ = 0
 
 tyargs :: Type -> [Type]
 tyargs (TyFun t t') = h t ++ tyargs t'

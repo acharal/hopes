@@ -7,6 +7,7 @@ import Pretty
 import Data.Monoid
 import Control.Monad.Identity
 
+
 type Line = Int
 type Col  = Int
 
@@ -117,6 +118,7 @@ instance Show Loc where
         (showInt o)
 
 instance Pretty Loc where
+    ppr (Loc _ (-1) (-1)) = text "<no-location>"
     ppr (Loc f l c) = hcat $ punctuate colon [ text f, int l, int c ]
 
 instance Pretty LocSpan where

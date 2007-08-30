@@ -29,7 +29,6 @@ import Control.Monad.State
       '_'       { (L _ TKwild)    }
       '::'      { (L _ TKcolcol)  }
       '->'      { (L _ TKarrow)   }
-      '/'       { (L _ TKslash)   }
       '\\'      { (L _ TKbslash)  }
       '!'       { (L _ TKcut)     }
       ';'       { (L _ TKsemi)    }
@@ -66,10 +65,10 @@ clauses :: { [PLHpFormula] }
         |                       { [] }
 
 fact :: { PLHpFormula }
-     : atom '.'                 { located ($1,$>) $ mkClause $1 [] }
+     : atom '.'                 { located ($1,$>) $ mkQuantForm [$1] [] }
 
 rule :: { PLHpFormula }
-     : atom ':-' body '.'       { located ($1,$>) $ mkClause $1 $3 }
+     : atom ':-' body '.'       { located ($1,$>) $ mkQuantForm [$1] $3 }
 
 body :: { [PLHpAtom] }
      : conj                     { reverse $1 }
@@ -80,12 +79,12 @@ conj :: { [PLHpAtom] }
 
 atom :: { PLHpAtom }
      : exp                      { $1 }
-     | '!'                      { located $1      $ undefined }
+     | '!'                      { located $1      $ cutSym }
 
 exp :: { PLHpExpr }
     : '(' exp ')'               { located ($1,$>) $ HpPar $2 }
     | exp tyann                 { located ($1,$>) $ HpAnn $1 (unLoc $2) }
-    | ID                        { located  $1     $ HpSym (tokSym $1) }
+    | ID                        { located  $1     $ (mkSym $1) }
     | exp '(' exps2 ')'         { located ($1,$>) $ HpApp $1 (reverse $3) }
 
 exp2 :: { PLHpExpr }
@@ -98,14 +97,14 @@ exps2 :: { [PLHpExpr] }
      | exp2                     { [$1] }
 
 term :: { PLHpTerm }
-    : ID                        { located $1      $ HpSym (tokSym $1) }
-    | '_'                       { located $1      $ HpSym (Sym "_") }
-    | ID '(' terms ')'          { located ($1,$>) $ HpApp (located $1 (HpSym (tokSym $1))) (reverse $3) }
+    : ID                        { located $1      $ (mkSym $1) }
+    | '_'                       { located $1      $ HpWildcat }
+    | ID '(' terms ')'          { located ($1,$>) $ HpApp (located $1 (mkSym $1)) (reverse $3) }
     | '(' terms2 ')'            { located ($1,$>) $ HpTup (reverse $2) }
+    | '[' ']'                   { located ($1,$>) $ mkList []           Nothing   }
+    | '[' terms ']'             { located ($1,$>) $ mkList (reverse $2) Nothing   }
+    | '[' terms '|' term ']'    { located ($1,$>) $ mkList (reverse $2) (Just $4) }
 {-
-    | '[' ']'                   { located ($1,$>) $ HpList []           Nothing   }
-    | '[' terms ']'             { located ($1,$>) $ HpList (reverse $2) Nothing   }
-    | '[' terms '|' term ']'    { located ($1,$>) $ HpList (reverse $2) (Just $4) }
     | '{' '}'                   { located ($1,$>) $ HpSet [] }
     | '{' terms '}'             { located ($1,$>) $ HpSet $2 }
 -}
@@ -119,8 +118,8 @@ terms2 :: { [PLHpTerm] }
        | term ',' term          { $3:$1:[] }
 
 goal :: { PLHpFormula }
-     :                          { located bogusLoc $ mkGoal [] }
-     | conj                     { located bogusLoc $ mkGoal (reverse $1) }
+     :                          { located bogusLoc $ mkQuantForm [] [] }
+     | conj                     { located bogusLoc $ mkQuantForm [] (reverse $1) }
 
 type :: { LHpType }
      : ID                       { located $1      $ HpTyGrd (tokId $1) }
@@ -133,14 +132,14 @@ types :: {  [LHpType]  }
       | type                    { [$1]  }
 
 tysig :: { PLHpTySign }
-      : ID '/' ID tyann         { located ($1,$>) $ ((tokSym $1),(unLoc $4)) }
+      : ID tyann                { located ($1,$>) $ ((tokSym $1),(unLoc $2)) }
 
 tyann :: { Located Type }
       : '::' type               {% mkTyp $2 >>= \t -> return $ located ($1,$>) t }
 
 {
 happyError = do
-    tok <- gets cur_tok
+    tok <- gets ptok
     case unLoc tok of
         TKEOF -> parseError $ text "unexpected end of input"
         _     -> parseError $ sep [ text "parse error on input", quotes (ppr (unLoc tok)) ]

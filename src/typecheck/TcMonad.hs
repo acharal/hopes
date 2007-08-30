@@ -12,6 +12,10 @@ import Loc
 import Syntax (HpSymbol)
 import Types
 import Pretty
+import Data.Monoid
+-- import qualified Data.Map as Map
+
+import Debug.Trace
 
 data TcEnv =
     TcEnv { 
@@ -32,9 +36,10 @@ type TypeEnv = [ (HpSymbol, Type) ]
 -- type TypeEnv a = Map.Map a Type
 
 type Constraint = (TyVar, MonoType)
+type ConstrEnv  = [(TyVar, MonoType)]
 
-type ConstrEnv = [ (TyVar, MonoType) ]
 -- type ConstrEnv = Map.Map TyVar MonoType
+
 
 type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages Identity))
 
@@ -49,7 +54,7 @@ runTc m =
         Left msgs -> (Nothing, msgs)
         Right (a, st) -> (Just a, msgs st)
     where run = runIdentity $ runErrorT $ runStateT (runReaderT m initEnv) initSt
-          initSt  = TcState { l = bogusLoc, uniq = 0, msgs = emptyMsgs, constr = [] }
+          initSt  = TcState { l = bogusLoc, uniq = 0, msgs = emptyMsgs, constr = mempty }
           initEnv = TcEnv { tyenv = [], ctxt  = [] }
 
 runTcWithEnv env m = runTc (extendEnv env m)
@@ -92,11 +97,12 @@ lookupVar v = do
 lookupTyVar :: TyVar -> Tc (Maybe MonoType)
 lookupTyVar tv = do
     cs <- gets constr
-    return (lookup tv cs)
+    return $ (lookup tv cs)
 
 addConstraint :: TyVar -> MonoType -> Tc ()
-addConstraint tv ty =
-    modify (\s -> s{constr = (tv,ty):(constr s)})
+addConstraint tv ty = do
+    cs <- gets constr
+    modify (\s -> s{constr = (tv,ty):cs})
 
 enterContext :: Context -> Tc a -> Tc a
 enterContext c m = local addctxt m

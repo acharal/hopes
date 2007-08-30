@@ -99,7 +99,7 @@ unifyAtoms a1@(Atom p pl) a2@(Atom q ql)
                         " and "  ++ (show a2) ++
                         " are not unifyable")
 
--- listUnify :: [Term] -> [Term] -> Maybe Subst
+-- listUnify :: [Term] -> [Term] -> m Subst
 listUnify [] [] = return epsilon
 listUnify (x:xs) (y:ys) =  do
     s  <- unify x y

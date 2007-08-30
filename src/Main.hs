@@ -32,7 +32,7 @@ loadSource file = do
     parse_res <- parseFromFile parseSrc file
     case parse_res of
         Right (p, s) -> do
-            pprint p
+            --pprint p
             case runTc (tcSource p) of
                 (Just (p', env), msgs) -> do
                     return (Just (p', env), msgs)

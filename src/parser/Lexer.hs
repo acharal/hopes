@@ -6,24 +6,21 @@ import Char
 import Pretty
 
 
-
-isNameChar c = isAlpha c || isDigit c || (c == '_')
-isVar str = isUpper (head str)
+lexer :: (Located Token -> Parser a) -> Parser a
+lexer cont = lexToken >>= \tok -> setTok tok >> cont tok
 
 lexError :: String -> Loc -> Parser a
+lexError []  l = parseErrorWithLoc l (sep [text "Unexpected end of input"])
 lexError inp l = parseErrorWithLoc l (sep [text "Unexpected character", quotes (char (head inp))])
-
-lexer :: (Located Token -> Parser a) -> Parser a
-lexer cont = lexToken >>= \tok -> setLastTok tok >> cont tok
 
 lexToken :: Parser (Located Token)
 
 lexToken = do
-    inp <- getSrcBuf
-    ls <- getLocSpan
+    inp <- getInput
+    ls  <- getLocSpan
     lexToken' inp (spanEnd ls)
 
-lexToken' :: StringBuffer -> Loc -> Parser (Located Token)
+lexToken' :: ParserInput -> Loc -> Parser (Located Token)
 lexToken' inp l = do
     case scanTok inp l of
         TokEnd -> do
@@ -34,7 +31,7 @@ lexToken' inp l = do
             lexToken' inp2 l2
         Tok t len inp2 -> do
             let l2 = l{locOffset=(locOffset l)+len}
-            setSrcBuf inp2
+            setInput inp2
             return $ located (l,l2) t
 
 data ScanResult = 
@@ -72,9 +69,11 @@ scanTok inp@(c:cs) l
     | isLower c || isDigit c = scanName TKid inp l
 scanTok inp loc              = TokError loc inp
 
+
 scanName :: (String -> Token) -> ScanAction
 scanName cstr cs l   = Tok (cstr name) (length name) rest
    where (name,rest) = span isNameChar cs
+         isNameChar c = isAlpha c || isDigit c || (c == '_')
 
 scanSkip :: ScanAction
 scanSkip inp lo = 
