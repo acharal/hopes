@@ -67,7 +67,7 @@ import List (partition)
 -}
 
 -- wffcSource :: (HpSource a, TypeEnv) -> Tc (HpSource a, TypeEnv)
-wffcSource (src, tyenv) = do
+wffcProg (src, tyenv) = do
     extendEnv tyenv $ do
         mapM_ (\c -> withLocation c (wffcClause c)) (clauses src)
         --mapM_ wffcClause (clauses src)
@@ -76,7 +76,7 @@ wffcSource (src, tyenv) = do
 
 
 -- wffcClause :: LHpClause a -> Tc ()
-wffcClause cl =
+wffcForm cl =
     tcWithCtxt (clauseCtxt cl) $ do
         let b = map binds $ bindings (unLoc cl)
         tvs <- mapM initNewTy b

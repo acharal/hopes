@@ -46,7 +46,9 @@ order (TyTup tys)  = maximum (map order tys)
 order _ = 0
 
 arity :: Type -> Int
-arity (TyFun t t') = 1 + arity t'
+arity (TyFun t t') = count t + arity t'
+    where count (TyTup tys) = length tys
+          count _ = 1
 arity _ = 0
 
 tyargs :: Type -> [Type]
