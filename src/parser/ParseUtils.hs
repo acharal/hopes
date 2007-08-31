@@ -63,30 +63,33 @@ instance Pretty Token where
     ppr t = text (show t)
 
 
-type Parser = StateT ParseState (ErrorT Messages Identity)
+type ParserT m = StateT ParseState (ErrorT Messages m)
+-- type Parser    = ParserT IO
 
 data ParseState = PState { pinput :: ParserInput,
                            ptok   :: Located Token
                          }
 
-instance MonadLoc Parser where
+instance (Monad m) => MonadLoc (ParserT m) where
     getLocSpan = gets (locSpan . ptok)
 
 
-runParser p s = runIdentity $ runErrorT $ runStateT p s
+runParser p s = runErrorT $ runStateT p s
 
-getInput :: Parser ParserInput
+getInput :: Monad m => ParserT m ParserInput
 getInput = gets pinput
 
-setInput :: ParserInput -> Parser ()
+setInput :: Monad m => ParserInput -> ParserT m ()
 setInput inp = modify (\s -> s{ pinput = inp })
 
-setTok :: Located Token -> Parser ()
+setTok :: Monad m =>  Located Token -> ParserT m ()
 setTok tok = modify (\s -> s{ ptok = tok })
 
+parseErrorWithLoc :: Monad m => Loc -> ErrDesc -> ParserT m a
 parseErrorWithLoc loc msg = 
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg
 
+parseError :: Monad m => ErrDesc -> ParserT m a
 parseError msg = do
     l <- getLoc
     parseErrorWithLoc l msg
@@ -95,8 +98,7 @@ parseError msg = do
 parseFromFile p fname = do 
     file <- openFile fname ReadMode
     inp <- hGetContents file
-    let result = runParser p (mkStateWithFile inp fname)
-    return result
+    runParser p (mkStateWithFile inp fname)
 
 mkStateWithFile inp file = PState inp t
     where l = Loc file 1 1
@@ -112,12 +114,12 @@ tokId :: Located Token -> String
 tokId (L _ (TKid x)) = x
 tokId _ = error "not a valid token"
 
-type HpStmt a = Either (LHpFormula a) (LHpTySign a)
+type HpStmt a = Either (LHpFormula a) HpTySign
 
 --mkSrc :: [HpStmt a] -> Parser (HpProg a)
 mkSrc stmts = 
     let (l, r) = collectEither stmts
-    in  return HpProg { clauses = l,  tysigs' = r }
+    in  return HpProg { clauses = l,  ptysigs = r }
 
 collectEither :: [Either a b] -> ([a], [b])
 collectEither es = (map unL l, map unR r)
@@ -162,7 +164,7 @@ data HpType   =
 
 type LHpType   = Located HpType
 
-mkTyp :: LHpType -> Parser Type
+mkTyp :: Monad m => LHpType -> ParserT m Type
 mkTyp (L _ (HpTyGrd "o"))  = return (TyCon TyBool)
 mkTyp (L _ (HpTyGrd "i"))  = return (TyCon TyAll)
 mkTyp (L _ (HpTyFun t1 t2)) = do

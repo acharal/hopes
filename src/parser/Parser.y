@@ -37,7 +37,7 @@ import Control.Monad.State
 %name parseSrc  src
 %name parseGoal  goal
 %lexer { lexer  } { (L _ TKEOF) }
-%monad { Parser } { >>= } { return }
+%monad { ParserT IO } { (>>=) } { return }
 
 %right '->'
 %left '::'
@@ -131,8 +131,8 @@ types :: {  [LHpType]  }
       : types ',' type          { $3:$1 }
       | type                    { [$1]  }
 
-tysig :: { PLHpTySign }
-      : ID tyann                { located ($1,$>) $ ((tokSym $1),(unLoc $2)) }
+tysig :: { HpTySign }
+      : ID tyann                { ((tokSym $1),(unLoc $2)) }
 
 tyann :: { Located Type }
       : '::' type               {% mkTyp $2 >>= \t -> return $ located ($1,$>) t }

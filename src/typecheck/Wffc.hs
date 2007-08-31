@@ -1,6 +1,6 @@
 module Wffc where
 
-import HpSyn
+import Syntax
 import TcMonad
 import Tc
 import Types
@@ -67,18 +67,19 @@ import List (partition)
 -}
 
 -- wffcSource :: (HpSource a, TypeEnv) -> Tc (HpSource a, TypeEnv)
-wffcProg (src, tyenv) = do
+wffcProg (p, tyenv) = do
     extendEnv tyenv $ do
-        mapM_ (\c -> withLocation c (wffcClause c)) (clauses src)
-        --mapM_ wffcClause (clauses src)
+        --mapM_ wffcForm (clauses p)
         ty_env' <- zonkEnv tyenv
-        return (src, ty_env')
+        p <- normProg p
+        return (p, ty_env')
 
 
 -- wffcClause :: LHpClause a -> Tc ()
+{-
 wffcForm cl =
-    tcWithCtxt (clauseCtxt cl) $ do
-        let b = map binds $ bindings (unLoc cl)
+    enterContext (CtxtForm cl) $ do
+        let b = map binds $ binds cl
         tvs <- mapM initNewTy b
         extendEnv tvs $ do
             mapM_ checkApps (atomsOf cl)
@@ -111,7 +112,7 @@ checkHead bv hd =
             --bvo = occurences (\x -> \y -> (unLoc x) `eqsym` (unLoc y)) bv'
             -- morethanonce = filter ((>1).snd) bvo
             -- mapM_ (\e -> tcExpr e tyAll) $ map fst $ morethanonce
-
+-}
 occurences eq [] = []
 occurences eq (x:xs) =
     let (s, r) = partition (eq x) (x:xs)
@@ -122,21 +123,53 @@ occurences eq (x:xs) =
 zonkEnv :: TypeEnv -> Tc TypeEnv
 zonkEnv env = 
     let aux (v,t) = do
-            t' <- zonkTy t
+            t' <- zonkType t
             return (v, t')
     in  mapM aux env
 
-zonkTy = zonkTy'
 
-zonkTy' (TyVar _) = return tyAll
-zonkTy' (TyFun t1 t2) = do
-    t1' <- zonkTy' t1
-    t2' <- zonkTy' t2
+zonkType (TyVar _) = return tyAll
+zonkType (TyFun t1 t2) = do
+    t1' <- zonkType t1
+    t2' <- zonkType t2
     return (TyFun t1' t2')
-zonkTy' (TyTup tl) = do
-    tl' <- mapM zonkTy' tl
+zonkType (TyTup tl) = do
+    tl' <- mapM zonkType tl
     return (TyTup tl')
-zonkTy' t = return t
+zonkType t = return t
+
+-- normProg :: HpProg a -> Tc (HpProg a)
+normProg p = do 
+    cl <- mapM normForm (clauses p)
+    return (p { clauses = cl })
+
+normForm (L l (HpForm b xs ys)) = do
+    b' <- normBinds b
+    xs' <- mapM normExpr xs
+    ys' <- mapM normExpr ys
+    return (L l (HpForm b' xs' ys'))
+
+normBinds bs = mapM normBind bs
+    where normBind (HpBind s ty) = do
+            ty' <- normType ty
+            s'   <- normSym s
+            return (HpBind s' ty')
+
+normExpr (L l (HpApp e es)) = do
+    e'  <-  normExpr e
+    es' <- mapM normExpr es
+    return (L l (HpApp e' es'))
+normExpr (L l (HpTup es)) = do
+    es' <- mapM normExpr es
+    return (L l (HpTup es'))
+normExpr (L l HpWildcat) = return (L l HpWildcat)
+normExpr (L l (HpSym s)) = do
+    s' <- normSym s
+    return (L l (HpSym s'))
+
+normSym  (TcS s i ty) = do
+    ty' <- normType ty
+    return (TcS s (arity ty) ty')
 
 multiHoOccurErr occlist =
     typeError (sep ([text "Higher order bound variables",

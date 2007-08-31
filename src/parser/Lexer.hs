@@ -6,21 +6,21 @@ import Char
 import Pretty
 
 
-lexer :: (Located Token -> Parser a) -> Parser a
+lexer :: Monad m => (Located Token -> ParserT m a) -> ParserT m a
 lexer cont = lexToken >>= \tok -> setTok tok >> cont tok
 
-lexError :: String -> Loc -> Parser a
+lexError :: Monad m => String -> Loc -> ParserT m a
 lexError []  l = parseErrorWithLoc l (sep [text "Unexpected end of input"])
 lexError inp l = parseErrorWithLoc l (sep [text "Unexpected character", quotes (char (head inp))])
 
-lexToken :: Parser (Located Token)
+lexToken :: Monad m => ParserT m (Located Token)
 
 lexToken = do
     inp <- getInput
     ls  <- getLocSpan
     lexToken' inp (spanEnd ls)
 
-lexToken' :: ParserInput -> Loc -> Parser (Located Token)
+lexToken' :: Monad m => ParserInput -> Loc -> ParserT m (Located Token)
 lexToken' inp l = do
     case scanTok inp l of
         TokEnd -> do

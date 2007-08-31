@@ -8,7 +8,7 @@ import Pretty
 import Err
 
 import Tc
---import Wffc
+import Wffc
 import Syntax
 --import Hopl
 --import ProofProc
@@ -33,7 +33,7 @@ loadSource file = do
     parse_res <- parseFromFile parseSrc file
     case parse_res of
         Right (p, s) -> do
-            (p', msgs) <- runTc (tcProg p)
+            (p', msgs) <- runTc (tcProg p >>= wffcProg)
             return (p', msgs)
         Left msgs -> 
             return (Nothing, msgs)

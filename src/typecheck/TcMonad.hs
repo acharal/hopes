@@ -16,8 +16,6 @@ import Data.Monoid
 import Data.IORef
 -- import qualified Data.Map as Map
 
-import Debug.Trace
-
 data TcEnv =
     TcEnv { 
         tyenv :: TypeEnv,
@@ -30,7 +28,7 @@ data TcState =
         msgs   :: Messages
     }
 
-type TypeEnv = [ (HpSymbol, Type) ]
+type TypeEnv = [ HpTySign ]
 
 type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages IO))
 
@@ -60,7 +58,7 @@ failIfErr = do
 getTypeEnv  :: Tc TypeEnv
 getTypeEnv = asks tyenv
 
-extendEnv :: [(HpSymbol, Type)] -> Tc a -> Tc a
+extendEnv :: [HpTySign] -> Tc a -> Tc a
 extendEnv binds m = local extend m
     where extend env = env{tyenv = binds ++ (tyenv env)}
 

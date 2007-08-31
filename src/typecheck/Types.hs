@@ -4,6 +4,7 @@ import Pretty
 import List (nub)
 import Data.IORef
 
+
 data TyVar = Tv Int (IORef (Maybe Type))
 
 instance Eq TyVar where
@@ -29,6 +30,8 @@ data MonoType =
     | TyFun MonoType MonoType
     | TyTup [MonoType]
   deriving (Eq, Show)
+
+type TySign a = (a, Type)
 
 tyBool = TyCon TyBool
 tyAll  = TyCon TyAll

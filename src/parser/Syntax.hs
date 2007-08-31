@@ -6,8 +6,6 @@ module Syntax where
 
 import Loc
 import Char (isUpper)
-import List (nub)
-import Maybe(catMaybes)
 import Pretty
 import Types
 import Data.Monoid
@@ -58,7 +56,10 @@ consSym = HpSym $ Sym ":"
 nilSym  = HpSym $ Sym "[]"
 cutSym  = HpSym $ Sym "!"
 
-buildinSym = [ Sym ":", Sym "[]", Sym "!" , Sym "s"]
+buildinSym = [  Sym ":",
+                Sym "[]",
+                Sym "!",
+                Sym "s" ]
 
 buildinTyp (Sym ":")  = TyFun (TyTup [tyAll, tyAll]) tyAll
 buildinTyp (Sym "[]") = tyAll
@@ -69,14 +70,16 @@ data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
 type HpBindings a = [HpBinding a]
 -- type HpBindings a = Set.Set (HpBinding a)
 
+type HpTySign = TySign HpSymbol
+
 data HpProg a =
     HpProg { 
         clauses :: [LHpFormula a],
-        tysigs' :: [LHpTySign HpSymbol]
+        ptysigs :: [HpTySign]
     }
 
-tysigs p = tysigs' p `mappend` buildinsigs
-    where buildinsigs = map (located bogusLoc) $ zip (buildinSym) (map buildinTyp buildinSym)
+tysigs p = ptysigs p `mappend` buildinsigs
+    where buildinsigs = zip (buildinSym) (map buildinTyp buildinSym)
 
 type HpSignature a = (Set.Set a, Set.Set a)
 
@@ -130,8 +133,6 @@ data HpExpr a =
     | HpTup [LHpExpr a]                    -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
     | HpWildcat                            -- wildcat
     deriving Eq
-
-type HpTySign a  = (a,Type)
 
 
 class Eq b => HasBindings a b where
@@ -198,13 +199,11 @@ isSymbol e =
 -- located syntax 
 type LHpExpr a    = Located (HpExpr a)
 type LHpFormula a = Located (HpFormula a)
-type LHpTySign a  = Located (HpTySign a)
 
 -- parsed located syntax 
 
 type PLHpExpr    = LHpExpr    HpSymbol
 type PLHpFormula = LHpFormula HpSymbol
-type PLHpTySign  = LHpTySign  HpSymbol
 type PHpProg     = HpProg     HpSymbol
 
 type PLHpAtom   = PLHpExpr

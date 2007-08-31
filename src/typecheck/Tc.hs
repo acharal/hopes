@@ -41,9 +41,9 @@ import Data.Monoid
 
 -- tcSource :: PHpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
 tcProg src = do
-    let tysign = map unLoc (tysigs src)
+    let tysign = tysigs  src
         cls    = clauses src
-        sigma  = sig src
+        sigma  = sig     src
     tv_sym <- mapM initNewTy (rigids sigma)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
