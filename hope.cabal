@@ -27,5 +27,5 @@ Other-Modules:	Lexer, Parser, ParseUtils, Syntax
                 Pretty
                 ProofProc, Logic, Hopl
 Extensions:     RankNTypes
-Ghc-Options:    -prof -auto-all
+Ghc-Options:    
 

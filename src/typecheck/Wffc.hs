@@ -9,7 +9,7 @@ import Loc
 import Pretty
 import Monad (when)
 import List (partition)
-
+import Maybe (catMaybes)
 
 {-
     Well-formated formulas
@@ -67,56 +67,60 @@ import List (partition)
 -}
 
 -- wffcSource :: (HpSource a, TypeEnv) -> Tc (HpSource a, TypeEnv)
-wffcProg (p, tyenv) = do
+restrictProg (p, tyenv) = do
     extendEnv tyenv $ do
-        --mapM_ wffcForm (clauses p)
-        ty_env' <- zonkEnv tyenv
-        p <- normProg p
-        return (p, ty_env')
+        mapM_ restrictForm (clauses p)
+        tyenv <- normEnv
+        tyenv <- zonkEnv tyenv
+        return (p, tyenv)
 
+restrictForm f@(L _ (HpForm _ xs ys)) = enterContext (CtxtForm f) $ do
+    let locals = map (\(HpBind a t) -> (a, t)) (binds f)
+    extendEnv locals $ do
+        mapM_ restrictFunc xs
+        mapM_ restrictFunc ys
+        restrictHead f 
 
--- wffcClause :: LHpClause a -> Tc ()
-{-
-wffcForm cl =
-    enterContext (CtxtForm cl) $ do
-        let b = map binds $ binds cl
-        tvs <- mapM initNewTy b
-        extendEnv tvs $ do
-            mapM_ checkApps (atomsOf cl)
-            checkHead b (hAtom cl)
+-- function symbol application must be (i, ..., i) -> i
+-- restrictFunc
 
--- checkApps :: LHpAtom a -> Tc ()
-checkApps e = 
-    let as = argsOf e
-        isapp e = case unLoc e of
-                     HpApp _ _ -> True
-                     _ -> False
-        apps = filter isapp as
-    in  do
-        mapM_ (\e -> tcExpr e tyAll) apps   -- restrict the result type to be i
-        let app_args = concatMap argsOf apps
-        mapM_ (\e -> tcExpr e tyAll) $ app_args -- restrict the arguments of the application to be of type i
-        mapM_ checkApps app_args -- check recursively the arguments for nested applications
+restrictHead f@(L _ (HpForm b [h] _)) = do
+    let func    = funcOf h
+        args    = argsOf h
+        (var_args, rest_args) = partition (expBind f) args
+        expBind f (L _ (HpSym s)) = isBind f s
+        expBind _ _ = False
+        unLocEq x y = (unLoc x) == (unLoc y)
+        varoccu = occurences unLocEq var_args
 
+    when (expBind f func) $
+        varInHead func
 
--- checkHead :: [a] -> LHpAtom a -> Tc ()
-checkHead bv hd =
-    let [hs] = symbolsE $ headOf hd
-        eqsym (HpSym s) (HpSym s') = s == s'
-        eqsym _ _ = False
-    in do
-        when (hs `elem` bv) $ varInHead hs      --head is bounded. unexcepted
-        -- ty <- lookupVar hs
-        -- let etys  = zip (argsOf hd) (tyargs ty)
-        -- let bvtys = filter ((\((HpSym x), _) -> x `elem` bv).isSymbol.fst) etys -- bounded variables 
-            --bvo = occurences (\x -> \y -> (unLoc x) `eqsym` (unLoc y)) bv'
-            -- morethanonce = filter ((>1).snd) bvo
-            -- mapM_ (\e -> tcExpr e tyAll) $ map fst $ morethanonce
--}
+    let restrToAll x = (tcExpr tyAll x >> return Nothing) `catchError` \e -> return (Just x)
+    maybe_errors <- mapM (\(x, _) -> restrToAll x) $ filter ((>1) . length . snd) varoccu
+    let notRestricted = catMaybes $ maybe_errors
+    when (not $ null $ notRestricted) (multiHoOccurErr notRestricted)
+
+    maybe_preds <- mapM restrToAll $ filter isSymbol rest_args
+    let preds = catMaybes $ maybe_preds
+    when (not $ null $ preds) (predInHeadErr preds)
+    --liftIO $ print (map (ppr.unLoc) (filter isSymbol rest_args))
+    return ()
+
+restrictFunc e = do
+    let args = argsOf e
+        apps = filter isApp args    --arguments that are applications
+    mapM  (tcExpr tyAll) apps
+    mapM_ restrictInsideFunc args
+restrictInsideFunc e = do
+    let args = argsOf e
+    mapM_ (tcExpr tyAll) args
+    mapM_ restrictInsideFunc args
+
 occurences eq [] = []
 occurences eq (x:xs) =
     let (s, r) = partition (eq x) (x:xs)
-    in  (x, (length s)):(occurences eq r)
+    in  (x, s):(occurences eq r)
 
 
 -- head must not contain "other than" higher order variables in higher-order arg positions
@@ -171,19 +175,22 @@ normSym  (TcS s i ty) = do
     ty' <- normType ty
     return (TcS s (arity ty) ty')
 
+
 multiHoOccurErr occlist =
-    typeError (sep ([text "Higher order bound variables",
-                     nest 4 (sep (punctuate comma (map (quotes.text.fst) occlist))),
-                     text "must occur only once as arguments in the head of a rule"]))
+    typeError (sep ([text "Higher order bound variables:",
+                     nest 4 (sep (punctuate comma (map ppr_aux occlist))),
+                     text "must occur only once as argument in the head of a clause"]))
+    where ppr_aux e = quotes $ ppr $ unLoc e
 
 predInHeadErr preds = 
-    typeError (sep ([text "Predicate variables",
-                     nest 4 (sep (punctuate comma (map (quotes.text) preds))),
-                     text "must not occur as arguments in atom in the lhs of a rule"]))
+    typeError (sep ([text "Predicate variables:",
+                     nest 4 (sep (punctuate comma (map ppr_aux preds))),
+                     text "must not occur as argument in the head of a clause"]))
+    where ppr_aux e = quotes $ ppr $ unLoc e
 
 
 varInHead var = 
-    typeError (sep ([text "Bounded variable", 
-                     nest 4 (quotes (ppr var)),
-                     text "must not occur at the head of atom when in the lhs of rule"]))
+    typeError (sep ([text "Bounded variable:", 
+                     nest 4 (quotes (ppr (unLoc var))),
+                     text "must not occur as functor in the head of a clause"]))
 

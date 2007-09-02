@@ -69,15 +69,15 @@ lookupVar v = do
         Nothing -> typeError (sep [text "Variable", quotes (ppr v), text "out of scope"] )
         Just ty -> return ty
 
-newTyVar :: Tc MonoType
-newTyVar = do
+freshTyVar :: Tc MonoType
+freshTyVar = do
     n <- gets uniq
     modify (\s -> s{uniq = n+1})
     r <- liftIO $ newIORef Nothing
     return (TyVar (Tv (n+1) r))
 
-lookupTyVar :: TyVar -> Tc (Maybe MonoType)
-lookupTyVar (Tv i r) = liftIO $ readIORef r
+lookupTy :: TyVar -> Tc (Maybe MonoType)
+lookupTy (Tv i r) = liftIO $ readIORef r
 
 addConstraint :: TyVar -> MonoType -> Tc ()
 addConstraint (Tv i r) ty = do
@@ -86,7 +86,7 @@ addConstraint (Tv i r) ty = do
         Just ty' -> typeError (sep [text "tyvar", quotes (int i), text "already bind with type", ppr ty'])
         Nothing ->  liftIO $ writeIORef r (Just ty)
 
-normEnv :: Tc TypeEnv
+
 normEnv = 
     let aux (v,t) = do
             t' <- normType t
@@ -99,7 +99,7 @@ normType (TyFun t1 t2) = do
     return $ TyFun t1' t2'
 
 normType tvy@(TyVar tv) = do
-    ty <- lookupTyVar tv
+    ty <- lookupTy tv
     case ty of
         Just t  -> do 
             ty' <- normType t

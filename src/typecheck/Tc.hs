@@ -1,16 +1,16 @@
-module Tc (
-        module Tc,
-        module TcMonad
-    ) where
+module Tc where
 
-import TcMonad
-import Types
+{- type checking -}
 import Syntax
-import Err
+import Types
+import TcMonad
+
 import Loc
 import Pretty
-import Monad    (zipWithM_, when)
+
+import Monad (mapAndUnzipM, zipWithM_, when)
 import Data.Monoid
+import Data.Foldable (foldlM)
 
 {-
     Strategy of type checking
@@ -39,24 +39,24 @@ import Data.Monoid
 
 -}
 
--- tcSource :: PHpSource HpSymbol -> Tc (HpSource HpSymbol, TypeEnv)
+-- type checking and inference
+
 tcProg src = do
     let tysign = tysigs  src
         cls    = clauses src
         sigma  = sig     src
-    tv_sym <- mapM initNewTy (rigids sigma)
+    tv_sym <- mapM freshTyFor (rigids sigma)
     extendEnv tv_sym $ do
     extendEnv tysign $ do
         cls' <- mapM tcForm cls
         ty_env  <- normEnv
         return (src{ clauses = cls' }, ty_env)
 
--- type checking and inference
 
 -- tcForm :: LHpFormula a -> Tc (LHpFormula b)
 tcForm f@(L l (HpForm b xs ys)) =
     enterContext (CtxtForm f) $ do
-    tvs <- mapM (initNewTy.symbolBind) (binds f)
+    tvs <- newTyBinds (binds f)
     extendEnv tvs $ do
         xs' <- mapM tcAtom xs
         ys' <- mapM tcAtom ys
@@ -67,31 +67,33 @@ tyBinds = mapM tyBind
     where tyBind (HpBind s oldty) = do
             ty <- lookupVar s
             ty <- normType ty
-            s' <- annoSym s
+            s' <- tySym s
             return (HpBind s' ty)
 
+newTyBinds b = mapM (freshTyFor.symbolBind) b
+
 -- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
-tcAtom a = enterContext (CtxtAtom a) $ tcExpr a tyBool
+tcAtom a = enterContext (CtxtAtom a) $ tcExpr tyBool a
 
 -- tiExpr :: LHpExpr a -> Tc (MonoType, LHpExpr)
 tiExpr e = do
-    var_ty <- newTyVar
-    e' <- tcExpr e var_ty
+    var_ty <- freshTyVar
+    e' <- tcExpr var_ty e
     return (var_ty, e')
 
 -- tcExpr, tcExpr' :: LHpExpr a -> MonoType -> Tc ()
 
-tcExpr e t = enterContext (CtxtExpr e) $ tcExpr' e t
+tcExpr  exp_ty e = enterContext (CtxtExpr e) $ tcExpr' exp_ty e
 
-tcExpr' (L _ (HpPar  e)) exp_ty = tcExpr e exp_ty
+tcExpr' exp_ty (L _ (HpPar  e)) = tcExpr exp_ty e
 
-tcExpr' (L _ (HpAnn e ty)) exp_ty = do
+tcExpr' exp_ty (L _ (HpAnn e ty)) = do
     ann_ty <- instantiate ty
-    e' <- tcExpr e ann_ty
+    e' <- tcExpr ann_ty e
     unify ann_ty exp_ty
     return e'
 
-tcExpr' (L l (HpApp e args)) exp_ty = do
+tcExpr' exp_ty (L l (HpApp e args))  = do
     (fun_ty, e')     <- tiExpr e
     (args_ty, args') <- mapAndUnzipM tiExpr args
     let tup_ty = case args_ty of
@@ -102,19 +104,18 @@ tcExpr' (L l (HpApp e args)) exp_ty = do
     unify res_ty exp_ty
     return (L l (HpApp e' args'))
 
-tcExpr' (L l (HpSym s)) exp_ty = do
+tcExpr' exp_ty (L l (HpSym s))  = do
     sym_ty <- lookupVar s
     unify sym_ty exp_ty
-    s' <- annoSym s
+    s' <- tySym s
     return (L l (HpSym s'))
 
-tcExpr' (L l (HpTup es)) exp_ty = do
+tcExpr' exp_ty (L l (HpTup es)) = do
     (tys, es') <- mapAndUnzipM tiExpr es
     unify (TyTup tys) exp_ty
     return (L l (HpTup es'))
 
-
-tcExpr' (L l HpWildcat) _ = return (L l HpWildcat)
+tcExpr' _ (L l HpWildcat) = return (L l HpWildcat)
 
 -- unification
 
@@ -126,8 +127,9 @@ unify (TyVar v1) t@(TyVar v2)
 unify (TyVar v) t = unifyVar v t
 unify t (TyVar v) = unifyVar v t
 
-unify (TyFun fun1 arg1) (TyFun fun2 arg2) =
-    unify fun1 fun2 >> unify arg1 arg2
+unify (TyFun fun1 arg1) (TyFun fun2 arg2) = do
+    unify fun1 fun2
+    unify arg1 arg2
 
 unify t@(TyTup tys) t'@(TyTup tys')
     | length tys == length tys' = zipWithM_ unify tys tys'
@@ -138,25 +140,25 @@ unify t t'
 
 
 unifyFun t = do
-    arg_ty  <- newTyVar
-    res_ty  <- newTyVar
+    arg_ty  <- freshTyVar
+    res_ty  <- freshTyVar
     unify (TyFun arg_ty res_ty) t
     return (arg_ty, res_ty)
 
 unifyVar v t = do
-    maybe_ty <- lookupTyVar v
+    maybe_ty <- lookupTy v
     case maybe_ty of
         Nothing -> varBind v t
         Just t' -> unify t' t
 
 varBind  v1 t@(TyVar v2) = do
-    maybe_ty <- lookupTyVar v2
+    maybe_ty <- lookupTy v2
     case maybe_ty of
         Nothing -> addConstraint v1 t
         Just ty -> unify (TyVar v1) ty
 
 varBind v ty = do
-    tvs <- getTyVars ty
+    tvs <- tyvarsM ty
     when (v `elem` tvs) (occurCheckErr v ty)
     addConstraint v ty
 
@@ -169,34 +171,23 @@ instantiate t = return t
 generalize :: MonoType -> Tc Type
 generalize t = return t
 
--- getTyVars :: MonoType -> Tc [TyVar]
-getTyVars (TyVar v) = do
-    maybe_ty <- lookupTyVar v
-    case maybe_ty of
-        Nothing  -> return [v]
-        Just ty' -> getTyVars ty' >>= \tvs' -> return $ v:tvs'
 
-getTyVars (TyFun ty1 ty2) = do
-    tvs1 <- getTyVars ty1
-    tvs2 <- getTyVars ty2
-    return (tvs1 `mappend` tvs2)
-
-getTyVars (TyTup tl) = do
-    l <- mapM getTyVars tl
-    return (mconcat l)
-
-getTyVars (TyCon _) = return mempty
+tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
+    where auxM v = lookupTy v >>= \mayv' ->
+            case mayv' of
+                Nothing -> return []
+                Just ty -> do 
+                    vs <- tyvarsM ty
+                    return (v:vs)
 
 
-initNewTy v = do
-    ty <- newTyVar >>= generalize
+freshTyFor :: a -> Tc (a, Type)
+freshTyFor v = do
+    ty <- freshTyVar >>= generalize
     return (v, ty)
 
-annoSym :: HpSymbol -> Tc TcSymbol
-annoSym sym = do
-    ty' <- lookupVar sym
-    ty <- normType ty'
-    return (TcS sym (arity ty) ty)
+tySym :: HpSymbol -> Tc HpSymbol
+tySym = return . id   --no annotation
 
 -- error reporting
 
@@ -209,6 +200,4 @@ unificationErr inf_ty exp_ty = do
         typeError desc
 
 
-occurCheckErr tv ty = do
-    let desc = text "Could not construct an infinite type:"
-    typeError desc
+occurCheckErr tv ty = typeError (text "Could not construct an infinite type")

@@ -7,9 +7,10 @@ import Parser
 import Pretty
 import Err
 
+import Syntax
 import Tc
 import Wffc
-import Syntax
+import TcMonad
 --import Hopl
 --import ProofProc
 --import Logic
@@ -23,7 +24,7 @@ main = do
     case res of
         Just (p, env) -> do
             pprint p
-            --print $ ppr_env env
+            print $ ppr_env env
         Nothing ->  
             pprint $ vcat (map ppr (processMsgs msgs))
 
@@ -33,7 +34,7 @@ loadSource file = do
     parse_res <- parseFromFile parseSrc file
     case parse_res of
         Right (p, s) -> do
-            (p', msgs) <- runTc (tcProg p >>= wffcProg)
+            (p', msgs) <- runTc (tcProg p >>= restrictProg)
             return (p', msgs)
         Left msgs -> 
             return (Nothing, msgs)

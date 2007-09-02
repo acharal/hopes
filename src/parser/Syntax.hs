@@ -51,6 +51,11 @@ newtype HpSymbol = Sym String
 
 data TcSymbol = TcS HpSymbol Int Type
 
+instance Eq TcSymbol where
+    (TcS s _ _) == (TcS s' _ _) = s == s'
+
+instance Ord TcSymbol where
+    compare (TcS s _ _) (TcS s' _ _) = compare s s'
 
 consSym = HpSym $ Sym ":"
 nilSym  = HpSym $ Sym "[]"
@@ -182,10 +187,10 @@ argsOf e =
 
 -- get a head of an application
 
-headOf :: LHpExpr a -> LHpExpr a
-headOf e = 
+funcOf :: LHpExpr a -> LHpExpr a
+funcOf e = 
     case unLoc e of
-        (HpApp e1 _) -> headOf e1
+        (HpApp e1 _) -> funcOf e1
         _ -> e
 
 
