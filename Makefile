@@ -17,7 +17,7 @@ clean:
 	$(RM) -rf dist
 	$(RM) -f *.hi *.o
 
-configure: .setup-config hope.cabal
+configure: .setup-config
 
 .setup-config:
 	$(SETUP) configure

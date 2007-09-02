@@ -1,4 +1,4 @@
-module Wffc where
+module Restr where
 
 import Syntax
 import TcMonad
@@ -67,11 +67,11 @@ import Maybe (catMaybes)
 -}
 
 -- wffcSource :: (HpSource a, TypeEnv) -> Tc (HpSource a, TypeEnv)
+
 restrictProg (p, tyenv) = do
     extendEnv tyenv $ do
         mapM_ restrictForm (clauses p)
         tyenv <- normEnv
-        tyenv <- zonkEnv tyenv
         return (p, tyenv)
 
 restrictForm f@(L _ (HpForm _ xs ys)) = enterContext (CtxtForm f) $ do
@@ -83,7 +83,7 @@ restrictForm f@(L _ (HpForm _ xs ys)) = enterContext (CtxtForm f) $ do
 
 -- function symbol application must be (i, ..., i) -> i
 -- restrictFunc
-
+restrictHead (L _ (HpForm _ [] _)) = return ()
 restrictHead f@(L _ (HpForm b [h] _)) = do
     let func    = funcOf h
         args    = argsOf h
@@ -121,60 +121,6 @@ occurences eq [] = []
 occurences eq (x:xs) =
     let (s, r) = partition (eq x) (x:xs)
     in  (x, s):(occurences eq r)
-
-
--- head must not contain "other than" higher order variables in higher-order arg positions
-zonkEnv :: TypeEnv -> Tc TypeEnv
-zonkEnv env = 
-    let aux (v,t) = do
-            t' <- zonkType t
-            return (v, t')
-    in  mapM aux env
-
-
-zonkType (TyVar _) = return tyAll
-zonkType (TyFun t1 t2) = do
-    t1' <- zonkType t1
-    t2' <- zonkType t2
-    return (TyFun t1' t2')
-zonkType (TyTup tl) = do
-    tl' <- mapM zonkType tl
-    return (TyTup tl')
-zonkType t = return t
-
--- normProg :: HpProg a -> Tc (HpProg a)
-normProg p = do 
-    cl <- mapM normForm (clauses p)
-    return (p { clauses = cl })
-
-normForm (L l (HpForm b xs ys)) = do
-    b' <- normBinds b
-    xs' <- mapM normExpr xs
-    ys' <- mapM normExpr ys
-    return (L l (HpForm b' xs' ys'))
-
-normBinds bs = mapM normBind bs
-    where normBind (HpBind s ty) = do
-            ty' <- normType ty
-            s'   <- normSym s
-            return (HpBind s' ty')
-
-normExpr (L l (HpApp e es)) = do
-    e'  <-  normExpr e
-    es' <- mapM normExpr es
-    return (L l (HpApp e' es'))
-normExpr (L l (HpTup es)) = do
-    es' <- mapM normExpr es
-    return (L l (HpTup es'))
-normExpr (L l HpWildcat) = return (L l HpWildcat)
-normExpr (L l (HpSym s)) = do
-    s' <- normSym s
-    return (L l (HpSym s'))
-
-normSym  (TcS s i ty) = do
-    ty' <- normType ty
-    return (TcS s (arity ty) ty')
-
 
 multiHoOccurErr occlist =
     typeError (sep ([text "Higher order bound variables:",

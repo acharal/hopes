@@ -21,7 +21,7 @@ Hs-Source-Dirs: src
                 src/typecheck
                 src/prover
 Other-Modules:	Lexer, Parser, ParseUtils, Syntax
-                Tc, TcMonad, Wffc
+                TcMonad, Wff, Tc, Restr 
                 Err
                 Loc
                 Pretty

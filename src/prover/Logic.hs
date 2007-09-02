@@ -7,8 +7,6 @@ import Control.Monad.Trans
 import Control.Monad.State
 import Control.Monad.Reader
 
-import Debug.Trace
-
 class MonadPlus m => MonadLogic m where
     msplit :: m a -> m (Maybe (a, m a))
     interleave :: m a -> m a -> m a
@@ -87,11 +85,11 @@ instance MonadLogic m => MonadLogic (ReaderT r m) where
                     Nothing -> return Nothing
                     Just (a,m') -> return (Just (a, ReaderT $ \env' -> m'))
 
-runL :: (Monad m) => Maybe Int -> LogicT m a -> m [a]
-runL Nothing (SFKT m) = m (\a fk -> fk >>= (return . (a:))) (return [])
-runL (Just n) (SFKT m) | n <=0 = return []
-runL (Just 1) (SFKT m) = m (\a fk -> return [a]) (return [])
-runL (Just n) m = unSFKT (msplit m) runM' (return [])
+runLogic :: (Monad m) => Maybe Int -> LogicT m a -> m [a]
+runLogic  Nothing (SFKT m) = m (\a fk -> fk >>= (return . (a:))) (return [])
+runLogic (Just n) (SFKT m) | n <=0 = return []
+runLogic (Just 1) (SFKT m) = m (\a fk -> return [a]) (return [])
+runLogic (Just n) m = unSFKT (msplit m) runM' (return [])
     where runM' Nothing _ = return []
           runM' (Just (a,m')) _ = runL (Just (n-1)) m' >>= (return . (a:))
 

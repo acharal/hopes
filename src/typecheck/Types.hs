@@ -3,7 +3,8 @@ module Types where
 import Pretty
 import List (nub)
 import Data.IORef
-import Data.Foldable hiding (concatMap, maximum)
+import Prelude hiding (concatMap, foldl, foldr)
+import Data.Foldable hiding (maximum)
 import Data.Monoid
 
 data TyVar = Tv Int (IORef (Maybe Type))
@@ -18,8 +19,10 @@ instance Show TyVar where
     showsPrec p (Tv i _) = showsPrec p i
 
 -- if language supports polymorphism then Type can be MonoType or PolyType (with quantified tyvars)
-type Type     = MonoType
+type Type     = TypeV TyVar
 type MonoType = MonoTypeV TyVar
+
+type TypeV    = MonoTypeV
 
 -- monotype parametrized by the tyvar
 data MonoTypeV a =
@@ -34,6 +37,12 @@ instance Foldable MonoTypeV where
     foldMap f (TyCon c)     = mempty
     foldMap f (TyFun t1 t2) = foldMap f t1 `mappend` foldMap f t2
     foldMap f (TyTup tl)    = mconcat (map (foldMap f) tl)
+
+instance Functor MonoTypeV where
+    fmap f (TyVar a)     = TyVar (f a)
+    fmap f (TyCon c)     = TyCon c
+    fmap f (TyFun t1 t2) = TyFun (fmap f t1) (fmap f t2)
+    fmap f (TyTup tl)    = TyTup (map (fmap f) tl)
 
 type TySign a = (a, Type)
 
@@ -67,11 +76,8 @@ tyargs _ = []
 
 -- pretty printing of types
 
-tynames :: [String]
-tynames =
-    let letters = [ "a", "b", "c", "d", "e", "f" ]
-    in  letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
-
+tynames = letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
+    where letters = [ "a", "b", "c", "d", "e", "f" ]
 
 instance Pretty TyCon where
     ppr TyBool = text "o"
