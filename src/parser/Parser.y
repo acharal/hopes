@@ -98,7 +98,7 @@ exps2 :: { [PLHpExpr] }
 
 term :: { PLHpTerm }
     : ID                        { located $1      $ (mkSym $1) }
-    | '_'                       { located $1      $ HpWildcat }
+    | '_'                       { located $1      $ wildcat }
     | ID '(' terms ')'          { located ($1,$>) $ HpApp (located $1 (mkSym $1)) (reverse $3) }
     | '(' terms2 ')'            { located ($1,$>) $ HpTup (reverse $2) }
     | '[' ']'                   { located ($1,$>) $ mkList []           Nothing   }

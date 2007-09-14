@@ -1,8 +1,8 @@
-module Restr where
+module Restrict where
 
 import Syntax
-import TcMonad
 import Tc
+import Typecheck
 import Types
 import Err
 import Loc

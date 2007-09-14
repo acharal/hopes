@@ -91,6 +91,6 @@ runLogic (Just n) (SFKT m) | n <=0 = return []
 runLogic (Just 1) (SFKT m) = m (\a fk -> return [a]) (return [])
 runLogic (Just n) m = unSFKT (msplit m) runM' (return [])
     where runM' Nothing _ = return []
-          runM' (Just (a,m')) _ = runL (Just (n-1)) m' >>= (return . (a:))
+          runM' (Just (a,m')) _ = runLogic (Just (n-1)) m' >>= (return . (a:))
 
 observe m = unSFKT m (\a fk -> return a) (fail "no answer")

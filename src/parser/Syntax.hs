@@ -9,7 +9,7 @@ import Char (isUpper)
 import Pretty
 import Types
 import Data.Monoid
-import qualified Data.Set as Set
+import List (find)
 {-
     Preliminaries
     1. Symbols
@@ -46,34 +46,46 @@ import qualified Data.Set as Set
        universally quantified.
 -}
 
-newtype HpSymbol = Sym String
-    deriving (Eq, Ord)
+data HpSymbol = Sym String | AnonSym
+
+-- no comparison
+instance Eq HpSymbol where
+    (Sym s) == (Sym s') = s == s'
+    _ == _ = False
 
 data TcSymbol = TcS HpSymbol Int Type
 
 instance Eq TcSymbol where
     (TcS s _ _) == (TcS s' _ _) = s == s'
 
-instance Ord TcSymbol where
-    compare (TcS s _ _) (TcS s' _ _) = compare s s'
+instance Show HpSymbol where
+    showsPrec p (Sym s) = showString s
+    showsPrec p AnonSym = showString "_"
 
-consSym = HpSym $ Sym ":"
-nilSym  = HpSym $ Sym "[]"
-cutSym  = HpSym $ Sym "!"
+consSym  = HpSym $ Sym ":"
+nilSym   = HpSym $ Sym "[]"
+cutSym   = HpSym $ Sym "!"
+succSym  = HpSym $ Sym "s"
+zeroSym  = HpSym $ Sym "0"
 
 buildinSym = [  Sym ":",
                 Sym "[]",
                 Sym "!",
-                Sym "s" ]
+                Sym "s",
+                Sym "0" ]
 
 buildinTyp (Sym ":")  = TyFun (TyTup [tyAll, tyAll]) tyAll
 buildinTyp (Sym "[]") = tyAll
 buildinTyp (Sym "!" ) = tyBool
 buildinTyp (Sym "s" ) = TyFun tyAll tyAll
+buildinTyp (Sym "0" ) = tyAll
 
 data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
 type HpBindings a = [HpBinding a]
 -- type HpBindings a = Set.Set (HpBinding a)
+
+lookupBind :: Eq a => a -> HpBindings a -> Maybe (HpBinding a)
+lookupBind x = find ((x==).symbolBind)
 
 type HpTySign = TySign HpSymbol
 
@@ -86,36 +98,39 @@ data HpProg a =
 tysigs p = ptysigs p `mappend` buildinsigs
     where buildinsigs = zip (buildinSym) (map buildinTyp buildinSym)
 
-type HpSignature a = (Set.Set a, Set.Set a)
+type HpSignature a = ([a], [a])
 
 class HasSignature a s where
     sig :: a -> HpSignature s
 
-instance (Eq a, Ord a) => HasSignature (HpProg a) a where
+instance (Eq a, HasSignature a a) => HasSignature (HpProg a) a where
     sig p = (a, mempty)
         where (a, b) = mconcat (map sig (clauses p))
 
-instance (Eq a, Ord a) => HasSignature (HpFormula a) a where
-    sig f@(HpForm b xs ys) = (Set.filter (not.isBind f) as, bs `mappend` (Set.fromList (map symbolBind b)))
-        where (as, bs) = mconcat (map sig (xs ++ ys))
+instance (Eq a, HasSignature a a) => HasSignature (HpFormula a) a where
+    sig f@(HpForm b xs ys) = (filter (not.isBind f) as, bs `mappend` (map symbolBind b))
+        where (as, bs) = mconcat $ map sig (xs ++ ys)
 
-instance (Eq a, Ord a) => HasSignature (HpExpr a) a where
-    sig (HpSym s)    = (Set.fromList [s], mempty)
+instance (Eq a, HasSignature a a) => HasSignature (HpExpr a) a where
+    sig (HpSym s)    = sig s
     sig (HpApp e es) = mconcat (map sig (e:es))
     sig (HpPar e)    = sig e
     sig (HpAnn e _)  = sig e
     sig (HpTup es)   = mconcat (map sig es)
-    sig a@(HpLam b e)= (Set.filter (not.isBind a) as, bs `mappend` (Set.fromList (map symbolBind b)))
+    sig a@(HpLam b e)= (filter (not.isBind a) as, bs `mappend` (map symbolBind b))
         where (as, bs) = sig e
-    sig (HpWildcat)  = (mempty, mempty)
+
+instance HasSignature HpSymbol HpSymbol where
+    sig (Sym s) = ([Sym s], [])
+    sig AnonSym = (mempty, mempty)
 
 instance HasSignature a s => HasSignature (Located a) s where
     sig = sig . unLoc
 
-symbols :: (Ord s) =>  HpSignature s -> [s]
-symbols (as, bs) = Set.toList $ as `mappend` bs
-vars    (as, bs) = Set.toList bs
-rigids  (as, bs) = Set.toList as
+symbols :: HpSignature s -> [s]
+symbols (as, bs) = as `mappend` bs
+vars    (as, bs) = bs
+rigids  (as, bs) = as
 
 
 -- returns the signature of a program
@@ -136,9 +151,9 @@ data HpExpr a =
     | HpLam (HpBindings a) (LHpExpr a)     -- lambda abstraction
     | HpAnn (LHpExpr a) Type               -- type annotated expression
     | HpTup [LHpExpr a]                    -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
-    | HpWildcat                            -- wildcat
     deriving Eq
 
+wildcat = HpSym AnonSym
 
 class Eq b => HasBindings a b where
     binds :: a -> HpBindings b
@@ -221,9 +236,8 @@ type PLHpClause = PLHpFormula
 
 instance Pretty HpSymbol where
     ppr (Sym s) = text s
+    ppr AnonSym = text "_"
 
-instance Show HpSymbol where
-    showsPrec p (Sym s) = showsPrec p s
 
 instance Pretty TcSymbol where
     ppr (TcS s i ty) = hcat [ ppr s, char '/', int i, char '_', char '{', ppr ty, char '}' ]
@@ -234,7 +248,6 @@ instance Pretty a => Pretty (HpExpr a) where
     ppr (HpSym s)     = ppr s
     ppr (HpApp e es)  = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
     ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
-    ppr (HpWildcat)   = text "_"
 
 
 instance Pretty a => Pretty (HpFormula a) where

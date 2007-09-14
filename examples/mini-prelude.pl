@@ -250,3 +250,6 @@ closure(R, X, Y) :- R(X, Z), closure(R, Z, Y).
 ordered(R, []).
 ordered(R, [X]).
 ordered(R, [X, Y| Z]):- R(X,Y), ordered(R, [Y | Z]).
+
+
+test(X, X).

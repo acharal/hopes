@@ -9,7 +9,7 @@ Synopsis:       Higher Order Prolog with Extensionality
 Description:    Not yet available
 Category:       intepreter
 Package-Url:    http://www.ajn.awmn.net/hope
-Build-Depends:  base, haskell98, mtl
+Build-Depends:  base, haskell98, mtl, readline
 Extra-Source-Files:
                 Makefile
 
@@ -21,11 +21,12 @@ Hs-Source-Dirs: src
                 src/typecheck
                 src/prover
 Other-Modules:	Lexer, Parser, ParseUtils, Syntax
-                TcMonad, Wff, Tc, Restr 
+                Tc, Wellform, Typecheck, Restrict 
                 Err
                 Loc
                 Pretty
-                ProofProc, Logic, Hopl
+                Hopl, Core, Logic, Infer
+		Interactive
 Extensions:     RankNTypes
 Ghc-Options:    
 

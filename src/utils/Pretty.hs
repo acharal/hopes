@@ -1,7 +1,5 @@
 module Pretty (
-        Pretty(..),
-        pprint,
-        dcolon, arrow, dot, entails,
+        module Pretty,
         module Text.PrettyPrint
     ) where
 
@@ -13,6 +11,12 @@ class Pretty a where
 instance Pretty Doc where
     ppr = id
 
+instance Pretty [Char] where
+    ppr = text
+
+instance Pretty Int where
+    ppr = int
+
 dcolon  = text "::"
 arrow   = text "->"
 dot     = char '.'
@@ -20,3 +24,5 @@ entails = text ":-"
 
 pprint :: Pretty a => a -> IO ()
 pprint a = print (ppr a)
+
+curly a = text "{" <+> a <+> text "}"

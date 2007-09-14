@@ -6,7 +6,7 @@ import Loc
 import Err
 import Pretty (Pretty(..), text)
 
-import Char (isUpper)
+import Char (isUpper, isDigit)
 import List (partition, nub)
 
 import System.IO
@@ -74,7 +74,9 @@ instance (Monad m) => MonadLoc (ParserT m) where
     getLocSpan = gets (locSpan . ptok)
 
 
-runParser p s = runErrorT $ runStateT p s
+runParser p = runErrorT $ runStateT p s
+    where s = PState "" t
+          t = located (Loc "stdin" 1 1) TKBOF
 
 getInput :: Monad m => ParserT m ParserInput
 getInput = gets pinput
@@ -94,18 +96,13 @@ parseError msg = do
     l <- getLoc
     parseErrorWithLoc l msg
 
+fromFile name m = do
+    let initLoc = Loc name 1 1
+        initTok = located initLoc TKBOF
+    modify (\s -> s {ptok = initTok})
+    m
 
-parseFromFile p fname = do 
-    file <- openFile fname ReadMode
-    inp <- hGetContents file
-    runParser p (mkStateWithFile inp fname)
-
-mkStateWithFile inp file = PState inp t
-    where l = Loc file 1 1
-          t = located l TKBOF
-
-mkState :: String -> ParseState
-mkState input = mkStateWithFile input "stdin"
+withInput inp m = setInput inp >> m
 
 tokSym :: Located Token -> HpSymbol
 tokSym t = Sym (tokId t)
@@ -144,17 +141,27 @@ mkQuantForm xs ys =
         symbols'' (HpPar e)    = symbols' e
         symbols'' (HpLam _ e)  = symbols' e
         symbols'' (HpApp e es) = concatMap symbols' (e:es)
+        symbols'' (HpSym AnonSym)  = []
         symbols'' (HpSym s)    = [s]
         symbols'' (HpTup es)   = concatMap symbols' es
-        symbols'' (HpWildcat)  = []
+        symbols'' (HpAnn e t)  = symbols'' (unLoc e)
     in  (HpForm vars' xs ys)
 
 mkList elems tl = 
-    unLoc $ foldr (\x -> \y -> located x $ HpApp consE [x,y]) nilE elems
-    where consE = located bogusLoc consSym
-          nilE  = located bogusLoc nilSym
+    unLoc $ foldr (\x -> \y -> located x $ HpApp consE [x,y]) lastel elems
+    where consE   = located bogusLoc consSym
+          lastel  = case tl of
+                        Nothing -> located bogusLoc nilSym
+                        Just e  -> e
 
-mkSym = HpSym . tokSym
+-- put some hardcoded building numerics
+mkSym s
+    | all isDigit (tokId s) = unLoc $ mkInt (read (tokId s))
+    | otherwise             = HpSym (tokSym s)
+
+mkInt 0 = located bogusLoc zeroSym
+mkInt i = located bogusLoc $ HpApp (located bogusLoc succSym) [minus_one]
+    where minus_one = mkInt (i-1)
 
 data HpType   =
       HpTyGrd String                    -- ground type

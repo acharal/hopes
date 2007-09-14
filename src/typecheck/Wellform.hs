@@ -1,22 +1,35 @@
-module Wff where
+module Wellform where
 
 {- checking well formated formulas -}
 import Syntax
 import Types
 import Loc
 import Tc
-import Restr
-import TcMonad
+import Typecheck
+import Restrict
 
--- well formated program
+
+-- well formatted program
 wfp p = do
-    (p, env) <- tcProg p
-    (p, env) <- restrictProg (p, env)
+    (p', env)  <- tcProg p
+    (p'', env) <- restrictProg (p', env)
     env <- zonkEnv env
-    return (p, env)
+    return (p'', env)
 
--- well formated formula
-wff f = return f >>= tcForm >>= restrictForm
+-- well formatted formula
+wff f = do
+    f' <- tcForm f
+    restrictForm f'
+    return f'
+
+-- well formatted goal.
+-- this is different from formula
+-- because it may contain *new* symbols
+wfg g = do
+    g'  <- wff g
+    env <- getTypeEnv
+    env <- zonkEnv env
+    return (g', env)
 
 -- head must not contain "other than" higher order variables in higher-order arg positions
 zonkEnv :: TypeEnv -> Tc TypeEnv
@@ -61,7 +74,6 @@ normExpr (L l (HpApp e es)) = do
 normExpr (L l (HpTup es)) = do
     es' <- mapM normExpr es
     return (L l (HpTup es'))
-normExpr (L l HpWildcat) = return (L l HpWildcat)
 normExpr (L l (HpSym s)) = do
     s' <- normSym s
     return (L l (HpSym s'))

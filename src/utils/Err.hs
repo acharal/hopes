@@ -56,9 +56,6 @@ mkErrWithLoc l typ lev msg = Msg l typ lev msg
 
 internalErr msg = mkErr Internal Fatal msg
 
-processMsgs :: Messages -> [Message]
-processMsgs (errs,warns) = (reverse errs) ++ (reverse warns)
-
 mkMsgs :: Message -> Messages
 mkMsgs msg = ([msg], [])
 

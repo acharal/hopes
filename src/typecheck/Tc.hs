@@ -1,203 +1,146 @@
 module Tc where
 
-{- type checking -}
+
+import Control.Monad.Reader
+import Control.Monad.State
+import Control.Monad.Error
+import Control.Monad.Identity
+
+import Err
+import Loc
+
 import Syntax
 import Types
-import TcMonad
-
-import Loc
 import Pretty
-
-import Monad (mapAndUnzipM, zipWithM_, when)
 import Data.Monoid
-import Data.Foldable (foldlM)
-
-{-
-    Strategy of type checking
-
-    Alternative I.
-
-    1. tc functions just type checks the source without annotate the syntax tree with types.
-    2. tc functions just collect Constraints and fail if cannot satisfy constraints.
-    3. The main problem is that local bindings does not exist in the global type environment.
-       As a result after the type check of a quantified formula (or lambda expression) we have to
-       store somewhere the types (or tyvars) of those bindings.
-
-    Alternative II.
-
-    1. tc functions check and if succeed annotate the source with types.
-    2. syntax tree is already parametrized with the symbol type, so the new syntax tree must have
-       a new symbol type that can hold other info about the symbol such as type and arity.
-    3. The annotation of the tree cannot be performed before the type checking completes. Types of
-       symbols (and therefore local bindings) are not fixed during the type checking.
-       As a result, the real annotation must happen *after* the type checking.
-
-    Ugly thinks
-    1. Location information (helps on error messagings but it is not part of the logic of type checking)
-    2. Context information (as in 1)
-    3. Bindings and annotation (annotation helps next stages but it's checking not annotating)
-
--}
-
--- type checking and inference
-
-tcProg src = do
-    let tysign = tysigs  src
-        cls    = clauses src
-        sigma  = sig     src
-    tv_sym <- mapM freshTyFor (rigids sigma)
-    extendEnv tv_sym $ do
-    extendEnv tysign $ do
-        cls' <- mapM tcForm cls
-        ty_env  <- normEnv
-        return (src{ clauses = cls' }, ty_env)
+import Data.IORef
 
 
--- tcForm :: LHpFormula a -> Tc (LHpFormula b)
-tcForm f@(L l (HpForm b xs ys)) =
-    enterContext (CtxtForm f) $ do
-    tvs <- newTyBinds (binds f)
-    extendEnv tvs $ do
-        xs' <- mapM tcAtom xs
-        ys' <- mapM tcAtom ys
-        b' <- tyBinds b
-        return (L l (HpForm b' xs' ys'))
+data TcEnv =
+    TcEnv { 
+        tyenv :: TypeEnv,
+        ctxt  :: [Context HpSymbol]
+    }
 
-tyBinds = mapM tyBind
-    where tyBind (HpBind s oldty) = do
-            ty <- lookupVar s
-            ty <- normType ty
-            s' <- tySym s
-            return (HpBind s' ty)
+data TcState = 
+    TcState {
+        uniq   :: Int,
+        msgs   :: Messages
+    }
 
-newTyBinds b = mapM (freshTyFor.symbolBind) b
+type TypeEnv = [ HpTySign ]
 
--- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
-tcAtom a = enterContext (CtxtAtom a) $ tcExpr tyBool a
+emptyEnv = []
 
--- tiExpr :: LHpExpr a -> Tc (MonoType, LHpExpr)
-tiExpr e = do
-    var_ty <- freshTyVar
-    e' <- tcExpr var_ty e
-    return (var_ty, e')
+instance Pretty TypeEnv where
+    ppr ts = vcat $ map (\(v, t) -> sep [ ppr v, text "::", ppr t] ) ts
 
--- tcExpr, tcExpr' :: LHpExpr a -> MonoType -> Tc ()
+type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages IO))
 
-tcExpr  exp_ty e = enterContext (CtxtExpr e) $ tcExpr' exp_ty e
+instance MonadLoc Tc where
+    getLoc = asks ctxt >>= return . loc 
 
-tcExpr' exp_ty (L _ (HpPar  e)) = tcExpr exp_ty e
+runTc m =  run >>= \res -> case res of
+                                (Left msg) -> return (Nothing, msg)
+                                (Right (p, s)) -> return (Just p, msgs s)
+    where run = runErrorT $ runStateT (runReaderT m initEnv) initSt
+          initSt  = TcState { uniq = 0, msgs = emptyMsgs }
+          initEnv = TcEnv { tyenv = [], ctxt  = [] }
 
-tcExpr' exp_ty (L _ (HpAnn e ty)) = do
-    ann_ty <- instantiate ty
-    e' <- tcExpr ann_ty e
-    unify ann_ty exp_ty
-    return e'
+runTcWithEnv env m = runTc (extendEnv env m)
 
-tcExpr' exp_ty (L l (HpApp e args))  = do
-    (fun_ty, e')     <- tiExpr e
-    (args_ty, args') <- mapAndUnzipM tiExpr args
-    let tup_ty = case args_ty of
-                     [x] -> x
-                     tys -> TyTup tys
-    (arg_ty, res_ty) <- unifyFun fun_ty
-    unify arg_ty tup_ty
-    unify res_ty exp_ty
-    return (L l (HpApp e' args'))
+recoverTc :: Tc a -> Tc a -> Tc a
+recoverTc main recov = 
+    catchError main (\msgs -> addMsgs msgs >> recov)
 
-tcExpr' exp_ty (L l (HpSym s))  = do
-    sym_ty <- lookupVar s
-    unify sym_ty exp_ty
-    s' <- tySym s
-    return (L l (HpSym s'))
+addMsgs m = modify (\s -> s{ msgs = concatMsgs m (msgs s) })
 
-tcExpr' exp_ty (L l (HpTup es)) = do
-    (tys, es') <- mapAndUnzipM tiExpr es
-    unify (TyTup tys) exp_ty
-    return (L l (HpTup es'))
+getTypeEnv  :: Tc TypeEnv
+getTypeEnv = asks tyenv
 
-tcExpr' _ (L l HpWildcat) = return (L l HpWildcat)
+extendEnv :: [HpTySign] -> Tc a -> Tc a
+extendEnv binds m = local extend m
+    where extend env = env{tyenv = binds ++ (tyenv env)}
 
--- unification
+withTypeEnv = extendEnv
 
-unify :: MonoType -> MonoType -> Tc ()
-unify (TyVar v1) t@(TyVar v2)
-    | v1 == v2    = return ()
-    | otherwise   = unifyVar v1 t
+lookupVar :: HpSymbol -> Tc Type
+lookupVar v = do
+    ty_env <- asks tyenv
+    case lookup v ty_env of
+        Nothing -> typeError (sep [text "Variable", quotes (ppr v), text "out of scope"] )
+        Just ty -> return ty
 
-unify (TyVar v) t = unifyVar v t
-unify t (TyVar v) = unifyVar v t
+freshTyVar :: Tc MonoType
+freshTyVar = do
+    n <- gets uniq
+    modify (\s -> s{uniq = n+1})
+    r <- liftIO $ newIORef Nothing
+    return (TyVar (Tv (n+1) r))
 
-unify (TyFun fun1 arg1) (TyFun fun2 arg2) = do
-    unify fun1 fun2
-    unify arg1 arg2
+lookupTy :: TyVar -> Tc (Maybe MonoType)
+lookupTy (Tv i r) = liftIO $ readIORef r
 
-unify t@(TyTup tys) t'@(TyTup tys')
-    | length tys == length tys' = zipWithM_ unify tys tys'
-    | otherwise                 = unificationErr t t'
-unify t t'
-    | t == t'     = return ()
-    | otherwise   = unificationErr t t'
+addConstraint :: TyVar -> MonoType -> Tc ()
+addConstraint (Tv i r) ty = do
+    maybet <- liftIO $ readIORef r
+    case maybet of 
+        Just ty' -> typeError (sep [text "tyvar", quotes (int i), text "already bind with type", ppr ty'])
+        Nothing ->  liftIO $ writeIORef r (Just ty)
 
 
-unifyFun t = do
-    arg_ty  <- freshTyVar
-    res_ty  <- freshTyVar
-    unify (TyFun arg_ty res_ty) t
-    return (arg_ty, res_ty)
+normEnv = 
+    let aux (v,t) = do
+            t' <- normType t
+            return (v, t')
+    in  getTypeEnv >>= mapM aux
 
-unifyVar v t = do
-    maybe_ty <- lookupTy v
-    case maybe_ty of
-        Nothing -> varBind v t
-        Just t' -> unify t' t
+normType (TyFun t1 t2) = do
+    t1' <- normType t1
+    t2' <- normType t2
+    return $ TyFun t1' t2'
 
-varBind  v1 t@(TyVar v2) = do
-    maybe_ty <- lookupTy v2
-    case maybe_ty of
-        Nothing -> addConstraint v1 t
-        Just ty -> unify (TyVar v1) ty
+normType tvy@(TyVar tv) = do
+    ty <- lookupTy tv
+    case ty of
+        Just t  -> do 
+            ty' <- normType t
+            let (Tv _ r) = tv
+            liftIO $ writeIORef r (Just ty')
+            return ty'
+        Nothing -> return tvy
 
-varBind v ty = do
-    tvs <- tyvarsM ty
-    when (v `elem` tvs) (occurCheckErr v ty)
-    addConstraint v ty
+normType (TyTup tl) = do
+    tl' <- mapM normType tl
+    return $ TyTup tl'
 
+normType t = return t
 
--- utilities
-
-instantiate :: Type -> Tc MonoType
-instantiate t = return t
-
-generalize :: MonoType -> Tc Type
-generalize t = return t
-
-
-tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
-    where auxM v = lookupTy v >>= \mayv' ->
-            case mayv' of
-                Nothing -> return []
-                Just ty -> do 
-                    vs <- tyvarsM ty
-                    return (v:vs)
+-- typeError :: Desc -> Tc ()
+typeError :: ErrDesc -> Tc a
+typeError err = do
+    l <- getLoc
+    diagnosis <- asks ctxt
+    throwError $ mkMsgs $ mkErrWithLoc l TypeError Failure (vcat [err, vcat (map ppr diagnosis)])
 
 
-freshTyFor :: a -> Tc (a, Type)
-freshTyFor v = do
-    ty <- freshTyVar >>= generalize
-    return (v, ty)
-
-tySym :: HpSymbol -> Tc HpSymbol
-tySym = return . id   --no annotation
-
--- error reporting
-
-unificationErr inf_ty exp_ty = do
-        inf_ty' <- normType inf_ty
-        exp_ty' <- normType exp_ty
-        let desc = hang (text "Could not match types:") 4 
-                        (vcat [ text "Inferred:" <+> ppr inf_ty', 
-                                text "Expected:" <+> ppr exp_ty' ])
-        typeError desc
+enterContext c m = local addctxt m
+    where addctxt env = env{ctxt = c:(ctxt env)}
 
 
-occurCheckErr tv ty = typeError (text "Could not construct an infinite type")
+data Context a = 
+      CtxtExpr (LHpExpr a)
+    | CtxtAtom (LHpExpr a)
+    | CtxtForm (LHpFormula a)
+
+instance HasLocation (Context a) where
+    locSpan (CtxtExpr a) = locSpan a
+    locSpan (CtxtForm a) = locSpan a
+    locSpan (CtxtAtom a) = locSpan a
+
+instance Pretty a => Pretty (Context a) where
+    ppr (CtxtExpr a) = hang (text "In expr:") 4 (ppr (unLoc a))
+    ppr (CtxtForm a) = hang (if isFact a then text "In fact:" else text "In rule:") 4 (ppr (unLoc a))
+    ppr (CtxtAtom a) = hang (text "In atom:") 4 (ppr (unLoc a))
+
+
