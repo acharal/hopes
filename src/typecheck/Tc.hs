@@ -1,10 +1,7 @@
 module Tc where
 
-
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Error
-import Control.Monad.Identity
 
 import Err
 import Loc
@@ -12,7 +9,6 @@ import Loc
 import Syntax
 import Types
 import Pretty
-import Data.Monoid
 import Data.IORef
 
 
@@ -38,7 +34,7 @@ instance Pretty TypeEnv where
 type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages IO))
 
 instance MonadLoc Tc where
-    getLoc = asks ctxt >>= return . loc 
+    getLoc = asks ctxt >>= return . loc
 
 runTc m =  run >>= \res -> case res of
                                 (Left msg) -> return (Nothing, msg)

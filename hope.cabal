@@ -1,5 +1,5 @@
 Name:           hope
-Version:        0.0.1
+Version:        0.0.5
 License:        GPL
 License-File:   COPYING
 Author:         Angelos Charalambidis
@@ -20,8 +20,8 @@ Hs-Source-Dirs: src
                 src/utils
                 src/typecheck
                 src/prover
-Other-Modules:	Lexer, Parser, ParseUtils, Syntax
-                Tc, Wellform, Typecheck, Restrict 
+Other-Modules:	Lexer, Parser, ParseUtils, Syntax, Types
+                Tc, WellForm, TypeCheck, Restrict 
                 Err
                 Loc
                 Pretty

@@ -1,4 +1,4 @@
-module Typecheck where
+module TypeCheck where
 
 
 {- type checking -}
@@ -10,10 +10,8 @@ import Loc
 import Pretty
 
 import Monad (mapAndUnzipM, zipWithM_, when)
-import Data.Monoid
 import Data.Foldable (foldlM)
 
-import Debug.Trace
 {-
     Strategy of type checking
 

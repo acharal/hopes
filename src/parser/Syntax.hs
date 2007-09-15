@@ -5,7 +5,6 @@ module Syntax where
 -}
 
 import Loc
-import Char (isUpper)
 import Pretty
 import Types
 import Data.Monoid
@@ -67,6 +66,16 @@ nilSym   = HpSym $ Sym "[]"
 cutSym   = HpSym $ Sym "!"
 succSym  = HpSym $ Sym "s"
 zeroSym  = HpSym $ Sym "0"
+
+{- 
+specialSyms = 
+ [ Special ":"  (TyFun (TyTup [tyAll, tyAll]) tyAll)
+ , Special "[]" (tyAll)
+ , Special "!"  (tyBool)
+ , Special "s"  (TyFun tyAll tyAll)
+ , Special "0"  (tyAll)
+ ]
+-}
 
 buildinSym = [  Sym ":",
                 Sym "[]",

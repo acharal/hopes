@@ -2,9 +2,9 @@ module Restrict where
 
 import Syntax
 import Tc
-import Typecheck
+import TypeCheck
 import Types
-import Err
+import Err (catchError)
 import Loc
 import Pretty
 import Monad (when)

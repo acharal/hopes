@@ -5,9 +5,10 @@ import Syntax
 import Types
 import Tc (TypeEnv)
 import Loc
-import Pretty
 
 import Control.Monad.Reader
+
+import Pretty
 
 instance Pretty a => Pretty (a, Type) where
     ppr (a,_) = ppr a

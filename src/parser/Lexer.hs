@@ -2,7 +2,7 @@ module Lexer where
 
 import Loc
 import ParseUtils
-import Char
+import Char (isSpace, isUpper, isLower, isDigit, isAlpha)
 import Pretty
 
 

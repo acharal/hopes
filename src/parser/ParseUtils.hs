@@ -4,14 +4,11 @@ import Syntax
 import Types
 import Loc
 import Err
-import Pretty (Pretty(..), text)
+import Pretty
 
 import Char (isUpper, isDigit)
 import List (partition, nub)
-
-import System.IO
-import Control.Monad.State    (StateT, gets, modify, runStateT)
-import Control.Monad.Identity (Identity, runIdentity)
+import Control.Monad.State
 
 type ParserInput = String
 

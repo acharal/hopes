@@ -4,13 +4,16 @@ import IO
 import System
 import System.IO
 import System.Console.Readline
+import System.Console.GetOpt
 import Control.Monad.State
 import List (isPrefixOf)
+import Data.List (find)
+import Char (isSpace)
 
 import Syntax
 import Parser
-import Wellform
-import Typecheck
+import WellForm
+import TypeCheck
 import Tc
 
 import Pretty
@@ -31,22 +34,38 @@ data HopeEnv =
         consultedSrc :: Prog (HpSymbol, Type)
     }
 
-data UserCommand =
+data Command =
       RefuteGoal  String
     | ConsultSrc  FilePath
     | ShowType    String
     | ShowHelp
     | Quit
 
+data CommandDesc a = Command { short :: String, argDescr :: ArgDescr a,  desc:: String }
 
--- type HopeI = ReaderT (HopeEnv) IO
--- filename can have leading and trailing whitespaces
-parseUserCommand (':':'l':r) = return $ ConsultSrc (dropWhile (==' ') r)
-parseUserCommand (':':'t':r) = return $ ShowType   (dropWhile (==' ') r)
-parseUserCommand (':':'q':r) = return $ Quit
-parseUserCommand (':':'h':r) = return $ ShowHelp
-parseUserCommand (':':r)     = fail "Unknown command. Type :h for help."
-parseUserCommand str         = return $ RefuteGoal str
+mkCom :: CommandDesc a -> String -> a
+mkCom c s = 
+    case argDescr c of
+        NoArg a -> a
+        ReqArg f _ ->  f s
+        OptArg f _ ->  f (Just s)
+
+userCommands =
+ [ Command ['c','l'] (ReqArg ConsultSrc "FILE")   "Consult a file"
+ , Command ['t']     (ReqArg ShowType "SYMBOL")   "Show a type of a symbol"
+ , Command ['h']     (NoArg  ShowHelp)            "Show help"
+ , Command ['q']     (NoArg  Quit)                "Quit"
+ ]
+
+trim :: String -> String
+trim xs = dropWhile (isSpace) $ reverse $ dropWhile (isSpace) $ reverse xs
+
+getCommand commands (':':x:xs) = 
+    case find (\c -> any (x==) (short c)) commands of
+        Nothing -> fail "Unknown command"
+        Just s  -> return $ mkCom s (trim xs)
+
+getCommand commands str = return $ RefuteGoal str
 
 
 commandCompletionFunction env xs = goalCompletionFunction env xs
@@ -91,7 +110,7 @@ sayNo     = putStrLn "No"
 
 promptStr = "-? "
 
-interactLoop :: (UserCommand -> HopeI ()) -> HopeI ()
+interactLoop :: (Command -> HopeI ()) -> HopeI ()
 interactLoop act = do
     env <- get
     liftIO $ setCompletionEntryFunction (Just (commandCompletionFunction env))
@@ -101,7 +120,7 @@ interactLoop act = do
         Just "" -> interactLoop act
         Just str -> do
             liftIO $ addHistory str
-            (parseUserCommand str >>= act) `catchError` (\e -> (liftIO $ print e))
+            (getCommand userCommands str >>= act) `catchError` (\e -> (liftIO $ print e))
             interactLoop act
 
 showSolutions []  = liftIO $ sayNo

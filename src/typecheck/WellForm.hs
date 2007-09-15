@@ -1,11 +1,11 @@
-module Wellform where
+module WellForm where
 
 {- checking well formated formulas -}
 import Syntax
 import Types
 import Loc
 import Tc
-import Typecheck
+import TypeCheck
 import Restrict
 
 
