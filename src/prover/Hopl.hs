@@ -27,12 +27,12 @@ flexs _ = []
 
 
 instance Pretty a => Pretty (Expr a) where
-    ppr (Flex  sym)  = text "<F>" <> ppr sym
-    ppr (Rigid sym)  = ppr sym
-    ppr (Set es v)   = curly  $ sep $ (punctuate comma (map ppr es)) ++ [text "|" <+> ppr v]
-    ppr (Tup es)     = parens $ sep $ (punctuate comma (map ppr es))
+    ppr (Flex  sym)        = ppr sym
+    ppr (Rigid sym)        = ppr sym
+    ppr (Set es v)         = curly  $ sep $ (punctuate comma (map ppr es)) ++ [text "|" <+> ppr v]
+    ppr (Tup es)           = parens $ sep $ (punctuate comma (map ppr es))
     ppr (App e e'@(Tup _)) = ppr e <> ppr e'
-    ppr (App e e')   = ppr e <> parens (ppr e')
+    ppr (App e e')         = ppr e <> parens (ppr e')
 
 instance Pretty a => Pretty (Clause a) where
     ppr (h,b) = hang (sep [ppr h, entails]) 4 (sep (punctuate comma (map ppr  b)))
