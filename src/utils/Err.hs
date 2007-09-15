@@ -8,8 +8,6 @@ import Pretty
 import Syntax
 import Control.Monad.Error
 
-{- this is a comment -}
-
 type ErrDesc = Doc
 
 data Message =
