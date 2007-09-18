@@ -1,0 +1,17 @@
+i.   handle correctly anonymous symbols aka '_'
+         1. Translate anonymous symbols at the very beginning (before typechecking) to fresh with-name symbols
+         2. Keep anonymous symbols till the proof procedure at handle respectively
+
+ii.  handle more elegant (and extensively) buildin special symbols.
+     special symbols may have also *special* pretty printing
+
+iii. decide whether Syntax should be wrapped into Located or Loc will be integrated inside structures.
+     pros: a lot unLoc will be removed.
+
+iv.  interactive user commands and completion Functions
+
+v.   decide whether Hopl should be our general Core language, or should be infer impl-depend lang.
+     All operations will take place knowing the Syntax grammar.
+     Infer module will take a Syntax tree, transform it into a Hopl tree (the same occur for the goal)
+     and then do the inference procedure (each time we want to infer something we have to retransform whole syntax tree?)
+     
