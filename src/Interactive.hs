@@ -1,38 +1,30 @@
 module Interactive where
 
+import Syntax
+import Symbol
+import Pretty
+import Error
+import Loc
+import Types
+import Parser
+import WellForm
+import Core
+import Infer
+import Hopl
+
+import List                         (isPrefixOf, find)
+import Char                         (isSpace)
 import IO
 import System
 import System.IO
 import System.Console.Readline
 import System.Console.GetOpt
 import Control.Monad.State
-import List (isPrefixOf)
-import Data.List (find)
-import Char (isSpace)
 
-import Syntax
-import Parser
-import WellForm
-import TypeCheck
-import Tc
-
-import Pretty
-import Err
-import Loc
-import Types
-
-import Core
-import Infer
-import Hopl
-
+import Hope
 
 type HopeI = StateT HopeEnv IO
 
-data HopeEnv = 
-    HEnv {  
-        currentEnv   :: TypeEnv,
-        consultedSrc :: Prog (HpSymbol, Type)
-    }
 
 data Command =
       RefuteGoal  String
@@ -67,7 +59,7 @@ getCommand commands (':':x:xs) =
 
 getCommand commands str = return $ RefuteGoal str
 
-
+{-
 commandCompletionFunction env xs = goalCompletionFunction env xs
 goalCompletionFunction = predicateCompletionFunction
 
@@ -75,6 +67,7 @@ predicateCompletionFunction env p =
     let vs =  map show [ v | (v,_) <- (currentEnv env) ]
     in  do
         return $ filter (p `isPrefixOf`) vs
+-}
 
 runInteract act = evalStateT (interactLoop act) initEnv
     where initEnv = HEnv [] []
@@ -89,9 +82,9 @@ action (ConsultSrc f) = consultFile f
 
 action (ShowType p) = do
     env <- gets currentEnv
-    case lookup (Sym p) env of
-        Nothing -> fail "undefined symbol"
-        Just ty -> liftIO $ pprint (sep [ ppr p, text "::", ppr ty])
+    case findTySig (liftSym p) env of
+        Nothing    -> fail "undefined symbol"
+        Just tysig -> liftIO $ pprint tysig
 
 action Quit = liftIO $ bye
 
@@ -113,7 +106,7 @@ promptStr = "-? "
 interactLoop :: (Command -> HopeI ()) -> HopeI ()
 interactLoop act = do
     env <- get
-    liftIO $ setCompletionEntryFunction (Just (commandCompletionFunction env))
+    liftIO $ setCompletionEntryFunction (Just (filenameCompletionFunction))
     maybe_inp <- liftIO $ readline promptStr
     case maybe_inp of
         Nothing -> interactLoop act
@@ -161,7 +154,7 @@ loadGoal inp env = do
     parsed_goal <- case parsed_res of
                         Right (g,_) -> return g
                         Left msgs   -> processMsgs msgs
-    (tcres, msgs) <- liftIO $ runTc $ withAllDefined parsed_goal $ withTypeEnv env $ wfg parsed_goal
+    (tcres, msgs) <- liftIO $ runTc $ withSig parsed_goal $ withTypeEnv env $ wfg parsed_goal
     case tcres of
         Just (tcgoal, env') -> do
             cg <- runCore $ ctGoal (tcgoal, env')
