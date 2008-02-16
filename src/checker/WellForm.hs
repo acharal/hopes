@@ -1,7 +1,11 @@
-module WellForm where
+module WellForm (
+    module WellForm,
+    module Tc
+) where
 
 {- checking well formated formulas -}
 import Syntax
+import Symbol
 import Types
 import Loc
 import Tc
@@ -32,7 +36,7 @@ wfg g = do
     return (g', env)
 
 -- head must not contain "other than" higher order variables in higher-order arg positions
-zonkEnv :: TypeEnv -> Tc TypeEnv
+zonkEnv :: (TyEnv a) -> Tc (TyEnv a)
 zonkEnv env = 
     let aux (v,t) = do
             t' <- zonkType t
@@ -78,6 +82,6 @@ normExpr (L l (HpSym s)) = do
     s' <- normSym s
     return (L l (HpSym s'))
 
-normSym  (TcS s i ty) = do
-    ty' <- normType ty
-    return (TcS s (arity ty) ty')
+normSym s = do
+    ty' <- normType (typeOf s)
+    return $ typed ty' s

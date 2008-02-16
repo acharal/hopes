@@ -4,7 +4,7 @@ import Pretty
 
 data Expr a = 
       App (Expr a) (Expr a)
-    | Set [Expr a] a
+    | Set [Expr a] [a]
     | Flex a 
     | Rigid a 
     | Tup [Expr a]
@@ -21,15 +21,20 @@ contradiction = []
 flexs  :: Expr a -> [a]
 flexs (Flex a)   = [a]
 flexs (App e e') = flexs e ++ flexs e'
-flexs (Set el v) = v : concatMap flexs el
+flexs (Set el vs) = vs ++ concatMap flexs el
 flexs (Tup es)   = concatMap flexs es
 flexs _ = []
+
+liftSet :: Expr a -> Expr a
+liftSet e@(Set _ _) = e
+liftSet (Flex v) = Set [] [v]
+liftSet _ = error ("Cannot represent expression as set")
 
 
 instance Pretty a => Pretty (Expr a) where
     ppr (Flex  sym)        = ppr sym
     ppr (Rigid sym)        = ppr sym
-    ppr (Set es v)         = curly  $ sep $ (punctuate comma (map ppr es)) ++ [text "|" <+> ppr v]
+    ppr (Set es vs)         = curly  $ sep $ (punctuate comma (map ppr es)) ++ map (\v -> text "|" <+> ppr v) vs
     ppr (Tup es)           = parens $ sep $ (punctuate comma (map ppr es))
     ppr (App e e'@(Tup _)) = ppr e <> ppr e'
     ppr (App e e')         = ppr e <> parens (ppr e')

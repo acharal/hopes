@@ -2,25 +2,20 @@ module Core where
 
 import Hopl
 import Syntax
+import Symbol
 import Types
-import Tc (TypeEnv)
 import Loc
 
 import Control.Monad.Reader
 
-import Pretty
 
-instance Pretty a => Pretty (a, Type) where
-    ppr (a,_) = ppr a
-
-
-data CoreEnv = CEnv { rigty :: TypeEnv, bindings :: [HpBindings HpSymbol] }
+data CoreEnv = CEnv { rigty :: TyEnv HpSymbol, bindings :: [HpBindings HpSymbol] }
 
 type CoreTransfT = ReaderT CoreEnv
 
 runCore m = runReaderT m (CEnv [] [])
 
-ctProg :: Monad m => (HpProg HpSymbol, TypeEnv) -> CoreTransfT m (Prog (HpSymbol,Type))
+ctProg :: Monad m => (HpProg HpSymbol, TyEnv HpSymbol) -> CoreTransfT m (Prog (Typed HpSymbol))
 ctProg (p, ty_env) = local (\r -> r{ rigty = ty_env}) $ mapM (ctClause.unLoc) (clauses p)
 
 ctGoal ((L _ (HpForm b [] ys)),ty_env) = 
@@ -50,8 +45,13 @@ ctExp (HpTup es) = do
 
 ctExp (HpPar e)  = ctExp (unLoc e)
 
-ctExp (HpSym AnonSym) = return $ Flex (AnonSym, undefined)
-ctExp (HpSym a)  = do
+ctExp (HpSym AnonSym) = return $ Flex (typed tyAll AnonSym)
+ctExp (HpSym a)  = 
+    let grd (TyFun t1 t2) = TyFun (grd t1) (grd t2)
+        grd (TyGrd c) = TyGrd c
+        grd (TyVar _) = tyAll
+        grd (TyTup ts) = TyTup (map grd ts)
+    in do
     te <- asks rigty
     le <- asks bindings
     case lookup a te of
@@ -61,8 +61,12 @@ ctExp (HpSym a)  = do
                 (l:_) -> 
                     case lookupBind a l of
                         Nothing -> error "not implemented yet"
-                        Just (HpBind v' ty) -> return $ Flex (v', ty)
-        Just ty -> return $ Rigid (a,ty)
+                        Just (HpBind v' ty) -> return $ Flex (typed (grd ty) v')
+        Just ty -> 
+             case ty of 
+                TyVar _ -> error (show a)
+                _ -> return $ Rigid (typed ty a)
 
 
 ctExp e = error "Expression must not occur in that phase"
+

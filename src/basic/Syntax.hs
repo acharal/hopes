@@ -3,7 +3,7 @@ module Syntax where
 {-
     Higher order Prolog abstract syntax
 -}
-
+import Symbol
 import Loc
 import Pretty
 import Types
@@ -45,49 +45,16 @@ import List (find)
        universally quantified.
 -}
 
-data HpSymbol = Sym String | AnonSym
-
--- no comparison
-instance Eq HpSymbol where
-    (Sym s) == (Sym s') = s == s'
-    _ == _ = False
-
-data TcSymbol = TcS HpSymbol Int Type
-
-instance Eq TcSymbol where
-    (TcS s _ _) == (TcS s' _ _) = s == s'
-
-instance Show HpSymbol where
-    showsPrec p (Sym s) = showString s
-    showsPrec p AnonSym = showString "_"
+type HpSymbol = Symbol String
 
 consSym  = HpSym $ Sym ":"
 nilSym   = HpSym $ Sym "[]"
 cutSym   = HpSym $ Sym "!"
 succSym  = HpSym $ Sym "s"
 zeroSym  = HpSym $ Sym "0"
+wildcat  = HpSym $ AnonSym
 
-{- 
-specialSyms = 
- [ Special ":"  (TyFun (TyTup [tyAll, tyAll]) tyAll)
- , Special "[]" (tyAll)
- , Special "!"  (tyBool)
- , Special "s"  (TyFun tyAll tyAll)
- , Special "0"  (tyAll)
- ]
--}
 
-buildinSym = [  Sym ":",
-                Sym "[]",
-                Sym "!",
-                Sym "s",
-                Sym "0" ]
-
-buildinTyp (Sym ":")  = TyFun (TyTup [tyAll, tyAll]) tyAll
-buildinTyp (Sym "[]") = tyAll
-buildinTyp (Sym "!" ) = tyBool
-buildinTyp (Sym "s" ) = TyFun tyAll tyAll
-buildinTyp (Sym "0" ) = tyAll
 
 data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
 type HpBindings a = [HpBinding a]
@@ -96,7 +63,7 @@ type HpBindings a = [HpBinding a]
 lookupBind :: Eq a => a -> HpBindings a -> Maybe (HpBinding a)
 lookupBind x = find ((x==).symbolBind)
 
-type HpTySign = TySign HpSymbol
+type HpTySign = TySig HpSymbol
 
 data HpProg a =
     HpProg { 
@@ -107,10 +74,6 @@ data HpProg a =
 tysigs p = ptysigs p `mappend` buildinsigs
     where buildinsigs = zip (buildinSym) (map buildinTyp buildinSym)
 
-type HpSignature a = ([a], [a])
-
-class HasSignature a s where
-    sig :: a -> HpSignature s
 
 instance (Eq a, HasSignature a a) => HasSignature (HpProg a) a where
     sig p = (a, mempty)
@@ -129,18 +92,10 @@ instance (Eq a, HasSignature a a) => HasSignature (HpExpr a) a where
     sig a@(HpLam b e)= (filter (not.isBind a) as, bs `mappend` (map symbolBind b))
         where (as, bs) = sig e
 
-instance HasSignature HpSymbol HpSymbol where
-    sig (Sym s) = ([Sym s], [])
-    sig AnonSym = (mempty, mempty)
+
 
 instance HasSignature a s => HasSignature (Located a) s where
     sig = sig . unLoc
-
-symbols :: HpSignature s -> [s]
-symbols (as, bs) = as `mappend` bs
-vars    (as, bs) = bs
-rigids  (as, bs) = as
-
 
 -- returns the signature of a program
 
@@ -162,7 +117,6 @@ data HpExpr a =
     | HpTup [LHpExpr a]                    -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
     deriving Eq
 
-wildcat = HpSym AnonSym
 
 class Eq b => HasBindings a b where
     binds :: a -> HpBindings b
@@ -179,19 +133,6 @@ instance Eq a => HasBindings (HpExpr a) a where
 instance (Eq b, HasBindings a b) => HasBindings (Located a) b where
     binds = binds . unLoc 
 
-{-
-hAtom :: LHpClause a -> LHpExpr a
-hAtom le = let (HpC _ h _) = unLoc le in h
-
-bAtoms :: LHpClause a -> [LHpExpr a]
-bAtoms le = let (HpC _ _ b) = unLoc le in b
-
-atomsOf :: LHpClause a -> [LHpExpr a]
-atomsOf lc = (hAtom lc):(bAtoms lc)
-
-fact :: LHpClause a -> Bool
-fact = null.bAtoms
--}
 
 isFact e = 
     case unLoc e of
@@ -242,14 +183,6 @@ type PLHpClause = PLHpFormula
 
 
  -- pretty printing 
-
-instance Pretty HpSymbol where
-    ppr (Sym s) = text s
-    ppr AnonSym = text "_"
-
-
-instance Pretty TcSymbol where
-    ppr (TcS s i ty) = hcat [ ppr s, char '/', int i, char '_', char '{', ppr ty, char '}' ]
 
 instance Pretty a => Pretty (HpExpr a) where
     ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]

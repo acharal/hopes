@@ -3,10 +3,11 @@ module Tc where
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Err
 import Loc
+import Error
 
 import Syntax
+import Symbol
 import Types
 import Pretty
 import Data.IORef
@@ -14,7 +15,7 @@ import Data.IORef
 
 data TcEnv =
     TcEnv { 
-        tyenv :: TypeEnv,
+        tyenv :: TyEnv HpSymbol,
         ctxt  :: [Context HpSymbol]
     }
 
@@ -24,12 +25,6 @@ data TcState =
         msgs   :: Messages
     }
 
-type TypeEnv = [ HpTySign ]
-
-emptyEnv = []
-
-instance Pretty TypeEnv where
-    ppr ts = vcat $ map (\(v, t) -> sep [ ppr v, text "::", ppr t] ) ts
 
 type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages IO))
 
@@ -51,7 +46,7 @@ recoverTc main recov =
 
 addMsgs m = modify (\s -> s{ msgs = concatMsgs m (msgs s) })
 
-getTypeEnv  :: Tc TypeEnv
+getTypeEnv  :: Tc (TyEnv HpSymbol)
 getTypeEnv = asks tyenv
 
 extendEnv :: [HpTySign] -> Tc a -> Tc a
@@ -63,7 +58,7 @@ withTypeEnv = extendEnv
 lookupVar :: HpSymbol -> Tc Type
 lookupVar v = do
     ty_env <- asks tyenv
-    case lookup v ty_env of
+    case lookupTyEnv v ty_env of
         Nothing -> typeError (sep [text "Variable", quotes (ppr v), text "out of scope"] )
         Just ty -> return ty
 
@@ -119,6 +114,23 @@ typeError err = do
     diagnosis <- asks ctxt
     throwError $ mkMsgs $ mkErrWithLoc l TypeError Failure (vcat [err, vcat (map ppr diagnosis)])
 
+
+instantiate :: Type -> Tc MonoType
+instantiate t = return t
+
+generalize :: MonoType -> Tc Type
+generalize t = return t
+
+freshTyFor :: a -> Tc (a, Type)
+freshTyFor v = do
+    ty <- freshTyVar >>= generalize
+    return (v, ty)
+
+withSig e m = 
+    let sigma = sig e
+    in do
+        ty_sym <- mapM freshTyFor (rigids sigma)
+        withTypeEnv ty_sym m
 
 enterContext c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}

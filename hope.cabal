@@ -16,14 +16,13 @@ Extra-Source-Files:
 Executable:     hope
 Main-Is:	Main.hs
 Hs-Source-Dirs: src
+                src/basic
                 src/parser
-                src/utils
-                src/typecheck
+                src/checker
                 src/prover
-Other-Modules:	Lexer, Parser, ParseUtils, Syntax, Types
+Other-Modules:	Lexer, Parser, ParseUtils,
+                Syntax, Symbol, Types, Error, Loc
                 Tc, WellForm, TypeCheck, Restrict 
-                Err
-                Loc
                 Pretty
                 Hopl, Core, Logic, Infer
 		Interactive

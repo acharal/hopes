@@ -3,6 +3,7 @@ module TypeCheck where
 
 {- type checking -}
 import Syntax
+import Symbol
 import Types
 import Tc
 
@@ -42,17 +43,11 @@ import Data.Foldable (foldlM)
 -- type checking and inference
 
 tcProg src = do
-    withAllDefined src $ do
+    withSig src $ do
     withTypeEnv (tysigs src) $ do
         cls' <- mapM tcForm $ clauses src
         ty_env  <- normEnv
         return (src{ clauses = cls' }, ty_env)
-
-withAllDefined e m = 
-    let sigma = sig e
-    in do
-        ty_sym <- mapM freshTyFor (rigids sigma)
-        withTypeEnv ty_sym m
 
 -- tcForm :: LHpFormula a -> Tc (LHpFormula b)
 tcForm f@(L l (HpForm b xs ys)) =
@@ -166,12 +161,6 @@ varBind v ty = do
 
 -- utilities
 
-instantiate :: Type -> Tc MonoType
-instantiate t = return t
-
-generalize :: MonoType -> Tc Type
-generalize t = return t
-
 
 tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
     where auxM v = lookupTy v >>= \mayv' ->
@@ -181,11 +170,6 @@ tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
                     vs <- tyvarsM ty
                     return (v:vs)
 
-
-freshTyFor :: a -> Tc (a, Type)
-freshTyFor v = do
-    ty <- freshTyVar >>= generalize
-    return (v, ty)
 
 tySym :: HpSymbol -> Tc HpSymbol
 tySym = return . id   --no annotation

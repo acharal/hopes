@@ -1,11 +1,10 @@
-module Err (
-    module Err,
+module Error (
+    module Error,
     module Control.Monad.Error
 ) where
 
 import Loc
 import Pretty
-import Syntax
 import Control.Monad.Error
 
 {- this is a comment -}
@@ -42,6 +41,12 @@ instance Error Message where
 instance Error Messages where
     strMsg str = mkMsgs $ strMsg str
 
+instance Pretty Message where
+    ppr err
+       | errloc err == bogusLoc = desc err
+       | otherwise              = hang (ppr (errloc err) <>colon) 4 (desc err)
+
+
 {-
 class Monad m => MonadWarn m w where
     addWarning :: w -> m ()
@@ -70,8 +75,3 @@ hasWarns (_,warns) = not (null warns)
 
 hasMsgs ([],[]) = False
 hasMsgs _ = True
-
-
-instance Pretty Message where
-    ppr err | errloc err == bogusLoc = desc err
-            | otherwise              = hang (ppr (errloc err) <>colon) 4 (desc err)

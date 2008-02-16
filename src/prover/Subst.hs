@@ -2,6 +2,7 @@ module Subst where
 
 import Hopl
 import Pretty
+import Data.Monoid (mconcat)
 
 type Subst a = [ (a, Expr a) ]
 
@@ -22,12 +23,17 @@ subst theta e@(Flex a) =
     case lookup a theta of
         Nothing -> e
         Just e' -> e'
-subst theta (Set es v) =
-    case lookup v theta of 
-        Nothing -> Set (map (subst theta) es) v
-        Just e' -> case e' of
-                     Set es' v' -> Set ((map (subst theta) es) ++ es') v'
-                     _ -> error "No idea how to substitute that"
+subst theta (Set es vs) =
+    let aux x = case lookup x theta of
+                    Nothing -> ([], [x])
+                    Just e -> case e of
+                                Set es' vs' -> (es', vs')
+                                Flex v -> ([], [v])
+                                _ -> error "No idea how to substitute that"
+        (es', vs') = mconcat (map aux vs)
+    in  Set ((map (subst theta) es) ++ es') vs'
+
+
 subst theta (Tup es) = Tup (map (subst theta) es)
 subst theta e = e
 

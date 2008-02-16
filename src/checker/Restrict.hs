@@ -4,7 +4,7 @@ import Syntax
 import Tc
 import TypeCheck
 import Types
-import Err (catchError)
+import Error (catchError)
 import Loc
 import Pretty
 import Monad (when)

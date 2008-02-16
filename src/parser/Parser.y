@@ -6,9 +6,9 @@ module Parser (
 
 import Lexer
 import Syntax
+import Symbol
 import Types
 import Loc
-import Err
 import Pretty
 import ParseUtils
 import Control.Monad.State

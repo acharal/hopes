@@ -4,14 +4,17 @@ import Hopl
 import Subst
 import Logic
 
-import Types  (Type, order)
-import Syntax (HpSymbol(..))
+import Types
+import Symbol
 
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Identity
 
-import List (nub)
+import List (nub, last)
+
+import Pretty
+import Debug.Trace
 
 
 type Infer a = ReaderT (Prog a) (StateT Int (LogicT Identity))
@@ -60,15 +63,17 @@ resolvR e =
     return (b, s)
 
 
-resolvF (App (Flex v) es) = resolvS (App (Set [] v) es)
+resolvF (App fv@(Flex v) es) = resolvS (App (liftSet fv) es)
 
 
-resolvS (App (Set ss v) e) = do
+resolvS (App (Set ss vs) e) = do
+    let v = last vs             -- SEARCH ME: any solutions lost? discard all variables except the last one (which is continuous?)
+    let TyFun a r = typeOf v
     x  <- freshIt v
-    v' <- freshIt v
-    (Flex x) `waybelow` e >>- \s ->
-        return ([], (bind v (Set [(Flex x)] v')) `combine` s)
-
+    let x' = typed a (unTyp x)
+    (Flex x') `waybelow` e >>- \s -> do
+        v' <- freshIt v
+        return ([], (bind v (Set [(Flex x')] [v'])) `combine` s)
 
 -- unification
 
@@ -123,21 +128,21 @@ occursIn a e = a `elem` (flexs e)
 -- if p is zero order just unify x with p
 
 
-waybelow (Flex x) (Rigid p@(_,t))
-    | order t == 0 = unify (Flex x) (Rigid p)
+waybelow (Flex x) (Rigid p)
+    | order p == 0 = unify (Flex x) (Rigid p)
     | otherwise    = error "last to implement"
         -- prove (p(X1, ..., XN)) = [s1, s2, ...]
 
 -- possibly a function symbol application (remember no partial applications allowed, so that can't be higher order)
 waybelow e1@(Flex _) e2@(App _ _) = unify e1 e2
 
-waybelow e@(Flex x) (Set sl v) = do
+waybelow (Flex x) (Set sl vs@(v:_)) = do
     v' <- freshIt v
-    return $ bind v (Set [e] v')
+    return $ bind v (Set [] [x, v'])
 
-waybelow e1@(Flex _) e2@(Flex v@(_, t))
-    | order t == 0 = unify e1 e2
-    | otherwise    = waybelow e1 (Set [] v)
+waybelow e1@(Flex _) e2@(Flex v)
+    | order v == 0 = unify e1 e2
+    | otherwise    = waybelow e1 (liftSet e2)
 
 waybelow (Flex x) e@(Tup es) = do
     xs <- mapM (\e -> freshIt x) es
@@ -182,8 +187,8 @@ variant (h,b) =
     s <- mapM bindWithFresh vs
     return (subst s h, map (subst s) b)
 
-freshIt :: MonadState Int m => (HpSymbol, Type) -> m (HpSymbol, Type)
-freshIt (_, ty) = do
+freshIt :: (MonadState Int m, Functor f) => f (Symbol String) -> m (f (Symbol String))
+freshIt s = do
     a' <- get
     modify (+1)
-    return $ (Sym ("_V" ++ show a'), ty)
+    return $ fmap (const (Sym ("_S" ++ show a'))) s

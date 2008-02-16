@@ -1,9 +1,10 @@
 module ParseUtils where
 
 import Syntax
+import Symbol
 import Types
 import Loc
-import Err
+import Error
 import Pretty
 
 import Char (isUpper, isDigit)
@@ -123,9 +124,6 @@ collectEither es = (map unL l, map unR r)
           unR (Right a) = a
           (l, r) = partition isLeft es
 
-bogusType :: Type
-bogusType = error ("This type is a placeholder and must not be evaluated")
-
 isCapitalized (Sym s) = isUpper $ head s
 
 
@@ -169,15 +167,15 @@ data HpType   =
 type LHpType   = Located HpType
 
 mkTyp :: Monad m => LHpType -> ParserT m Type
-mkTyp (L _ (HpTyGrd "o"))  = return (TyCon TyBool)
-mkTyp (L _ (HpTyGrd "i"))  = return (TyCon TyAll)
+mkTyp (L _ (HpTyGrd "o"))  = return tyBool
+mkTyp (L _ (HpTyGrd "i"))  = return tyAll
 mkTyp (L _ (HpTyFun t1 t2)) = do
     t1' <- mkTyp t1
     t2' <- mkTyp t2
     return (TyFun t1' t2')
 mkTyp (L _ (HpTyRel t))    = do
     t' <- mkTyp t
-    return (TyFun t' (TyCon TyBool))
+    return (TyFun t' tyBool)
 mkTyp (L _ (HpTyTup tl))   = do
     tl' <- mapM mkTyp tl
     case tl' of
