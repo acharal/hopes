@@ -40,40 +40,37 @@ refute g
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
 derive [] = return (contradiction, success)
 derive g = 
-    let f a = case a of
-                 (App (Rigid _) _) -> resolvR a
-                 (App (Flex _)  _) -> resolvF a
-                 (App (Set _ _) _) -> resolvS a
+    let f g a = case a of
+                 (App (Rigid _) _) -> resolve g a
+                 (App (Flex _)  _) -> resolvF g a
+                 (App (Set _ _) _) -> resolvS g a
                  _ -> fail "Cannot derive anything from that atom"
-    in
-    split g  >>- \(a, g') ->
-    f a      >>- \(g'', s) ->
-    return (g'' ++ g', s)
+    in split g  >>- \(a, g') -> f g' a
 
 
 
 -- derive by resolution (the common rigid case)
 -- FIXME: clause assumed to be a tuple.
 --        goal assumed to be equivalent to the body of a clause
--- resolv :: Expr a -> Infer a (Goal a, Subst a)
-resolvR e = 
+-- resolv :: Goal a -> Expr a -> Infer a (Goal a, Subst a)
+resolve g e = 
     clausesOf e >>- \c     ->
     variant c   >>- \(h,b) ->
     unify e h   >>- \s     ->
-    return (b, s)
+    return (b `mappend` g, s)
 
 
-resolvF (App fv@(Flex v) es) = resolvS (App (liftSet fv) es)
+resolvF g (App fv@(Flex v) es) = resolvS g (App (liftSet fv) es)
 
 
-resolvS (App (Set ss vs) e) = do
+resolvS g (App (Set ss vs) e) = do
     let v = last vs             -- SEARCH ME: any solutions lost? discard all variables except the last one (which is continuous?)
     let TyFun a r = typeOf v
     x  <- freshIt v
     let x' = typed a (unTyp x)
     (Flex x') `waybelow` e >>- \s -> do
         v' <- freshIt v
-        return ([], (bind v (Set [(Flex x')] [v'])) `combine` s)
+        return (g, (bind v (Set [(Flex x')] [v'])) `combine` s)
 
 -- unification
 
