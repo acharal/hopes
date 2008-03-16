@@ -31,5 +31,6 @@ Extensions:     RankNTypes
 		FlexibleInstances
 		TypeSynonymInstances
 		FlexibleContexts
-Ghc-Options:
+		FunctionalDependencies
+Ghc-Options:    -O
 

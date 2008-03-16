@@ -20,6 +20,9 @@ type Prog a = [Clause a]
 
 contradiction = []
 
+isContra []    = True
+isContra (_:_) = False
+
 instance HasSignature (Expr a) a where
 	sig (App e1 e2) = sig e1 `mappend` sig e2
 	sig (Set _ _) = emptySig

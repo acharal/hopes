@@ -30,11 +30,11 @@ prove g =  do
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute [] = return success
-refute g = 
-    derive g >>- \(g',  s)  ->
-    refute (map (subst s) g') >>- \ans ->
-    return (s `combine` ans)
+refute g 
+    | isContra g = return success
+    | otherwise  = derive g >>- \(g',  s)  ->
+                   refute (subst s g') >>- \ans ->
+                   return (s `combine` ans)
 
 -- a derivation
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
@@ -178,14 +178,14 @@ clausesOf (App q _) = do
 -- variant :: Clause a -> Infer a (Clause a)
 -- FIXME: subst assumed to be list 
 -- PITFALL: flexs are computed every time
-variant c@(h,b) =
+variant c =
     let vs = vars c
         bindWithFresh v = do
             v' <- freshIt v
             return (v, Flex v')
     in do
     s <- mapM bindWithFresh vs
-    return (subst s h, map (subst s) b)
+    return $ subst s c
 
 freshIt :: (MonadState Int m, Functor f) => f (Symbol String) -> m (f (Symbol String))
 freshIt s = do
