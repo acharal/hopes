@@ -30,10 +30,18 @@ instance HasSignature (Symbol a) (Symbol a) where
     sig (Sym s) = rigSig (Sym s)
     sig AnonSym = emptySig
 
-symbols :: Sig s -> [s]
-symbols (as, bs) = as ++ bs
-vars    (as, bs) = bs
-rigids  (as, bs) = as
+symbolsSig :: Sig s -> [s]
+symbolsSig (as, bs) = as ++ bs
+varsSig    (as, bs) = bs
+rigidsSig  (as, bs) = as
+
+symbols :: HasSignature a b => a -> [b]
+vars    :: HasSignature a b => a -> [b]
+rigids  :: HasSignature a b => a -> [b]
+
+symbols = symbolsSig . sig
+vars    = varsSig    . sig
+rigids  = rigidsSig  . sig
 
 {- 
 specialSyms = 

@@ -1,6 +1,8 @@
 module Hopl where
 
 import Pretty
+import Symbol
+import Data.Monoid
 
 data Expr a = 
       App (Expr a) (Expr a)
@@ -18,12 +20,22 @@ type Prog a = [Clause a]
 
 contradiction = []
 
-flexs  :: Expr a -> [a]
-flexs (Flex a)   = [a]
-flexs (App e e') = flexs e ++ flexs e'
-flexs (Set el vs) = vs ++ concatMap flexs el
-flexs (Tup es)   = concatMap flexs es
-flexs _ = []
+instance HasSignature (Expr a) a where
+	sig (App e1 e2) = sig e1 `mappend` sig e2
+	sig (Set _ _) = emptySig
+	sig (Flex a)  = varSig a
+	sig (Rigid a) = rigSig a
+	sig (Tup es ) = mconcat $ map sig es
+
+instance HasSignature (Clause a) a where
+	sig (e1, e2) = sig e1 `mappend` sig e2
+
+instance HasSignature (Goal a) a where
+	sig gs = mconcat $ map sig gs
+
+instance HasSignature (Prog a) a where
+	sig cs = mconcat $ map sig cs
+
 
 liftSet :: Expr a -> Expr a
 liftSet e@(Set _ _) = e

@@ -126,11 +126,9 @@ freshTyFor v = do
     ty <- freshTyVar >>= generalize
     return (v, ty)
 
-withSig e m = 
-    let sigma = sig e
-    in do
-        ty_sym <- mapM freshTyFor (rigids sigma)
-        withTypeEnv ty_sym m
+withSig e m = do
+	ty_sym <- mapM freshTyFor (rigids e)
+	withTypeEnv ty_sym m
 
 enterContext c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}

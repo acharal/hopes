@@ -26,7 +26,7 @@ runInfer p m = runIdentity $ runLogic Nothing $ evalStateT (runReaderT m p) 0
 -- prove  :: Goal a -> Infer a (Subst a)
 prove g =  do
     ans <- refute g
-    return (restrict (concatMap flexs g) ans)
+    return (restrict (vars g) ans)
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
@@ -115,7 +115,7 @@ listUnify _ _   = fail "lists of different length"
 occurCheck :: (Eq a, Monad m) => a -> Expr a -> m ()
 occurCheck a e = when (a `occursIn` e) $ fail "Occur Check"
 
-occursIn a e = a `elem` (flexs e)
+occursIn a e = a `elem` (vars e)
 
 
 {-
@@ -178,8 +178,8 @@ clausesOf (App q _) = do
 -- variant :: Clause a -> Infer a (Clause a)
 -- FIXME: subst assumed to be list 
 -- PITFALL: flexs are computed every time
-variant (h,b) =
-    let vs = nub $ flexs h ++ concatMap flexs b
+variant c@(h,b) =
+    let vs = vars c
         bindWithFresh v = do
             v' <- freshIt v
             return (v, Flex v')
