@@ -2,6 +2,7 @@ module Hopl where
 
 import Pretty
 import Symbol
+import Types
 import Data.Monoid
 
 data Expr a = 
@@ -40,6 +41,20 @@ instance HasSignature (Prog a) a where
 	sig cs = mconcat $ map sig cs
 
 
+instance HasType a => HasType (Expr a) where
+	typeOf (App e1 e2) = b
+		where (TyFun a b) = typeOf e1
+	typeOf (Set _ _) = error ""
+	typeOf (Flex a)  = typeOf a
+	typeOf (Rigid a) = typeOf a
+	typeOf (Tup tys) = TyTup $ map typeOf tys
+
+instance HasType a => HasType (Clause a) where
+	typeOf c = liftGround TyBool
+
+instance HasType a => HasType (Goal a) where
+	typeOf g = liftGround TyBool
+
 liftSet :: Expr a -> Expr a
 liftSet e@(Set _ _) = e
 liftSet (Flex v) = Set [] [v]
@@ -49,7 +64,7 @@ liftSet _ = error ("Cannot represent expression as set")
 instance Pretty a => Pretty (Expr a) where
     ppr (Flex  sym)        = ppr sym
     ppr (Rigid sym)        = ppr sym
-    ppr (Set es vs)         = curly  $ sep $ (punctuate comma (map ppr es)) ++ map (\v -> text "|" <+> ppr v) vs
+    ppr (Set es vs)        = curly  $ sep $ (punctuate comma (map ppr es)) ++ map (\v -> text "|" <+> ppr v) vs
     ppr (Tup es)           = parens $ sep $ (punctuate comma (map ppr es))
     ppr (App e e'@(Tup _)) = ppr e <> ppr e'
     ppr (App e e')         = ppr e <> parens (ppr e')

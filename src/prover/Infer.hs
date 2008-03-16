@@ -10,7 +10,7 @@ import Symbol
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Identity
-
+import Data.Monoid
 import List (nub, last)
 
 import Pretty
@@ -38,7 +38,7 @@ refute g
 
 -- a derivation
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
-derive [] = return ([], success)
+derive [] = return (contradiction, success)
 derive g = 
     let f a = case a of
                  (App (Rigid _) _) -> resolvR a
