@@ -30,7 +30,7 @@ setup:
 doc: haddock
 
 haddock: config
-	$(SETUP) haddock
+	$(SETUP) haddock --executables
 
 install: build-stamp
 	$(SETUP) install
@@ -59,10 +59,10 @@ dist: $(HOPEBALL)
 deb: dist
 	cd $(TMPDISTDIR) && ln -s $(HOPEBALL) haskell-hope.orig.tar.gz
 	cd $(TMPDISTDIR) && tar zxvf $(HOPEBALL)
-	mv $(TMPDISTDIR)/hopes-$(HOPEVERSION) $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION)
-	cd $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION) && ln -s release/debian .
-	cd $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION) && debuild -us -uc
-	rm -rf $(TMPDISTDIR)
+	mv $(TMPDISTDIR)/hopes-$(HOPEVERSION)
+	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && ln -s release/debian .
+	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && debuild -us -uc
+#	rm -rf $(TMPDISTDIR)
 
 .PHONY: all configure build install dist src-dist darcs-dist clean maintainer-clean
 
