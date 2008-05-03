@@ -26,6 +26,7 @@ import Loc
 import Control.Monad.Reader
 
 
+
 data CoreEnv = CEnv { rigty :: TyEnv HpSymbol, bindings :: [HpBindings HpSymbol] }
 
 type CoreTransfT = ReaderT CoreEnv

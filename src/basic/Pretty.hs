@@ -65,7 +65,7 @@ instance Pretty a => Pretty (Symbol a) where
     ppr AnonSym = text "_"
 
 instance Pretty a => Pretty (Typed a) where
-    ppr (T a ty) = ppr a <+> curly (ppr ty)
+    ppr (T a ty) = ppr a <> dcolon <> ppr ty
 
 instance Pretty GrdType where
     ppr TyBool = text "o"
@@ -81,11 +81,12 @@ instance (Eq a, Pretty a) => Pretty (MonoTypeV a) where
 pprPrec p f (TyTup tl)     = parens $ sep (punctuate comma (map (pprPrec 1 f) tl))
 pprPrec p f (TyGrd c)      = ppr c
 pprPrec p f (TyVar v)      = f v
-pprPrec p f ty@(TyFun t t')= 
-    if (p == 0) then 
-        parens (sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ])
-    else
-        sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ]
+pprPrec p f ty@(TyFun t t')
+	| t' == tyBool = curly (ppr t)
+        | otherwise    =  if (p == 0) then 
+                               parens (sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ])
+                          else
+                               sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ]
 
 tynames = letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
     where letters = [ "a", "b", "c", "d", "e", "f" ]

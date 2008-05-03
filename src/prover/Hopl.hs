@@ -77,6 +77,9 @@ liftSet e@(Set _ _) = e
 liftSet (Flex v) = Set [] [v]
 liftSet _ = error ("Cannot represent expression as set")
 
+functor :: Expr a -> Expr a
+functor (App e a) = functor e
+functor e = e
 
 instance Pretty a => Pretty (Expr a) where
     ppr (Flex  sym)        = ppr sym

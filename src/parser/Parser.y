@@ -135,8 +135,8 @@ terms2 :: { [PLHpTerm] }
        | term ',' term          { $3:$1:[] }
 
 goal :: { PLHpFormula }
-     :                          { located bogusLoc $ mkQuantForm [] [] }
-     | conj                     { located bogusLoc $ mkQuantForm [] (reverse $1) }
+     -- :                          { located bogusLoc $ mkQuantForm [] [] }
+     : conj '.'                 { located bogusLoc $ mkQuantForm [] (reverse $1) }
 
 type :: { LHpType }
      : ID                       { located $1      $ HpTyGrd (tokId $1) }

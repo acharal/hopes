@@ -57,10 +57,10 @@ refute g
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
 derive [] = return (contradiction, success)
 derive g = 
-    let f g a = case a of
-                 (App (Rigid _) _) -> resolve g a
-                 (App (Flex _)  _) -> resolvF g a
-                 (App (Set _ _) _) -> resolvS g a
+    let f g a = case functor a of
+                 Rigid _ -> resolve g a
+                 Flex _  -> resolvF g a
+                 Set _ _ -> resolvS g a
                  _ -> fail "Cannot derive anything from that atom"
     in split g  >>- \(a, g') -> f g' a
 
@@ -69,7 +69,7 @@ derive g =
 -- derive by resolution (the common rigid case)
 -- FIXME: clause assumed to be a tuple.
 --        goal assumed to be equivalent to the body of a clause
--- resolv :: Goal a -> Expr a -> Infer a (Goal a, Subst a)
+-- resolve :: Goal a -> Expr a -> Infer a (Goal a, Subst a)
 resolve g e = 
     clausesOf e >>- \c     ->
     variant c   >>- \(h,b) ->

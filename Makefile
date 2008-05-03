@@ -59,7 +59,6 @@ dist: $(HOPEBALL)
 deb: dist
 	cd $(TMPDISTDIR) && ln -s $(HOPEBALL) haskell-hope.orig.tar.gz
 	cd $(TMPDISTDIR) && tar zxvf $(HOPEBALL)
-	mv $(TMPDISTDIR)/hopes-$(HOPEVERSION)
 	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && ln -s release/debian .
 	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && debuild -us -uc
 #	rm -rf $(TMPDISTDIR)
