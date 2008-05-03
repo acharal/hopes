@@ -57,11 +57,11 @@ dist: $(HOPEBALL)
 	@echo "Hope source tarball built: $(TMPDISTDIR)/$(HOPEBALL)" 
 
 deb: dist
-	cd $(TMPDISTDIR) && ln -s $(HOPEBALL) haskell-hope.orig.tar.gz
 	cd $(TMPDISTDIR) && tar zxvf $(HOPEBALL)
 	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && ln -s release/debian .
 	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && debuild -us -uc
-#	rm -rf $(TMPDISTDIR)
+	cp $(TMPDISTDIR)/*.deb dist
+	rm -rf $(TMPDISTDIR)
 
 .PHONY: all configure build install dist src-dist darcs-dist clean maintainer-clean
 
