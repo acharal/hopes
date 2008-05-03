@@ -1,0 +1,11 @@
+Source: hopes
+Priority: optional
+Section: devel
+Maintainer: Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+Build-Depends: debhelper (>= 4.0.0), haskell-devscripts (>=0.5.12), ghc6 (>=6.8), ghc6-prof 
+Standards-Version: 3.6.1.0
+
+Package: hopes
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: an interpreter for Higher Order Prolog with extensional semantics 
