@@ -60,7 +60,7 @@ deb: dist
 	cd $(TMPDISTDIR) && tar zxvf $(HOPEBALL)
 	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && ln -s release/debian .
 	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && debuild -us -uc
-	cp $(TMPDISTDIR)/*.deb dist
+	cp $(TMPDISTDIR)/*.deb .
 	rm -rf $(TMPDISTDIR)
 
 .PHONY: all configure build install dist src-dist darcs-dist clean maintainer-clean
