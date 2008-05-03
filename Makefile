@@ -48,7 +48,7 @@ AUTHORS:
 	echo "Angelos Charalambidis <a.charalambidis@di.uoa.gr>" > AUTHORS
 
 $(HOPEBALL):
-	darcs dist --dist-name hope-$(HOPEVERSION)
+	darcs dist --dist-name hopes-$(HOPEVERSION)
 
 dist: $(HOPEBALL)
 	rm -rf $(TMPDISTDIR)
@@ -59,8 +59,9 @@ dist: $(HOPEBALL)
 deb: dist
 	cd $(TMPDISTDIR) && ln -s $(HOPEBALL) haskell-hope.orig.tar.gz
 	cd $(TMPDISTDIR) && tar zxvf $(HOPEBALL)
-	mv $(TMPDISTDIR)/hope $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION)
-	cd $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION) && debuild
+	mv $(TMPDISTDIR)/hopes-$(HOPEVERSION) $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION)
+	cd $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION) && ln -s release/debian .
+	cd $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION) && debuild -us -uc
 	rm -rf $(TMPDISTDIR)
 
 .PHONY: all configure build install dist src-dist darcs-dist clean maintainer-clean
