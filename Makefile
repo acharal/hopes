@@ -1,39 +1,67 @@
 
 BUILDARGS=
 
-SETUPFILE=./Setup.hs
-SETUP=runhaskell $(SETUPFILE)
+SETUPHS=./Setup.hs
+#SETUP=runhaskell $(SETUPHS)
+SETUP=./setup
 RM=rm
-GHC=ghc
+HC=ghc
 DARCS=darcs
+HOPEVERSION=0.0.5
+HOPEBALL=hopes-$(HOPEVERSION).tar.gz
+
+TMPDISTDIR=/tmp/hopesdist
 
 all: build
 
-build: configure
+build: build-stamp
+
+build-stamp: config
 	$(SETUP) build $(BUILDARGS)
 
-clean:
+config: .setup-config
+
+setup:
+	$(HC) --make $(SETUPHS) -o $(SETUP)
+
+.setup-config: setup
+	$(SETUP) configure
+
+doc: haddock
+
+haddock: config
+	$(SETUP) haddock
+
+install: build-stamp
+	$(SETUP) install
+
+clean: setup
 	$(SETUP) clean
 	$(RM) -rf dist
 	$(RM) -f *.hi *.o
 
-configure: .setup-config
+maintainer-clean: clean
+	$(RM) -f .setup-config
+	$(RM) -f $(SETUP)
 
-.setup-config:
-	$(SETUP) configure
+AUTHORS: 
+	echo "Angelos Charalambidis <a.charalambidis@di.uoa.gr>" > AUTHORS
 
-doc:
-	$(SETUP) haddock
+$(HOPEBALL):
+	darcs dist --dist-name hope-$(HOPEVERSION)
 
-dist: build
-	$(SETUP) sdist
+dist: $(HOPEBALL)
+	rm -rf $(TMPDISTDIR)
+	mkdir $(TMPDISTDIR)
+	mv $(HOPEBALL) $(TMPDISTDIR)
+	@echo "Hope source tarball built: $(TMPDISTDIR)/$(HOPEBALL)" 
 
-darcs-dist: 
-	$(DARCS) dist
+deb: dist
+	cd $(TMPDISTDIR) && ln -s $(HOPEBALL) haskell-hope.orig.tar.gz
+	cd $(TMPDISTDIR) && tar zxvf $(HOPEBALL)
+	mv $(TMPDISTDIR)/hope $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION)
+	cd $(TMPDISTDIR)/haskell-hope-$(HOPEVERSION) && debuild
+	rm -rf $(TMPDISTDIR)
 
-install: build
-	$(SETUP) install
-
-buildsetup:  $(SETUPFILE)
-	$(GHC) --make $(SETUPFILE) -o setup
+.PHONY: all configure build install dist src-dist darcs-dist clean maintainer-clean
 

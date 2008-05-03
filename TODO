@@ -3,8 +3,8 @@ TODO List
 i.   handle correctly anonymous symbols aka '_'
          1. Translate anonymous symbols at the very beginning (before
             typechecking) to fresh with-name symbols
-         2. Keep anonymous symbols till the proof procedure at handle
-            respectively
+         2. Keep anonymous symbols till the proof procedure handle them
+            accordingly
      Current Status:
 	Anonymous Symbols are carried all the way to the inference procedure.
         In |variant| function, binds for '_' occur but no anonymous symbol is
@@ -13,8 +13,8 @@ i.   handle correctly anonymous symbols aka '_'
         I think that this behaviour is quite convenient but the correct handle
         should be to change the implementation of |variant| completelly.
 
-ii.  handle more elegant (and extensively) buildin special symbols.
-     special symbols may have also *special* pretty printing
+ii.  handle more elegantly (and extensively) buildin special symbols.
+     special symbols may also have *special* pretty printing
 
 iii. decide whether Syntax should be wrapped into Located or Loc will be
      integrated inside structures.
@@ -24,7 +24,7 @@ iii. decide whether Syntax should be wrapped into Located or Loc will be
 		+ slightly better performance since no calls of unLoc
 		+ cleaner code at typechecker
 	- we have to change Parser and remove |located| that was quite elegant.
-	= Syntax will not be more cleaner or more independent in any case. That
+	* Syntax will not be more cleaner or more portable in any case. That
           is sad.
 
 iv.  interactive user commands and completion Functions
@@ -36,4 +36,16 @@ v.   decide whether Hopl should be our general Core language, or should be infer
      same occur for the goal)
      and then do the inference procedure (each time we want to infer something
      we have to retransform whole syntax tree?)
+
+vi.  try to support some usefull meta-predicates of conventional Prolog
+     e.g.   listing(p), E = t, halt, consult('file').
+     and some ideas type(p).
+
+What happens in Prolog Systems.
+
+
+Assertions are putted in a knowledge base, that is indexed and can assert or rectact clauses.
+Each clause is rename with new variables more machine-oriented, A, B, C, ...
+
+
 

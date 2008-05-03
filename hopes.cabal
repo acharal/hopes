@@ -1,19 +1,21 @@
-Name:           hope
+Name:           hopes
 Version:        0.0.5
 License:        GPL
 License-File:   LICENSE
 Author:         Angelos Charalambidis
-Maintainer:     a.charalambidis@di.uoa.gr
+Maintainer:     Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+Copyright:	Angelos Charalambidis 2007-2008
 Stability:      Experimental
-Synopsis:       Higher Order Prolog with Extensionality
-Description:    Not yet available
-Category:       intepreter
-Package-Url:    http://www.ajn.awmn.net/hope
+Synopsis:       Higher Order Prolog with Extensional Semantics
+Description:
+	Hopes is a prototype interpreter for a subset of Higher Order Logic
+	used as Programming Language.
+Category:       Compilers and interpreters
 Build-Depends:  array, pretty, base, haskell98, mtl, readline
 Extra-Source-Files:
                 Makefile
 
-Executable:     hope
+Executable:     hopes
 Main-Is:	Main.hs
 Hs-Source-Dirs: src
                 src/basic
