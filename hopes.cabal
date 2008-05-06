@@ -19,6 +19,7 @@ Extra-Source-Files:
 		README
 
 Flag split-base
+  Description:    Choose the new, split-up base package.
 
 Executable      hopes
   Main-Is:	  Main.hs
@@ -45,5 +46,5 @@ Executable      hopes
                   TypeSynonymInstances
                   FlexibleContexts
                   FunctionalDependencies
-  Ghc-Options:    
+  Ghc-Options:    -Wall -O
 

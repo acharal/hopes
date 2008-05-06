@@ -4,7 +4,6 @@ BUILDARGS=
 SETUPHS=./Setup.hs
 #SETUP=runhaskell $(SETUPHS)
 SETUP=./setup
-RM=rm
 HC=ghc
 DARCS=darcs
 HOPEVERSION=0.0.5
@@ -29,20 +28,28 @@ setup:
 
 doc: haddock
 
+man:
+	cd docs && $(MAKE) man
+
 haddock: config
 	$(SETUP) haddock --executables
 
-install: build-stamp
+install-binary: build-stamp
 	$(SETUP) install
+
+install: install-binary install-docs
+
+install-docs: man
 
 clean: setup
 	$(SETUP) clean
-	$(RM) -rf dist
-	$(RM) -f *.hi *.o
+	rm -rf dist
+	rm -f *.hi *.o
 
 maintainer-clean: clean
-	$(RM) -f .setup-config
-	$(RM) -f $(SETUP)
+	rm -f .setup-config
+	rm -f $(SETUP)
+	rm -f Setup.hi Setup.o
 
 AUTHORS: 
 	echo "Angelos Charalambidis <a.charalambidis@di.uoa.gr>" > AUTHORS
@@ -62,6 +69,12 @@ deb: dist
 	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && debuild -us -uc
 	cp $(TMPDISTDIR)/*.deb .
 	rm -rf $(TMPDISTDIR)
+
+rpm: dist
+	cd $(TMPDISTDIR) && tar zxvf $(HOPEBALL)
+	cd $(TMPDISTDIR)/hopes-$(HOPEVERSION) && ln -s release/rpm/hopes.spec .
+	rpmbuild
+	# rm -rf $(TMPDISTDIR)
 
 .PHONY: all configure build install dist src-dist darcs-dist clean maintainer-clean
 
