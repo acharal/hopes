@@ -7,13 +7,13 @@ Version:        %{version}
 Release:        %{release}
 License:        GPL
 Group:          Development/Languages
-URL:            
-Source:         
+URL:            http://www.ajn.awmn.net/hopes/
+Source:         %{name}-%{version}.tar.gz
 Packager:       Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Prefix:         %{_prefix}
 BuildRequires:  ghc
-Summary:        
+Summary:        Interpreter for Higher order prolog with extensional semantics
 
 %description
 Authors:

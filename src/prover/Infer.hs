@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 module Infer where
 
 import Hopl
+import KnowledgeBase
 import Subst
 import Logic
 
@@ -28,16 +29,15 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Identity
 import Data.Monoid
-import List (nub, last)
-
-import Pretty
-import Debug.Trace
+import List (last)
 
 
-type Infer a = ReaderT (Prog a) (StateT Int (LogicT Identity))
+type Infer a = ReaderT (KnowledgeBase a) (StateT Int (LogicT Identity))
 
 runInfer p m = runIdentity $ runLogic Nothing $ evalStateT (runReaderT m p) 0
 
+infer :: KnowledgeBase a -> Infer a b -> Maybe (b, Infer a b)
+infer p m =  runIdentity $ observe $ evalStateT (runReaderT (msplit m) p) 0
 
 -- try prove a formula by refutation
 -- prove  :: Goal a -> Infer a (Subst a)
@@ -178,12 +178,12 @@ waybelow (Rigid p) (Rigid q)
 
 -- split a goal to an atom and the rest goal
 -- deterministic computation picking always the left-most atom
-split :: Goal a -> Infer a (Expr a, Goal a)
+-- split :: Goal a -> Infer a (Expr a, Goal a)
 split []     = fail "Empty goal. Can't pick an atom"
 split (x:xs) = return (x, xs)
 
 clausesOf (App q _) = do
-    p <- ask
+    p <- asks clauses
     let cl = filter (\(App r _, b)-> r == q) p
     msum (map return cl)
 

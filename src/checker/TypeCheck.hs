@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,11 +15,11 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+-- | check for well typed expressions and formulas
 module TypeCheck where
 
-
-{- type checking -}
 import Syntax
+import Buildins
 import Symbol
 import Types
 import Tc
@@ -29,6 +29,7 @@ import Pretty
 
 import Monad (mapAndUnzipM, zipWithM_, when)
 import Data.Foldable (foldlM)
+import Data.Monoid (mappend)
 
 {-
     Strategy of type checking
@@ -61,20 +62,20 @@ import Data.Foldable (foldlM)
 
 tcProg src = do
     withSig src $ do
-    withTypeEnv (tysigs src) $ do
+    withTypeEnv (tyEnv src `mappend` buildinsigs) $ do
         cls' <- mapM tcForm $ clauses src
         ty_env  <- normEnv
         return (src{ clauses = cls' }, ty_env)
 
 -- tcForm :: LHpFormula a -> Tc (LHpFormula b)
-tcForm f@(L l (HpForm b xs ys)) =
+tcForm f@(L l (HpClause b xs ys)) =
     enterContext (CtxtForm f) $ do
-    tvs <- newTyBinds (binds f)
+    tvs <- newTyBindings (bindings f)
     extendEnv tvs $ do
         xs' <- mapM tcAtom xs
         ys' <- mapM tcAtom ys
         b' <- tyBinds b
-        return (L l (HpForm b' xs' ys'))
+        return (L l (HpClause b' xs' ys'))
 
 tyBinds = mapM tyBind
     where tyBind (HpBind s oldty) = do
@@ -83,7 +84,7 @@ tyBinds = mapM tyBind
             s' <- tySym s
             return (HpBind s' ty)
 
-newTyBinds b = mapM (freshTyFor.symbolBind) b
+newTyBindings b = mapM (freshTyFor.symbolBind) b
 
 -- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
 tcAtom a = enterContext (CtxtAtom a) $ tcExpr tyBool a
@@ -177,7 +178,6 @@ varBind v ty = do
 
 
 -- utilities
-
 
 tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
     where auxM v = lookupTy v >>= \mayv' ->

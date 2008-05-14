@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,14 +15,10 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-module WellForm (
-    module WellForm,
-    module Tc
-) where
+-- | checking well formatted formulas
+module WellForm where
 
-{- checking well formated formulas -}
 import Syntax
-import Symbol
 import Types
 import Loc
 import Tc
@@ -72,15 +68,15 @@ zonkType (TyTup tl) = do
 zonkType t = return t
 
 -- normProg :: HpProg a -> Tc (HpProg a)
-normProg p = do 
+normSrc p = do 
     cl <- mapM normForm (clauses p)
     return (p { clauses = cl })
 
-normForm (L l (HpForm b xs ys)) = do
+normForm (L l (HpClause b xs ys)) = do
     b' <- normBinds b
     xs' <- mapM normExpr xs
     ys' <- mapM normExpr ys
-    return (L l (HpForm b' xs' ys'))
+    return (L l (HpClause b' xs' ys'))
 
 normBinds bs = mapM normBind bs
     where normBind (HpBind s ty) = do

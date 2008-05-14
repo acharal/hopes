@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@ module Parser (
 
 import Lexer
 import Syntax
-import Symbol
+-- import Symbol
+import Buildins
 import Types
 import Loc
-import Pretty
 import ParseUtils
 import Control.Monad.State
 }
@@ -49,10 +49,11 @@ import Control.Monad.State
       '\\'      { (L _ TKbslash)  }
       '!'       { (L _ TKcut)     }
       ';'       { (L _ TKsemi)    }
-      ID        { (L _ (TKid _)) }
+      ID        { (L _ (TKid _))  }
+      '\''      { (L _ (TKsq))    }
 
 %name parseSrc  src
-%name parseGoal  goal
+%name parseGoal goal
 %lexer { lexer  } { (L _ TKEOF) }
 %monad { ParserT IO } { (>>=) } { return }
 
@@ -62,7 +63,7 @@ import Control.Monad.State
 
 %% 
 
-src :: { PHpProg }
+src :: { PHpSrc }
     : stmts                     {% mkSrc (reverse $1) }
 
 stmt :: { HpStmt HpSymbol }
@@ -77,14 +78,14 @@ clause :: { PLHpClause }
        : rule                   { $1 }
        | fact                   { $1 }
 
-clauses :: { [PLHpFormula] }
+clauses :: { [PLHpClause] }
         : clauses clause        { $2:$1 }
         |                       { [] }
 
-fact :: { PLHpFormula }
+fact :: { PLHpClause }
      : atom '.'                 { located ($1,$>) $ mkQuantForm [$1] [] }
 
-rule :: { PLHpFormula }
+rule :: { PLHpClause }
      : atom ':-' body '.'       { located ($1,$>) $ mkQuantForm [$1] $3 }
 
 body :: { [PLHpAtom] }
@@ -96,7 +97,7 @@ conj :: { [PLHpAtom] }
 
 atom :: { PLHpAtom }
      : exp                      { $1 }
-     | '!'                      { located $1      $ cutSym }
+     | '!'                      { located $1      $ mkBuildin "!" }
 
 exp :: { PLHpExpr }
     : '(' exp ')'               { located ($1,$>) $ HpPar $2 }
@@ -114,9 +115,10 @@ exps2 :: { [PLHpExpr] }
      | exp2                     { [$1] }
 
 term :: { PLHpTerm }
-    : ID                        { located $1      $ (mkSym $1) }
+    : name                      { $1 }
     | '_'                       { located $1      $ wildcat }
-    | ID '(' terms ')'          { located ($1,$>) $ HpApp (located $1 (mkSym $1)) (reverse $3) }
+    | name '(' terms ')'        { located ($1,$>) $
+                                    HpApp $1 (reverse $3) }
     | '(' terms2 ')'            { located ($1,$>) $ HpTup (reverse $2) }
     | '[' ']'                   { located ($1,$>) $ mkList []           Nothing   }
     | '[' terms ']'             { located ($1,$>) $ mkList (reverse $2) Nothing   }
@@ -134,8 +136,11 @@ terms2 :: { [PLHpTerm] }
        : terms2 ',' term        { $3:$1 }
        | term ',' term          { $3:$1:[] }
 
-goal :: { PLHpFormula }
-     -- :                          { located bogusLoc $ mkQuantForm [] [] }
+name :: { PLHpExpr }
+     : ID                       { located $1      $ (mkSym $1) }
+     | '\'' ID '\''             { located ($1,$>) $ (mkSym $2) }
+
+goal :: { PLHpClause }
      : conj '.'                 { located bogusLoc $ mkQuantForm [] (reverse $1) }
 
 type :: { LHpType }
@@ -148,16 +153,12 @@ types :: {  [LHpType]  }
       : types ',' type          { $3:$1 }
       | type                    { [$1]  }
 
-tysig :: { HpTySign }
+tysig :: { TySig a }
       : ID tyann                { ((tokSym $1),(unLoc $2)) }
 
 tyann :: { Located Type }
       : '::' type               {% mkTyp $2 >>= \t -> return $ located ($1,$>) t }
 
 {
-happyError = do
-    tok <- gets ptok
-    case unLoc tok of
-        TKEOF -> parseError $ text "unexpected end of input"
-        _     -> parseError $ sep [ text "parse error on input", quotes (ppr (unLoc tok)) ]
+happyError = parseError'
 }

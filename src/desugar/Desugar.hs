@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,56 +15,60 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-module Core where
+-- | Transform Syntax to plain Hopl removing superfluous information (e.g. Location)
+module Desugar where
 
 import Hopl
-import Syntax
+-- import qualified KnowledgeBase as KB
+import Syntax hiding(bindings)
 import Symbol
 import Types
 import Loc
-
 import Control.Monad.Reader
 
+data DesugarEnv = DSEnv { rigty :: TyEnv HpSymbol, bindings :: [HpBindings HpSymbol] }
 
+type DesugarT = ReaderT DesugarEnv
 
-data CoreEnv = CEnv { rigty :: TyEnv HpSymbol, bindings :: [HpBindings HpSymbol] }
+runDesugarT m = runReaderT m (DSEnv [] [])
 
-type CoreTransfT = ReaderT CoreEnv
+-- desugarSrc :: Monad m => (HpSrc HpSymbol, TyEnv HpSymbol) -> DesugarT m (KB.KnowledgeBase (Typed HpSymbol))
+desugarSrc :: Monad m => (HpSrc HpSymbol, TyEnv HpSymbol) -> DesugarT m [Clause (Typed HpSymbol)]
+desugarSrc (p, ty_env) = local (\r -> r{ rigty = ty_env}) $ do
+        cl <- mapM (desugarClause.unLoc) (clauses p)
+        --return $ KB.KB { KB.clauses = cl }
+        return cl
 
-runCore m = runReaderT m (CEnv [] [])
-
-ctProg :: Monad m => (HpProg HpSymbol, TyEnv HpSymbol) -> CoreTransfT m (Prog (Typed HpSymbol))
-ctProg (p, ty_env) = local (\r -> r{ rigty = ty_env}) $ mapM (ctClause.unLoc) (clauses p)
-
-ctGoal ((L _ (HpForm b [] ys)),ty_env) = 
+desugarGoal ((L _ (HpClause b [] ys)),ty_env) =
     local (\r -> r{ rigty = ty_env, bindings = b:(bindings r)}) $ do
-    bd <- mapM ctExp (map unLoc ys)
+    bd <- mapM desugarExp (map unLoc ys)
     return bd
 
-ctClause (HpForm b [] ys)  = fail "Cannot transform clause without a head"
-ctClause (HpForm b [x] ys) = 
+desugarClause (HpClause b [] ys)  = fail "Cannot transform clause without a head"
+desugarClause (HpClause b [x] ys) =
     local (\r -> r {bindings = b:(bindings r)}) $ do
-    h <- ctExp (unLoc x)
-    b <- mapM ctExp (map unLoc ys)
+    h <- desugarExp (unLoc x)
+    b <- mapM desugarExp (map unLoc ys)
     return (h, b)
 
-ctExp (HpApp e es') = do
-    ce   <- ctExp (unLoc e)
-    ces' <- mapM ctExp (map unLoc es')
+desugarExp (HpApp e es') = do
+    ce   <- desugarExp (unLoc e)
+    ces' <- mapM desugarExp (map unLoc es')
     ce'  <-
         case ces' of
             [x] -> return x
             xs -> return (Tup xs)
     return (App ce ce')
 
-ctExp (HpTup es) = do
-    ces <- mapM ctExp (map unLoc es)
+desugarExp (HpTup es) = do
+    ces <- mapM desugarExp (map unLoc es)
     return (Tup ces)
 
-ctExp (HpPar e)  = ctExp (unLoc e)
+desugarExp (HpPar e)  = desugarExp (unLoc e)
 
-ctExp (HpSym AnonSym) = return $ Flex (typed tyAll AnonSym)
-ctExp (HpSym a)  = 
+desugarExp (HpSym AnonSym) = return $ Flex (typed tyAll AnonSym)
+
+desugarExp (HpSym a)  =
     let grd (TyFun t1 t2) = TyFun (grd t1) (grd t2)
         grd (TyGrd c) = TyGrd c
         grd (TyVar _) = tyAll
@@ -85,6 +89,4 @@ ctExp (HpSym a)  =
                 TyVar _ -> error (show a)
                 _ -> return $ Rigid (typed ty a)
 
-
-ctExp e = error "Expression must not occur in that phase"
-
+desugarExp e = error "Expression must not occur in that phase"

@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -91,8 +91,8 @@ restrictProg (p, tyenv) = do
         tyenv <- normEnv
         return (p, tyenv)
 
-restrictForm f@(L _ (HpForm _ xs ys)) = enterContext (CtxtForm f) $ do
-    let locals = map (\(HpBind a t) -> (a, t)) (binds f)
+restrictForm f@(L _ (HpClause _ xs ys)) = enterContext (CtxtForm f) $ do
+    let locals = map (\(HpBind a t) -> (a, t)) (bindings f)
     extendEnv locals $ do
         mapM_ restrictFunc xs
         mapM_ restrictFunc ys
@@ -100,12 +100,12 @@ restrictForm f@(L _ (HpForm _ xs ys)) = enterContext (CtxtForm f) $ do
 
 -- function symbol application must be (i, ..., i) -> i
 -- restrictFunc
-restrictHead (L _ (HpForm _ [] _)) = return ()
-restrictHead f@(L _ (HpForm b [h] _)) = do
+restrictHead   (L _ (HpClause _ [] _))  = return ()
+restrictHead f@(L _ (HpClause b [h] _)) = do
     let func    = funcOf h
         args    = argsOf h
         (var_args, rest_args) = partition (expBind f) args
-        expBind f (L _ (HpSym s)) = isBind f s
+        expBind f (L _ (HpSym s)) = isBinding f s
         expBind _ _ = False
         unLocEq x y = (unLoc x) == (unLoc y)
         varoccu = occurences unLocEq var_args

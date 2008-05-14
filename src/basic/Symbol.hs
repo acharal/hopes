@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,11 +15,57 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+-- | Symbol module contains the definitions of a symbol,
+--   either constant or variable
 module Symbol where
 
-import Types
+{-
+
+import Data.Monoid
+
+class ClassSymbol a where
+    toString :: a -> String
+    isVariable :: a -> Bool
+    isRigid :: a -> Bool
+
+data Symbol =
+      Rigid String
+    | Var (Maybe Int)
+    | Buildin String
+
+newtype Signature a = Sig [a]
+
+class Monoid Signature where
+    mempty  = Sig mempty
+    mappend (Sig x) (Sig y) = Sig $ mappend x y
+
+class ClassSymbol s => HasSignature a s where
+    sig :: a -> Signature s
+
+
+symbolsOf :: (ClassSymbol s, HasSignature a s) => a -> [s]
+varsOf    :: (ClassSymbol s, HasSignature a s) => a -> [s]
+rigidsOf  :: (ClassSymbol s, HasSignature a s) => a -> [s]
+
+
+Symbol information;
+    - if its rigid or variable
+    - type
+    - arity
+    - module name
+-}
+
+type Name = String
 
 data Symbol a = Sym a | AnonSym
+
+data Var =
+      V Name
+    | NoNameVar
+
+instance Show Var where
+    showsPrec p (V n) = showsPrec p n
+    showsPrec p (NoNameVar) = showString "_"
 
 instance Eq a => Eq (Symbol a) where
     (Sym a) == (Sym b) = a == b
@@ -32,7 +78,7 @@ instance Show a => Show (Symbol a) where
 liftSym :: a -> Symbol a
 liftSym a = Sym a
 
-
+-- | Signature is the union of constants and variables
 type Sig a = ([a], [a])
 
 emptySig = ([],[])
@@ -47,37 +93,13 @@ instance HasSignature (Symbol a) (Symbol a) where
     sig (Sym s) = rigSig (Sym s)
     sig AnonSym = emptySig
 
-symbolsSig :: Sig s -> [s]
-symbolsSig (as, bs) = as ++ bs
-varsSig    (as, bs) = bs
-rigidsSig  (as, bs) = as
+class HasVariables a where
+    vars' :: a -> [Var]
 
-symbols :: HasSignature a b => a -> [b]
 vars    :: HasSignature a b => a -> [b]
 rigids  :: HasSignature a b => a -> [b]
 
-symbols = symbolsSig . sig
-vars    = varsSig    . sig
-rigids  = rigidsSig  . sig
-
-{- 
-specialSyms = 
- [ Special ":"  (TyFun (TyTup [tyAll, tyAll]) tyAll)
- , Special "[]" (tyAll)
- , Special "!"  (tyBool)
- , Special "s"  (TyFun tyAll tyAll)
- , Special "0"  (tyAll)
- ]
--}
-
-buildinSym = [  liftSym ":",
-                liftSym "[]",
-                liftSym "!",
-                liftSym "s",
-                liftSym "0" ]
-
-buildinTyp (Sym ":")  = TyFun (TyTup [tyAll, tyAll]) tyAll
-buildinTyp (Sym "[]") = tyAll
-buildinTyp (Sym "!" ) = tyBool
-buildinTyp (Sym "s" ) = TyFun tyAll tyAll
-buildinTyp (Sym "0" ) = tyAll
+-- symbols :: HasSignature a b => a -> [b]
+-- symbols = symbolsSig . sig where symbolsSig (as, bs) = as ++ bs
+vars    = varsSig    . sig where varsSig    (as, bs) = bs
+rigids  = rigidsSig  . sig where rigidsSig  (as, bs) = as

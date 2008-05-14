@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 module Types where
 
 import List (nub)
-import Data.IORef
+import Data.IORef -- that's ugly
 import Prelude hiding (concatMap, foldl, foldr)
 import Data.Foldable hiding (maximum)
 import Data.Monoid
@@ -41,6 +41,7 @@ type MonoType = MonoTypeV TyVar
 type TypeV    = MonoTypeV
 
 -- monotype parametrized by the tyvar
+-- FIXME: TyTup must be removed and emulated only from TyFun
 data MonoTypeV a =
       TyVar a
     | TyGrd GrdType
@@ -117,12 +118,14 @@ arity a =
             TyFun t t' -> count t + arity t'
             _ -> 0
 
+-- | type signature
 type TySig a = (a, Type)
 
+-- | type environment is a set of type signatures
 type TyEnv a = [ TySig a ]
 
-emptyTyEnv :: TyEnv a
-emptyTyEnv = []
+-- emptyTyEnv :: TyEnv a
+-- emptyTyEnv = []
 
 lookupTyEnv :: Eq a => a -> TyEnv a -> Maybe Type
 lookupTyEnv = lookup

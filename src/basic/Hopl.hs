@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,26 +15,24 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+-- | Higher Order Predicate Language
 module Hopl where
 
-import Pretty
 import Symbol
 import Types
 import Data.Monoid
 
 data Expr a = 
       App (Expr a) (Expr a)
+    | Flex a
+    | Rigid a
     | Set [Expr a] [a]
-    | Flex a 
-    | Rigid a 
     | Tup [Expr a]
     deriving Eq
 
 type Clause a = (Expr a, [Expr a])
 
 type Goal a = [Expr a]
-
-type Prog a = [Clause a]
 
 contradiction = []
 
@@ -53,10 +51,6 @@ instance HasSignature (Clause a) a where
 
 instance HasSignature (Goal a) a where
 	sig gs = mconcat $ map sig gs
-
-instance HasSignature (Prog a) a where
-	sig cs = mconcat $ map sig cs
-
 
 instance HasType a => HasType (Expr a) where
 	typeOf (App e1 e2) = b
@@ -80,21 +74,3 @@ liftSet _ = error ("Cannot represent expression as set")
 functor :: Expr a -> Expr a
 functor (App e a) = functor e
 functor e = e
-
-instance Pretty a => Pretty (Expr a) where
-    ppr (Flex  sym)        = ppr sym
-    ppr (Rigid sym)        = ppr sym
-    ppr (Set es vs)        = curly  $ sep $ (punctuate comma (map ppr es)) ++ map (\v -> text "|" <+> ppr v) vs
-    ppr (Tup es)           = parens $ sep $ (punctuate comma (map ppr es))
-    ppr (App e e'@(Tup _)) = ppr e <> ppr e'
-    ppr (App e e')         = ppr e <> parens (ppr e')
-
-instance Pretty a => Pretty (Clause a) where
-    ppr (h,b) = hang (sep [ppr h, entails]) 4 (sep (punctuate comma (map ppr  b)))
-
-instance Pretty a => Pretty (Goal a) where
-    ppr g = text "-?" <+> sep (punctuate comma (map ppr g))
-
-
-instance Pretty a => Pretty (Prog a) where
-    ppr p = vcat $ map ppr p

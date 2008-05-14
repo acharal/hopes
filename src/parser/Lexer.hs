@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -27,8 +27,9 @@ lexer :: Monad m => (Located Token -> ParserT m a) -> ParserT m a
 lexer cont = lexToken >>= \tok -> setTok tok >> cont tok
 
 lexError :: Monad m => String -> Loc -> ParserT m a
-lexError []  l = parseErrorWithLoc l (sep [text "Unexpected end of input"])
-lexError inp l = parseErrorWithLoc l (sep [text "Unexpected character", quotes (char (head inp))])
+lexError []  l = parseErrorWithLoc l $ text "Unexpected end of input"
+lexError inp l = parseErrorWithLoc l msg
+   where msg = sep [text "Unexpected character", quotes (char (head inp))]
 
 lexToken :: Monad m => ParserT m (Located Token)
 
@@ -77,6 +78,7 @@ scanTok ('.':cs) loc         = Tok TKdot    1 cs
 scanTok ('_':cs) loc         = Tok TKwild   1 cs
 scanTok ('!':cs) loc         = Tok TKcut    1 cs
 scanTok (';':cs) loc         = Tok TKsemi   1 cs
+scanTok ('\'':cs) loc        = Tok TKsq     1 cs
 scanTok (':':'-':cs) loc     = Tok TKgets   2 cs
 scanTok (':':':':cs) loc     = Tok TKcolcol 2 cs
 scanTok ('-':'>':cs) loc     = Tok TKarrow  2 cs

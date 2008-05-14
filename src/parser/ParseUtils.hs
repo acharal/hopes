@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ import Types
 import Loc
 import Error
 import Pretty
-
+import Buildins
 import Char (isUpper, isDigit)
 import List (partition, nub)
 import Control.Monad.State
@@ -49,6 +49,7 @@ data Token =
     | TKbslash
     | TKarrow
     | TKid String
+    | TKsq
     | TKEOF
     | TKBOF
    deriving Eq
@@ -72,6 +73,7 @@ instance Show Token where
     showsPrec n (TKbslash) = showString "\\"
     showsPrec n (TKarrow)  = showString "->"
     showsPrec n (TKid s)   = showString s
+    showsPrec n (TKsq)     = showString "'"
 
 
 instance Pretty Token where
@@ -111,6 +113,14 @@ parseError msg = do
     l <- getLoc
     parseErrorWithLoc l msg
 
+parseError' :: Monad m =>  ParserT m a
+parseError' = do
+    tok <- gets ptok
+    case unLoc tok of
+        TKEOF -> parseError $ text "unexpected end of input"
+        _     -> parseError $ sep [ text "parse error on input",
+                                    quotes (ppr (unLoc tok)) ]
+
 fromFile name m = do
     let initLoc = Loc name 1 1
         initTok = located initLoc TKBOF
@@ -126,12 +136,12 @@ tokId :: Located Token -> String
 tokId (L _ (TKid x)) = x
 tokId _ = error "not a valid token"
 
-type HpStmt a = Either (LHpFormula a) HpTySign
+type HpStmt a = Either (LHpClause a) (TySig a)
 
 --mkSrc :: [HpStmt a] -> Parser (HpProg a)
 mkSrc stmts = 
     let (l, r) = collectEither stmts
-    in  return HpProg { clauses = l,  ptysigs = r }
+    in  return HpSrc { clauses = l, tyEnv = r }
 
 collectEither :: [Either a b] -> ([a], [b])
 collectEither es = (map unL l, map unR r)
@@ -157,7 +167,7 @@ mkQuantForm xs ys =
         symbols'' (HpSym s)    = [s]
         symbols'' (HpTup es)   = concatMap symbols' es
         symbols'' (HpAnn e t)  = symbols'' (unLoc e)
-    in  (HpForm vars' xs ys)
+    in  (HpClause vars' xs ys)
 
 mkList elems tl = 
     unLoc $ foldr (\x -> \y -> located x $ HpApp consE [x,y]) lastel elems
@@ -176,10 +186,10 @@ mkInt i = located bogusLoc $ HpApp (located bogusLoc succSym) [minus_one]
     where minus_one = mkInt (i-1)
 
 data HpType   =
-      HpTyGrd String                    -- ground type
-    | HpTyFun LHpType LHpType           -- type of function
-    | HpTyTup [LHpType]                 -- type of tuple
-    | HpTyRel LHpType                   -- type of relation / isomorfic to a function type
+      HpTyGrd String           -- ground type
+    | HpTyFun LHpType LHpType  -- type of function
+    | HpTyTup [LHpType]        -- type of tuple
+    | HpTyRel LHpType          -- type of relation /isomorfic to a function type
 
 type LHpType   = Located HpType
 

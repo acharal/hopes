@@ -6,7 +6,7 @@ License:        GPL
 License-File:   LICENSE
 Author:         Angelos Charalambidis
 Maintainer:     Angelos Charalambidis <a.charalambidis@di.uoa.gr>
-Copyright:	2007-2008 Angelos Charalambidis
+Copyright:	2006-2008 Angelos Charalambidis
 Stability:      Experimental
 Synopsis:       Higher Order Prolog with Extensional Semantics
 Description:
@@ -34,17 +34,18 @@ Executable      hopes
                   src/parser
                   src/checker
                   src/prover
+                  src/desugar
   Other-Modules:  Lexer, Parser, ParseUtils,
-                  Syntax, Symbol, Types, Error, Loc
-                  Tc, WellForm, TypeCheck, Restrict 
-                  Pretty
-                  Hopl, Core, Logic, Infer
-                  Interactive
+                  Syntax, Symbol, Buildins, Types,
+                  Tc, WellForm, TypeCheck, Restrict, 
+                  Pretty, Error, Loc, Desugar,
+                  Hopl, Logic, Infer, Subst,
+                  Shell, Driver
   Extensions:     RankNTypes
                   MultiParamTypeClasses
                   FlexibleInstances
                   TypeSynonymInstances
                   FlexibleContexts
                   FunctionalDependencies
-  Ghc-Options:    -Wall -O
+  Ghc-Options:    -fwarn-unused-imports -fno-monomorphism-restriction -fallow-undecidable-instances
 

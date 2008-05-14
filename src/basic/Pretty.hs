@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -25,8 +25,11 @@ import Text.PrettyPrint
 
 import Loc
 import Symbol
+import Syntax
 import Types
 import List (nub)
+import Hopl
+import qualified KnowledgeBase as KB
 
 class Pretty a where
     ppr :: a -> Doc
@@ -104,3 +107,44 @@ instance Pretty a => Pretty (TySig a) where
 
 instance Pretty a => Pretty (TyEnv a) where
     ppr ts = vcat $ map ppr ts
+
+-- syntax
+
+instance Pretty a => Pretty (HpExpr a) where
+    ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
+    ppr (HpPar e)     = parens (ppr (unLoc e))
+    ppr (HpSym s)     = ppr s
+    ppr (HpApp e es)  = ppr (unLoc e) <>
+                            parens (sep (punctuate comma (map (ppr.unLoc) es)))
+    ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
+
+
+instance Pretty a => Pretty (HpClause a) where
+    ppr (HpClause _ [h] []) = ppr (unLoc h) <> dot
+    ppr (HpClause _ h b)  =
+        hang (  sep (punctuate comma (map (ppr.unLoc)  h)) <> entails) 4 $ 
+                sep (punctuate comma (map (ppr.unLoc)  b)) <> dot
+
+
+instance Pretty a => Pretty (HpSrc a) where
+    ppr p = vcat $ map (ppr.unLoc) (clauses p)
+
+-- hopl
+
+instance Pretty a => Pretty (Expr a) where
+    ppr (Flex  sym)        = ppr sym
+    ppr (Rigid sym)        = ppr sym
+    ppr (Set es vs)        = curly  $ sep $ (punctuate comma (map ppr es)) ++ map (\v -> text "|" <+> ppr v) vs
+    ppr (Tup es)           = parens $ sep $ (punctuate comma (map ppr es))
+    ppr (App e e'@(Tup _)) = ppr e <> ppr e'
+    ppr (App e e')         = ppr e <> parens (ppr e')
+
+instance Pretty a => Pretty (Clause a) where
+    ppr (h,b) = hang (sep [ppr h, entails]) 4 (sep (punctuate comma (map ppr  b)))
+
+instance Pretty a => Pretty (Goal a) where
+    ppr g = text "-?" <+> sep (punctuate comma (map ppr g))
+
+
+instance Pretty a => Pretty (KB.KnowledgeBase a) where
+    ppr p = vcat $ map ppr (KB.clauses p)

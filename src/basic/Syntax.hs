@@ -1,4 +1,4 @@
---  Copyright (C) 2007 2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -17,15 +17,11 @@
 
 module Syntax where
 
-{-
-    Higher order Prolog abstract syntax
--}
 import Symbol
 import Loc
-import Pretty
 import Types
-import Data.Monoid
-import List (find)
+import Data.Monoid(mappend, mconcat, mempty)
+import List (find, nub)
 {-
     Preliminaries
     1. Symbols
@@ -64,14 +60,6 @@ import List (find)
 
 type HpSymbol = Symbol String
 
-consSym  = HpSym $ Sym ":"
-nilSym   = HpSym $ Sym "[]"
-cutSym   = HpSym $ Sym "!"
-succSym  = HpSym $ Sym "s"
-zeroSym  = HpSym $ Sym "0"
-wildcat  = HpSym $ AnonSym
-
-
 
 data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
 type HpBindings a = [HpBinding a]
@@ -80,24 +68,21 @@ type HpBindings a = [HpBinding a]
 lookupBind :: Eq a => a -> HpBindings a -> Maybe (HpBinding a)
 lookupBind x = find ((x==).symbolBind)
 
-type HpTySign = TySig HpSymbol
+--type HpTySign = TySig HpSymbol
 
-data HpProg a =
-    HpProg { 
-        clauses :: [LHpFormula a],
-        ptysigs :: [HpTySign]
+data HpSrc a =
+    HpSrc { 
+        clauses :: [LHpClause a],
+        tyEnv   :: TyEnv HpSymbol
     }
 
-tysigs p = ptysigs p `mappend` buildinsigs
-    where buildinsigs = zip (buildinSym) (map buildinTyp buildinSym)
-
-
-instance (Eq a, HasSignature a a) => HasSignature (HpProg a) a where
+instance (Eq a, HasSignature a a) => HasSignature (HpSrc a) a where
     sig p = (a, mempty)
         where (a, b) = mconcat (map sig (clauses p))
 
-instance (Eq a, HasSignature a a) => HasSignature (HpFormula a) a where
-    sig f@(HpForm b xs ys) = (filter (not.isBind f) as, bs `mappend` (map symbolBind b))
+instance (Eq a, HasSignature a a) => HasSignature (HpClause a) a where
+    sig f@(HpClause b xs ys) = (filter (not.isBinding f) as,
+                              bs `mappend` (map symbolBind b))
         where (as, bs) = mconcat $ map sig (xs ++ ys)
 
 instance (Eq a, HasSignature a a) => HasSignature (HpExpr a) a where
@@ -106,13 +91,30 @@ instance (Eq a, HasSignature a a) => HasSignature (HpExpr a) a where
     sig (HpPar e)    = sig e
     sig (HpAnn e _)  = sig e
     sig (HpTup es)   = mconcat (map sig es)
-    sig a@(HpLam b e)= (filter (not.isBind a) as, bs `mappend` (map symbolBind b))
+    sig a@(HpLam b e)= (filter (not.isBinding a) as, bs `mappend`
+                       (map symbolBind b))
         where (as, bs) = sig e
-
 
 
 instance HasSignature a s => HasSignature (Located a) s where
     sig = sig . unLoc
+
+{-
+
+instance HasVariables a => HasVariables (Located a) where
+    vars = vars . unLoc
+
+instance HasVariables (HpExpr a) where
+    vars (HpVar x) = [x]
+    vars (HpApp e es) = nub $ mconcat $ map vars (e:es)
+    vars (HpPar e) = vars e
+    vars (HpAnn e _) = vars e
+    vars (HpTup es) = nub $ mconcat $ map vars es
+    vars (HpLam b e) = vars e
+
+instance HasVariables (HpClause a) where
+    vars (HpClause b xs ys) = nub $ mconcat $ map vars (xs ++ ys)
+-}
 
 -- returns the signature of a program
 
@@ -123,10 +125,11 @@ instance HasSignature a s => HasSignature (Located a) s where
 -- goal has no A and no or more B
 -- contradiction (False) has no A and no B
 
-data HpFormula a = HpForm (HpBindings a) [LHpExpr a] [LHpExpr a]
+data HpClause a = HpClause (HpBindings a) [LHpExpr a] [LHpExpr a]
 
 data HpExpr a = 
       HpSym a                              -- symbol (constant, functional symbol, variable, predicate)
+    | HpVar a                              -- variable
     | HpApp (LHpExpr a) [LHpExpr a]        -- general application (predicate or func sym)
     | HpPar (LHpExpr a)                    -- parenthesized expression
     | HpLam (HpBindings a) (LHpExpr a)     -- lambda abstraction
@@ -136,24 +139,24 @@ data HpExpr a =
 
 
 class Eq b => HasBindings a b where
-    binds :: a -> HpBindings b
-    isBind :: a -> b -> Bool
-    isBind a s = any (s==) $ map symbolBind (binds a)
+    bindings :: a -> HpBindings b
+    isBinding :: a -> b -> Bool
+    isBinding a s = any (s==) $ map symbolBind (bindings a)
 
-instance Eq a => HasBindings (HpFormula a) a where
-    binds (HpForm b _ _) = b
+instance Eq a => HasBindings (HpClause a) a where
+    bindings (HpClause b _ _) = b
 
 instance Eq a => HasBindings (HpExpr a) a where
-    binds (HpLam b _) = b
-    binds _ = []
+    bindings (HpLam b _) = b
+    bindings _ = []
 
 instance (Eq b, HasBindings a b) => HasBindings (Located a) b where
-    binds = binds . unLoc 
+    bindings = bindings . unLoc
 
 
 isFact e = 
     case unLoc e of
-        (HpForm _ [h] []) -> True
+        (HpClause _ [h] []) -> True
         _ -> False
 
 isApp e =
@@ -182,40 +185,17 @@ isSymbol e =
         (HpSym _) -> True
         _ -> False
 
-
 -- located syntax 
 type LHpExpr a    = Located (HpExpr a)
-type LHpFormula a = Located (HpFormula a)
+type LHpClause a  = Located (HpClause a)
 
 -- parsed located syntax 
 
 type PLHpExpr    = LHpExpr    HpSymbol
-type PLHpFormula = LHpFormula HpSymbol
-type PHpProg     = HpProg     HpSymbol
+type PLHpClause  = LHpClause  HpSymbol
+type PHpSrc      = HpSrc      HpSymbol
 
 type PLHpAtom   = PLHpExpr
 type PLHpTerm   = PLHpExpr
-type PLHpGoal   = PLHpFormula
-type PLHpClause = PLHpFormula
-
-
- -- pretty printing 
-
-instance Pretty a => Pretty (HpExpr a) where
-    ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
-    ppr (HpPar e)     = parens (ppr (unLoc e))
-    ppr (HpSym s)     = ppr s
-    ppr (HpApp e es)  = ppr (unLoc e) <> parens (sep (punctuate comma (map (ppr.unLoc) es)))
-    ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
-
-
-instance Pretty a => Pretty (HpFormula a) where
-    ppr (HpForm _ [h] []) = ppr (unLoc h) <> dot
-    ppr (HpForm _ h b)  = 
-        hang (  sep (punctuate comma (map (ppr.unLoc)  h)) <> entails) 4 $ 
-                sep (punctuate comma (map (ppr.unLoc)  b)) <> dot
-
-
-instance Pretty a => Pretty (HpProg a) where
-    ppr p = vcat $ map (ppr.unLoc) (clauses p)
-
+type PLHpGoal   = PLHpClause
+-- type PLHpClause = PLHpClause
