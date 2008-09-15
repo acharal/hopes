@@ -50,6 +50,7 @@ data Token =
     | TKarrow
     | TKid String
     | TKsq
+    | TKeq
     | TKEOF
     | TKBOF
    deriving Eq
@@ -74,6 +75,7 @@ instance Show Token where
     showsPrec n (TKarrow)  = showString "->"
     showsPrec n (TKid s)   = showString s
     showsPrec n (TKsq)     = showString "'"
+    showsPrec n (TKeq)     = showString "="
 
 
 instance Pretty Token where

@@ -15,6 +15,15 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-
+    Missing Features.
+    - Special directives op/3, dynamic/2, ...
+    - Operators
+    - Commands (e.g. :- command)
+    - Semicolon as 'or' operator
+    - Strings ? "asdad"
+-}
+
 {
 module Parser (
         module Parser,
@@ -51,6 +60,7 @@ import Control.Monad.State
       ';'       { (L _ TKsemi)    }
       ID        { (L _ (TKid _))  }
       '\''      { (L _ (TKsq))    }
+      '='       { (L _ (TKeq))    }
 
 %name parseSrc  src
 %name parseGoal goal
@@ -104,6 +114,7 @@ exp :: { PLHpExpr }
     | exp tyann                 { located ($1,$>) $ HpAnn $1 (unLoc $2) }
     | ID                        { located  $1     $ (mkSym $1) }
     | exp '(' exps2 ')'         { located ($1,$>) $ HpApp $1 (reverse $3) }
+    | exp '=' exp               { located ($1,$>) $ HpApp univ [$1, $3]   }
 
 exp2 :: { PLHpExpr }
     : term                      { $1 }
