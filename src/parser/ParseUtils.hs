@@ -18,7 +18,7 @@
 module ParseUtils where
 
 import Syntax
-import Symbol
+import Lang
 import Types
 import Loc
 import Error
@@ -205,11 +205,14 @@ mkTyp (L _ (HpTyFun t1 t2)) = do
 mkTyp (L _ (HpTyRel t))    = do
     t' <- mkTyp t
     return (TyFun t' tyBool)
+
+{-
 mkTyp (L _ (HpTyTup tl))   = do
     tl' <- mapM mkTyp tl
     case tl' of
         [t] -> return t 
         _ -> return (TyTup tl')
+-}
 
 mkTyp (L l t) = parseErrorWithLoc (spanBegin l) (text "Not a valid type")
 

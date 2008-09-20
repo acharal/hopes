@@ -114,7 +114,7 @@ exp :: { PLHpExpr }
     | exp tyann                 { located ($1,$>) $ HpAnn $1 (unLoc $2) }
     | ID                        { located  $1     $ (mkSym $1) }
     | exp '(' exps2 ')'         { located ($1,$>) $ HpApp $1 (reverse $3) }
-    | exp '=' exp               { located ($1,$>) $ HpApp univ [$1, $3]   }
+    {-- | exp '=' exp               { located ($1,$>) $ HpApp univ [$1, $3]   } --}
 
 exp2 :: { PLHpExpr }
     : term                      { $1 }

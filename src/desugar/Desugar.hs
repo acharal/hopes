@@ -21,48 +21,80 @@ module Desugar where
 import Hopl
 -- import qualified KnowledgeBase as KB
 import Syntax hiding(bindings)
-import Symbol
+import Lang
 import Types
 import Loc
 import Control.Monad.Reader
+import Control.Monad.State
+
 
 data DesugarEnv = DSEnv { rigty :: TyEnv HpSymbol, bindings :: [HpBindings HpSymbol] }
 
-type DesugarT = ReaderT DesugarEnv
+type DesugarT m = ReaderT DesugarEnv (StateT Int m)
 
-runDesugarT m = runReaderT m (DSEnv [] [])
+runDesugarT m = evalStateT (runReaderT m (DSEnv [] [])) 0
 
 -- desugarSrc :: Monad m => (HpSrc HpSymbol, TyEnv HpSymbol) -> DesugarT m (KB.KnowledgeBase (Typed HpSymbol))
 desugarSrc :: Monad m => (HpSrc HpSymbol, TyEnv HpSymbol) -> DesugarT m [Clause (Typed HpSymbol)]
 desugarSrc (p, ty_env) = local (\r -> r{ rigty = ty_env}) $ do
         cl <- mapM (desugarClause.unLoc) (clauses p)
-        --return $ KB.KB { KB.clauses = cl }
         return cl
 
 desugarGoal ((L _ (HpClause b [] ys)),ty_env) =
     local (\r -> r{ rigty = ty_env, bindings = b:(bindings r)}) $ do
     bd <- mapM desugarExp (map unLoc ys)
-    return bd
+    desugarTupApp cand bd
 
 desugarClause (HpClause b [] ys)  = fail "Cannot transform clause without a head"
 desugarClause (HpClause b [x] ys) =
     local (\r -> r {bindings = b:(bindings r)}) $ do
-    h <- desugarExp (unLoc x)
+    -- h <- desugarExp (unLoc x)
     b <- mapM desugarExp (map unLoc ys)
-    return (h, b)
+    (Rigid p) <- desugarExp (unLoc (funcOf x))
+    b2 <- desugarTupApp cand b
+    body <- bindAndUnify (map unLoc (argsOf x)) b2
+    return (C p body)
+
+bindAndUnify [] b = return b
+bindAndUnify (l:ls) b =
+    let injExp e (Lambda x e') = Lambda x (injExp e e')
+        injExp e e' = (App (App cand e) e')
+    in do
+    e <- bindAndUnify ls b
+    a <- desugarExp l
+    v <- if (order a) == 0 then do
+            v <- freshVar
+            return $ typed (typeOf a) v
+         else
+            case a of
+              Flex vv -> return vv
+              _ -> fail "Higher order term, not a variable"
+    e' <- if (order a) == 0 then do
+            let eqexp = (App (App ceq (Flex v)) a)
+            return $ injExp eqexp e
+          else
+            return e
+    return (Lambda v e')
+
+desugarAppTup a ls =
+    return $ foldl (\e -> \b -> App e b) a ls
+
+desugarTupApp _ [] =  return ctop
+desugarTupApp _ [x] = return x
+desugarTupApp a (l:ls) = do
+    r <- desugarTupApp a ls
+    return $ App (App a l) r
 
 desugarExp (HpApp e es') = do
     ce   <- desugarExp (unLoc e)
     ces' <- mapM desugarExp (map unLoc es')
-    ce'  <-
-        case ces' of
-            [x] -> return x
-            xs -> return (Tup xs)
-    return (App ce ce')
+    desugarAppTup ce ces'
 
+{-
 desugarExp (HpTup es) = do
     ces <- mapM desugarExp (map unLoc es)
     return (Tup ces)
+-}
 
 desugarExp (HpPar e)  = desugarExp (unLoc e)
 
@@ -72,7 +104,7 @@ desugarExp (HpSym a)  =
     let grd (TyFun t1 t2) = TyFun (grd t1) (grd t2)
         grd (TyGrd c) = TyGrd c
         grd (TyVar _) = tyAll
-        grd (TyTup ts) = TyTup (map grd ts)
+        --grd (TyTup ts) = TyTup (map grd ts)
     in do
     te <- asks rigty
     le <- asks bindings
@@ -90,3 +122,9 @@ desugarExp (HpSym a)  =
                 _ -> return $ Rigid (typed ty a)
 
 desugarExp e = error "Expression must not occur in that phase"
+
+freshVar :: (MonadState Int m, Monad m, Symbol a) => m a
+freshVar = do
+    r <- get
+    modify (+1)
+    return $ liftSym $ "_" ++ (show r)

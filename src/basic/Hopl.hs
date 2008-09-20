@@ -18,59 +18,117 @@
 -- | Higher Order Predicate Language
 module Hopl where
 
-import Symbol
+import Lang
 import Types
 import Data.Monoid
 
-data Expr a = 
-      App (Expr a) (Expr a)
-    | Flex a
-    | Rigid a
-    | Set [Expr a] [a]
-    | Tup [Expr a]
-    deriving Eq
+data Expr a =
+       App (Expr a) (Expr a)
+    |  Flex a
+    |  Rigid a
+    |  Const a
+    |  Lambda a (Expr a)
+  deriving (Eq, Show)
 
-type Clause a = (Expr a, [Expr a])
+data Clause a = C a (Expr a) deriving Eq
 
-type Goal a = [Expr a]
+clauseHead (C a _) = a
+clauseBody (C _ b) = b
 
-contradiction = []
+type Goal a = Expr a
 
-isContra []    = True
-isContra (_:_) = False
+instance (Eq a, Symbol a) => HasConstants (Expr a) where
+    ctop    = Const $ liftSym "1"
+    cbot    = Const $ liftSym "0"
+    ceq     = Const $ liftSym "="
+    cexists = Const $ liftSym "exists"
+    cor     = Const $ liftSym "or"
+    cand    = Const $ liftSym "and"
+
+{-
+instance (HasConstants a, HasType a) => HasConstants (Typed a) where
+    ctop = typed tyBool ctop
+    cbot = typed tyBool cbot
+    ceq = typed (TyFun tyAll tyAll) ceq
+    cexists = typed (TyFun (TyVar undefined) tyBool) cexists
+    cor = typed (TyFun tyBool ((TyFun tyBool) tyBool)) cor
+    cand = typed (TyFun tyBool ((TyFun tyBool) tyBool)) cand
+-}
+{-
+instance (Eq a, Symbol a) => HasConstants (Expr (Typed a)) where
+    ctop = Const (typed tyBool (liftSym "1"))
+    cbot = Const (typed tyBool (liftSym "0"))
+    ceq  = Const (typed (TyFun tyAll tyAll) (liftSym "="))
+    cexists = Const (typed (TyFun (TyVar undefined) tyBool) (liftSym "exists"))
+    cor = Const (typed (TyFun tyBool ((TyFun tyBool) tyBool)) (liftSym "or"))
+    cand = Const (typed (TyFun tyBool ((TyFun tyBool) tyBool)) (liftSym "and"))
+    isEqual(Const (T s _)) = s == liftSym "="
+    isConj (Const (T s _)) = s == liftSym "and"
+    isDisj (Const (T  s _)) = s == liftSym "or"
+    isTop (Const (T s _)) = s == liftSym "1"
+    isBot (Const (T s _)) = s == liftSym "0"
+    isExistsQ (Const (T s _)) = s == liftSym "exists"
+-}
+
+contradiction :: HasConstants a => a
+contradiction = ctop
+
+isContra :: HasConstants a => a -> Bool
+isContra = (==contradiction)
 
 instance HasSignature (Expr a) a where
 	sig (App e1 e2) = sig e1 `mappend` sig e2
-	sig (Set _ _) = emptySig
 	sig (Flex a)  = varSig a
 	sig (Rigid a) = rigSig a
-	sig (Tup es ) = mconcat $ map sig es
+        sig (Const a) = emptySig
+        sig (Lambda a x) = varSig a `mappend` sig x
 
 instance HasSignature (Clause a) a where
-	sig (e1, e2) = sig e1 `mappend` sig e2
+	sig (C p e2) = rigSig p `mappend` sig e2 `mappend` mempty
 
-instance HasSignature (Goal a) a where
-	sig gs = mconcat $ map sig gs
+--instance HasSignature (Goal a) a where
+--	sig gs = mconcat $ map sig gs
 
-instance HasType a => HasType (Expr a) where
-	typeOf (App e1 e2) = b
-		where (TyFun a b) = typeOf e1
-	typeOf (Set _ _) = error ""
+instance (Symbol a, Eq a, HasType a) => HasType (Expr a) where
+	typeOf (App e1 e2) =
+            case typeOf e1 of
+                (TyFun a b) -> b
+                t -> error ("not expected type " ++ (show t))
 	typeOf (Flex a)  = typeOf a
 	typeOf (Rigid a) = typeOf a
-	typeOf (Tup tys) = TyTup $ map typeOf tys
+        typeOf c@(Const a)
+            | c == ctop = tyBool
+            | c == cbot = tyBool
+            | c == cor  = TyFun tyBool ((TyFun tyBool) tyBool)
+            | c == cand = TyFun tyBool ((TyFun tyBool) tyBool)
+            | c == ceq  = TyFun tyAll ((TyFun tyAll) tyBool)
+            | c == cexists = TyFun (TyVar undefined) tyBool
+            | otherwise = typeOf a
+	typeOf (Lambda a e) =
+            let t = typeOf e
+                t1 = typeOf a
+            in TyFun t1 t
+        hasType ty e = error "hasType"
 
 instance HasType a => HasType (Clause a) where
 	typeOf c = liftGround TyBool
+        hasType ty c =
+            if not (ty == tyBool) then
+                error "clause can have not boolean type"
+            else c
 
-instance HasType a => HasType (Goal a) where
-	typeOf g = liftGround TyBool
+-- instance HasType a => HasType (Goal a) where
+--	typeOf g = liftGround TyBool
 
-liftSet :: Expr a -> Expr a
-liftSet e@(Set _ _) = e
-liftSet (Flex v) = Set [] [v]
-liftSet _ = error ("Cannot represent expression as set")
+-- liftSet :: Expr a -> Expr a
+-- liftSet e@(Set _ _) = e
+-- liftSet (Flex v) = Set [] [v]
+-- liftSet _ = error ("Cannot represent expression as set")
 
 functor :: Expr a -> Expr a
 functor (App e a) = functor e
 functor e = e
+
+args (App e a) = args2 e ++ [a]
+    where args2 (App e a) = args2 e ++ [a]
+          args2 e = []

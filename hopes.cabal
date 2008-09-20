@@ -36,7 +36,7 @@ Executable      hopes
                   src/prover
                   src/desugar
   Other-Modules:  Lexer, Parser, ParseUtils,
-                  Syntax, Symbol, Buildins, Types,
+                  Syntax, Lang, Buildins, Types,
                   Tc, WellForm, TypeCheck, Restrict, 
                   Pretty, Error, Loc, Desugar,
                   Hopl, Logic, Infer, Subst,

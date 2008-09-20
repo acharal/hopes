@@ -17,7 +17,7 @@
 
 module KnowledgeBase where
 
-import Symbol
+import Lang
 import Hopl
 -- import Types
 import Data.Monoid

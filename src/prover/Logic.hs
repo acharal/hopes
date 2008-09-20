@@ -31,6 +31,7 @@ import Control.Monad
 import Control.Monad.Trans
 import Logic.Class
 
+
 newtype LogicT m a  = SFKT (forall ans. SK (m ans) a -> FK (m ans) -> m ans)
 unSFKT (SFKT a) = a
 

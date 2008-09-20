@@ -42,6 +42,7 @@ data Command =
       CRefute    String
     | CConsult   FilePath
     | CShowType  String
+    | CShowDef   (Maybe String)
     | CHalt
     | CBuildin   String [String]
 
@@ -60,8 +61,9 @@ mkCom c s =
 
 userCommands =
  [ Command ['c','l'] (ReqArg CConsult "FILE")
- , Command ['t']     (ReqArg CShowType "SYMBOL") 
+ , Command ['t']     (ReqArg CShowType "SYMBOL")
  , Command ['q']     (NoArg  CHalt)
+ , Command ['p']     (OptArg CShowDef "PREDICATE")
  ]
 
 

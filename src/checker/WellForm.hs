@@ -62,9 +62,9 @@ zonkType (TyFun t1 t2) = do
     t1' <- zonkType t1
     t2' <- zonkType t2
     return (TyFun t1' t2')
-zonkType (TyTup tl) = do
-    tl' <- mapM zonkType tl
-    return (TyTup tl')
+-- zonkType (TyTup tl) = do
+--    tl' <- mapM zonkType tl
+--    return (TyTup tl')
 zonkType t = return t
 
 -- normProg :: HpProg a -> Tc (HpProg a)
@@ -97,4 +97,4 @@ normExpr (L l (HpSym s)) = do
 
 normSym s = do
     ty' <- normType (typeOf s)
-    return $ typed ty' s
+    return $ hasType ty' s

@@ -20,14 +20,14 @@ module TypeCheck where
 
 import Syntax
 import Buildins
-import Symbol
+import Lang
 import Types
 import Tc
 
 import Loc
 import Pretty
 
-import Monad (mapAndUnzipM, zipWithM_, when)
+import Monad (mapAndUnzipM, when)
 import Data.Foldable (foldlM)
 import Data.Monoid (mappend)
 
@@ -110,12 +110,14 @@ tcExpr' exp_ty (L _ (HpAnn e ty)) = do
 tcExpr' exp_ty (L l (HpApp e args))  = do
     (fun_ty, e')     <- tiExpr e
     (args_ty, args') <- mapAndUnzipM tiExpr args
-    let tup_ty = case args_ty of
-                     [x] -> x
-                     tys -> TyTup tys
+    -- let tup_ty = case args_ty of
+    --                 [x] -> x
+    --                 tys -> TyTup tys
+    let arg'_ty = head args_ty
+    let res'_ty =  foldr (\a -> \t -> TyFun a t) exp_ty (tail args_ty)
     (arg_ty, res_ty) <- unifyFun fun_ty
-    unify arg_ty tup_ty
-    unify res_ty exp_ty
+    unify arg_ty arg'_ty
+    unify res_ty res'_ty
     return (L l (HpApp e' args'))
 
 tcExpr' _ (L l (HpSym AnonSym)) = return (L l (HpSym AnonSym))
@@ -126,10 +128,10 @@ tcExpr' exp_ty (L l (HpSym s))  = do
     s' <- tySym s
     return (L l (HpSym s'))
 
-tcExpr' exp_ty (L l (HpTup es)) = do
-    (tys, es') <- mapAndUnzipM tiExpr es
-    unify (TyTup tys) exp_ty
-    return (L l (HpTup es'))
+--tcExpr' exp_ty (L l (HpTup es)) = do
+--    (tys, es') <- mapAndUnzipM tiExpr es
+--    unify (TyTup tys) exp_ty
+--    return (L l (HpTup es'))
 
 -- unification
 
@@ -145,9 +147,10 @@ unify (TyFun fun1 arg1) (TyFun fun2 arg2) = do
     unify fun1 fun2
     unify arg1 arg2
 
-unify t@(TyTup tys) t'@(TyTup tys')
-    | length tys == length tys' = zipWithM_ unify tys tys'
-    | otherwise                 = unificationErr t t'
+-- unify t@(TyTup tys) t'@(TyTup tys')
+--    | length tys == length tys' = zipWithM_ unify tys tys'
+--    | otherwise                 = unificationErr t t'
+
 unify t t'
     | t == t'     = return ()
     | otherwise   = unificationErr t t'

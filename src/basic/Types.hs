@@ -46,7 +46,7 @@ data MonoTypeV a =
       TyVar a
     | TyGrd GrdType
     | TyFun (MonoTypeV a) (MonoTypeV a)
-    | TyTup [MonoTypeV a]
+--    | TyTup [MonoTypeV a]
   deriving (Eq, Show)
 
 data GrdType = TyAll | TyBool deriving (Eq,Show)
@@ -57,13 +57,13 @@ instance Foldable MonoTypeV where
     foldMap f (TyVar a)     = f a
     foldMap f (TyGrd c)     = mempty
     foldMap f (TyFun t1 t2) = foldMap f t1 `mappend` foldMap f t2
-    foldMap f (TyTup tl)    = mconcat (map (foldMap f) tl)
+--    foldMap f (TyTup tl)    = mconcat (map (foldMap f) tl)
 
 instance Functor MonoTypeV where
     fmap f (TyVar a)     = TyVar (f a)
     fmap f (TyGrd c)     = TyGrd c
     fmap f (TyFun t1 t2) = TyFun (fmap f t1) (fmap f t2)
-    fmap f (TyTup tl)    = TyTup (map (fmap f) tl)
+--    fmap f (TyTup tl)    = TyTup (map (fmap f) tl)
 
 
 tyBool    = liftGround TyBool
@@ -71,14 +71,14 @@ tyAll     = liftGround TyAll
 bogusType = error ("This type is a placeholder and must not be evaluated")
 
 tyargs :: TypeV a -> [TypeV a]
-tyargs (TyFun t t') = h t ++ tyargs t'
-    where   h (TyTup tl) = tl
-            h t = [t]
+tyargs (TyFun t t') = t : tyargs t'
+    --where   h (TyTup tl) = tl
+    --        h t = [t]
 tyargs _ = []
 
 tyvars ty = nub $ foldMap (:[]) ty
 
-data Typed a = T a Type
+data Typed a = T a Type deriving Show
 
 instance Eq a => Eq (Typed a) where
     (T a tya) == (T b tyb) = a == b
@@ -88,15 +88,19 @@ unTyp (T a _) = a
 
 class HasType a where
     typeOf :: a -> Type
+    hasType :: Type -> a -> a
 
 instance HasType Type where
     typeOf = id
+    hasType t _ = t
 
 instance HasType (Typed a) where
     typeOf (T _ ty) = ty
+    hasType ty (T a _) = (T a ty)
 
 instance HasType (TySig a) where
     typeOf (_, t) = t
+    hasType ty (a, _) = (a, ty)
 
 instance Functor Typed where
     fmap f (T a ty) = T (f a) ty
@@ -106,13 +110,13 @@ order :: HasType a => a -> Int
 order a = 
     case typeOf a of
         (TyFun t t') -> max (1 + (order t)) (order t')
-        (TyTup tys)  -> maximum (map order tys)
+       --(TyTup tys)  -> maximum (map order tys)
         (TyVar _)    -> error ("no fixed order when type is variable")
         _            -> 0
 
 arity :: HasType a => a -> Int
 arity a = 
-    let count (TyTup tys) = length tys
+    let --count (TyTup tys) = length tys
         count _ = 1
     in  case typeOf a of
             TyFun t t' -> count t + arity t'

@@ -18,13 +18,14 @@
 -- | drives the pipeline of compilation + execution
 module Driver where
 
-import Symbol(liftSym)
+import Lang(liftSym)
 import Syntax(HpSymbol)
 import Parser(runParser, withInput, parseSrc, parseGoal, fromFile)
 import Types(TyEnv, Typed, findTySig)
 import Tc(runTc, withSig, withTypeEnv)
 import WellForm(wfp, wfg)
 import Desugar
+import Hopl
 import Infer
 import Pretty
 import System.IO
@@ -111,6 +112,13 @@ dispatch com =
             case findTySig (liftSym p) env of
                 Nothing    -> fail "undefined symbol"
                 Just tysig -> liftIO $ pprint tysig
+        CShowDef maybe_p -> do
+            src <- gets kb
+            case maybe_p of
+                Nothing -> liftIO $ pprint src
+                Just p  -> do
+                    let cl = filter (\c -> clauseHead c == liftSym p) (clauses src)
+                    liftIO $ pprint $ vcat (map ppr cl)
         CHalt -> liftIO $ bye "Leaving..."
 
 runWith commands = evalStateT (runWithM commands) tabulaRasa
@@ -148,6 +156,7 @@ consumeSolutions i = do
     case infer src i of
         Nothing -> liftIO $ sayNo
         Just (a, rest) -> do
+            liftIO $ sayYes
             liftIO $ pprint a
             c <- liftIO $ getChar
             when (not $ c == 'q') $ consumeSolutions rest

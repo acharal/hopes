@@ -25,7 +25,7 @@ import Loc
 import Error
 
 import Syntax
-import Symbol
+import Lang
 import Types
 import Pretty
 import Data.IORef
@@ -119,9 +119,9 @@ normType tvy@(TyVar tv) = do
             return ty'
         Nothing -> return tvy
 
-normType (TyTup tl) = do
-    tl' <- mapM normType tl
-    return $ TyTup tl'
+-- normType (TyTup tl) = do
+--    tl' <- mapM normType tl
+--    return $ TyTup tl'
 
 normType t = return t
 

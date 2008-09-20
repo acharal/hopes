@@ -24,7 +24,7 @@ module Pretty (
 import Text.PrettyPrint
 
 import Loc
-import Symbol
+import Lang
 import Syntax
 import Types
 import List (nub)
@@ -49,6 +49,7 @@ dcolon  = text "::"
 arrow   = text "->"
 dot     = char '.'
 entails = text ":-"
+-- semi = text ";"
 curly a = text "{" <+> a <+> text "}"
 
 instance Pretty Loc where
@@ -63,12 +64,12 @@ instance Pretty LocSpan where
         where ppr_par l c = parens (int l <> comma <> int c)
     ppr (LocSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
 
-instance Pretty a => Pretty (Symbol a) where
+instance Pretty Sym where
     ppr (Sym s) = ppr s
     ppr AnonSym = text "_"
 
 instance Pretty a => Pretty (Typed a) where
-    ppr (T a ty) = ppr a <> dcolon <> ppr ty
+    ppr (T a ty) = ppr a -- <> dcolon <> ppr ty
 
 instance Pretty GrdType where
     ppr TyBool = text "o"
@@ -81,15 +82,13 @@ instance (Eq a, Pretty a) => Pretty (MonoTypeV a) where
     ppr t = pprPrec 1 f t
         where f = tvmap [t]
 
-pprPrec p f (TyTup tl)     = parens $ sep (punctuate comma (map (pprPrec 1 f) tl))
+-- pprPrec p f (TyTup tl)     = parens $ sep (punctuate comma (map (pprPrec 1 f) tl))
 pprPrec p f (TyGrd c)      = ppr c
 pprPrec p f (TyVar v)      = f v
-pprPrec p f ty@(TyFun t t')
-	| t' == tyBool = curly (ppr t)
-        | otherwise    =  if (p == 0) then 
-                               parens (sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ])
-                          else
-                               sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ]
+pprPrec p f ty@(TyFun t t') =  if (p == 0) then
+                                   parens (sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ])
+                               else
+                                   sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ]
 
 tynames = letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
     where letters = [ "a", "b", "c", "d", "e", "f" ]
@@ -129,8 +128,42 @@ instance Pretty a => Pretty (HpClause a) where
 instance Pretty a => Pretty (HpSrc a) where
     ppr p = vcat $ map (ppr.unLoc) (clauses p)
 
--- hopl
+instance (Pretty a, Eq a, Symbol a, HasConstants (Expr a), HasSignature (Expr a) a) => Pretty (Expr a) where
+    ppr a =  pprPrec1 v' 1 a
+        where {- v x = case lookup x vlist of
+                      Nothing -> ppr x
+                      Just n  -> text n
+              vlist = zip (vars a) varnames
+              letters = [ "X", "Y", "Z", "A", "B", "C", "D", "E", "F", "H", "K", "L" ]
+              varnames = letters ++ [ x ++ (show i) | x <- letters, i <- [1..]] -}
+              v' x = ppr x
 
+
+pprPrec1 f p (Flex sym)    = (f sym)
+pprPrec1 f p (Rigid sym)   = ppr sym
+pprPrec1 f p c@(Const a)   = ppr a
+pprPrec1 f p e@(App e1 e2) =
+    let fu = functor e
+    in if (fu == ceq) then
+            (sep (punctuate (text "=") (map (pprPrec1 f  p) $ args e)))
+       else if fu == cand then
+            (sep (punctuate comma (map (pprPrec1 f p) $ args e)))
+       else if fu == cor then
+            (sep (punctuate semi (map (pprPrec1 f p) $ args e)))
+       else
+            (pprPrec1 f p (functor e)) <> parens (sep (punctuate comma (map (pprPrec1 f p) $ args e)))
+
+pprPrec1 f p (Lambda a e) =
+    text "\\" <> (f a) <> text "." <+> (pprPrec1 f p e)
+
+instance (Pretty a, Eq a, Symbol a,  HasConstants (Expr a), HasSignature (Expr a) a) => Pretty (Clause a) where
+    ppr (C h b) = hang ((ppr h) <+> text "<:=") 4 $ ppr b
+
+instance (Pretty a, Eq a, Symbol a,  HasConstants (Expr a), HasSignature (Expr a) a) => Pretty (KB.KnowledgeBase a) where
+    ppr a = vcat $ map ppr (KB.clauses a)
+
+
+{-
 instance Pretty a => Pretty (Expr a) where
     ppr (Flex  sym)        = ppr sym
     ppr (Rigid sym)        = ppr sym
@@ -148,3 +181,5 @@ instance Pretty a => Pretty (Goal a) where
 
 instance Pretty a => Pretty (KB.KnowledgeBase a) where
     ppr p = vcat $ map ppr (KB.clauses p)
+-}
+

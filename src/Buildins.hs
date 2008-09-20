@@ -17,7 +17,7 @@
 
 module Buildins where
 
-import Symbol
+import Lang
 import Types
 import Syntax
 
@@ -28,7 +28,7 @@ succSym  = HpSym $ Sym "s"
 zeroSym  = HpSym $ Sym "0"
 wildcat  = HpSym $ AnonSym
 
-buildinTyp (HpSym (Sym "."))  = TyFun (TyTup [tyAll, tyAll]) tyAll
+buildinTyp (HpSym (Sym "."))  = TyFun tyAll (TyFun tyAll tyAll)
 buildinTyp (HpSym (Sym "[]")) = tyAll
 buildinTyp (HpSym (Sym "!" )) = tyBool
 buildinTyp (HpSym (Sym "s" )) = TyFun tyAll tyAll

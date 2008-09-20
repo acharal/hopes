@@ -17,11 +17,11 @@
 
 module Syntax where
 
-import Symbol
+import Lang
 import Loc
 import Types
 import Data.Monoid(mappend, mconcat, mempty)
-import List (find, nub)
+import List (find)
 {-
     Preliminaries
     1. Symbols
@@ -58,7 +58,7 @@ import List (find, nub)
        universally quantified.
 -}
 
-type HpSymbol = Symbol String
+type HpSymbol = Sym
 
 
 data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
