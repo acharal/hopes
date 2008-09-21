@@ -31,7 +31,7 @@ wfp p = do
     (p', env)  <- tcProg p
     (p'', env) <- restrictProg (p', env)
     env <- zonkEnv env
-    return (p'', env)
+    return (p', env)
 
 -- well formatted formula
 wff f = do

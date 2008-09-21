@@ -116,7 +116,9 @@ instance Pretty a => Pretty (HpExpr a) where
     ppr (HpApp e es)  = ppr (unLoc e) <>
                             parens (sep (punctuate comma (map (ppr.unLoc) es)))
     ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
-
+    ppr (HpLam xs e)  =
+        sep (punctuate (text "->") (map (\x -> text "\\" <> ppr (symbolBind x)) xs)) <>
+            text "->" <+> ppr (unLoc e)
 
 instance Pretty a => Pretty (HpClause a) where
     ppr (HpClause _ [h] []) = ppr (unLoc h) <> dot
@@ -141,7 +143,6 @@ instance (Pretty a, Eq a, Symbol a, HasConstants (Expr a), HasSignature (Expr a)
 
 pprPrec1 f p (Flex sym)    = (f sym)
 pprPrec1 f p (Rigid sym)   = ppr sym
-pprPrec1 f p c@(Const a)   = ppr a
 pprPrec1 f p e@(App e1 e2) =
     let fu = functor e
     in if (fu == ceq) then

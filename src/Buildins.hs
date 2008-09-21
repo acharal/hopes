@@ -19,49 +19,23 @@ module Buildins where
 
 import Lang
 import Types
-import Syntax
 
-consSym  = HpSym $ Sym "."
-nilSym   = HpSym $ Sym "[]"
-cutSym   = HpSym $ Sym "!"
-succSym  = HpSym $ Sym "s"
-zeroSym  = HpSym $ Sym "0"
-wildcat  = HpSym $ AnonSym
+mkBuildin "_" = AnonSym
+mkBuildin s = liftSym s
 
-buildinTyp (HpSym (Sym "."))  = TyFun tyAll (TyFun tyAll tyAll)
-buildinTyp (HpSym (Sym "[]")) = tyAll
-buildinTyp (HpSym (Sym "!" )) = tyBool
-buildinTyp (HpSym (Sym "s" )) = TyFun tyAll tyAll
-buildinTyp (HpSym (Sym "0" )) = tyAll
-buildinTyp (HpSym AnonSym   ) = tyAll
+isBuildin s = maybe False (const True) $ lookup s buildins'
 
-mkBuildin s = HpSym $ Sym s
+buildinsigs = map (\(x,t) -> (liftSym x, t) ) buildins'
 
-buildins = [
-    consSym,
-    nilSym,
-    cutSym,
-    succSym,
-    zeroSym ]
-
---isBuildin :: Eq a => HpExpr a -> Bool
-isBuildin s = any (s==) buildins
-
-buildinsigs = zip (map (\(HpSym x) -> x) buildins) $ map buildinTyp buildins
-
-
-{-
-A buildin is a special predicate, that can be called from the prolog command
-prompt, or more generally from a prolog file.
-Special predicates are those that can't be expressed as clauses, and must be
-directly implement from the interpreter.
-Note that the use of that predicates may destroy the semantics of the language.
-
-data Buildin =
-    Buildin {
-        name::(String),
-        args::Int
-        action:: HopeI () -- it's an action including IO and
-                          -- program modification.
-    }
--}
+buildins' =
+    [ (".",     TyFun tyAll (TyFun tyAll tyAll))
+    , ("[]",    tyAll)
+    , ("s",     TyFun tyAll tyAll)
+    , ("true",  tyBool)
+    , ("false", tyBool)
+    , ("0",     tyAll)
+    , ("=",     TyFun tyAll  (TyFun tyAll tyBool))
+    , (",",     TyFun tyBool (TyFun tyBool tyBool))
+    , (";",     TyFun tyBool (TyFun tyBool tyBool))
+    , ("_",     tyAll)
+    ]

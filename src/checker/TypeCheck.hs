@@ -128,6 +128,15 @@ tcExpr' exp_ty (L l (HpSym s))  = do
     s' <- tySym s
     return (L l (HpSym s'))
 
+tcExpr' exp_ty (L l (HpLam bs e)) = do
+    tvs <- newTyBindings bs
+    extendEnv tvs $ do
+        (body_ty, e')  <- tiExpr e
+        let fun_ty = foldl (\a -> \(_,t) -> TyFun t a) body_ty (reverse tvs)
+        unify fun_ty exp_ty
+        bs' <- tyBinds bs
+        return (L l (HpLam bs' e'))
+
 --tcExpr' exp_ty (L l (HpTup es)) = do
 --    (tys, es') <- mapAndUnzipM tiExpr es
 --    unify (TyTup tys) exp_ty

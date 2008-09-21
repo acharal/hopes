@@ -95,7 +95,7 @@ restrictForm f@(L _ (HpClause _ xs ys)) = enterContext (CtxtForm f) $ do
     let locals = map (\(HpBind a t) -> (a, t)) (bindings f)
     extendEnv locals $ do
         mapM_ restrictFunc xs
-        mapM_ restrictFunc ys
+        --mapM_ restrictFunc ys
         restrictHead f 
 
 -- function symbol application must be (i, ..., i) -> i
@@ -125,10 +125,12 @@ restrictHead f@(L _ (HpClause b [h] _)) = do
     return ()
 
 restrictFunc e = do
-    let args = argsOf e
-        apps = filter isApp args    --arguments that are applications
-    mapM  (tcExpr tyAll) apps
-    mapM_ restrictInsideFunc args
+--    let args = argsOf e
+--        apps = filter isApp args    --arguments that are applications
+    -- mapM  (tcExpr tyAll) apps
+    (ty,_) <- tiExpr e
+    when (ty == tyAll) $
+        mapM_ restrictInsideFunc (filter isApp (argsOf e))
 restrictInsideFunc e = do
     let args = argsOf e
     mapM_ (tcExpr tyAll) args

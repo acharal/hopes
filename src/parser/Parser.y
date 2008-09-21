@@ -32,8 +32,6 @@ module Parser (
 
 import Lexer
 import Syntax
--- import Symbol
-import Buildins
 import Types
 import Loc
 import ParseUtils
@@ -107,14 +105,15 @@ conj :: { [PLHpAtom] }
 
 atom :: { PLHpAtom }
      : exp                      { $1 }
-     | '!'                      { located $1      $ mkBuildin "!" }
+     | '!'                      { located $1      $ mkSym $1 }
 
 exp :: { PLHpExpr }
     : '(' exp ')'               { located ($1,$>) $ HpPar $2 }
     | exp tyann                 { located ($1,$>) $ HpAnn $1 (unLoc $2) }
-    | ID                        { located  $1     $ (mkSym $1) }
+    | ID                        { located  $1     $ mkSym $1 }
     | exp '(' exps2 ')'         { located ($1,$>) $ HpApp $1 (reverse $3) }
-    {-- | exp '=' exp               { located ($1,$>) $ HpApp univ [$1, $3]   } --}
+    | exp '=' exp               { located ($1,$>) $ HpApp (located $2 $ mkSym $2) [$1, $3]   }
+    | '\\' ID '->' exp          { located ($1,$>) $ mkLambda $2 $4 }
 
 exp2 :: { PLHpExpr }
     : term                      { $1 }
@@ -127,17 +126,13 @@ exps2 :: { [PLHpExpr] }
 
 term :: { PLHpTerm }
     : name                      { $1 }
-    | '_'                       { located $1      $ wildcat }
+    | '_'                       { located $1      $ mkSym $1 }
     | name '(' terms ')'        { located ($1,$>) $
                                     HpApp $1 (reverse $3) }
     | '(' terms2 ')'            { located ($1,$>) $ HpTup (reverse $2) }
     | '[' ']'                   { located ($1,$>) $ mkList []           Nothing   }
     | '[' terms ']'             { located ($1,$>) $ mkList (reverse $2) Nothing   }
     | '[' terms '|' term ']'    { located ($1,$>) $ mkList (reverse $2) (Just $4) }
-{-
-    | '{' '}'                   { located ($1,$>) $ HpSet [] }
-    | '{' terms '}'             { located ($1,$>) $ HpSet $2 }
--}
 
 terms :: { [PLHpTerm] }
       : terms ',' term          { $3:$1 }

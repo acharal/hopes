@@ -26,7 +26,6 @@ data Expr a =
        App (Expr a) (Expr a)
     |  Flex a
     |  Rigid a
-    |  Const a
     |  Lambda a (Expr a)
   deriving (Eq, Show)
 
@@ -38,12 +37,12 @@ clauseBody (C _ b) = b
 type Goal a = Expr a
 
 instance (Eq a, Symbol a) => HasConstants (Expr a) where
-    ctop    = Const $ liftSym "1"
-    cbot    = Const $ liftSym "0"
-    ceq     = Const $ liftSym "="
-    cexists = Const $ liftSym "exists"
-    cor     = Const $ liftSym "or"
-    cand    = Const $ liftSym "and"
+    ctop    = Rigid $ liftSym "true"
+    cbot    = Rigid $ liftSym "false"
+    ceq     = Rigid $ liftSym "="
+    cexists = Rigid $ liftSym "_exists"
+    cor     = Rigid $ liftSym ";"
+    cand    = Rigid $ liftSym ","
 
 {-
 instance (HasConstants a, HasType a) => HasConstants (Typed a) where
@@ -80,7 +79,6 @@ instance HasSignature (Expr a) a where
 	sig (App e1 e2) = sig e1 `mappend` sig e2
 	sig (Flex a)  = varSig a
 	sig (Rigid a) = rigSig a
-        sig (Const a) = emptySig
         sig (Lambda a x) = varSig a `mappend` sig x
 
 instance HasSignature (Clause a) a where
@@ -95,8 +93,7 @@ instance (Symbol a, Eq a, HasType a) => HasType (Expr a) where
                 (TyFun a b) -> b
                 t -> error ("not expected type " ++ (show t))
 	typeOf (Flex a)  = typeOf a
-	typeOf (Rigid a) = typeOf a
-        typeOf c@(Const a)
+        typeOf c@(Rigid a)
             | c == ctop = tyBool
             | c == cbot = tyBool
             | c == cor  = TyFun tyBool ((TyFun tyBool) tyBool)

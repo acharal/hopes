@@ -121,6 +121,12 @@ desugarExp (HpSym a)  =
                 TyVar _ -> error (show a)
                 _ -> return $ Rigid (typed ty a)
 
+desugarExp (HpLam bs e) =
+    local (\r -> r {bindings = bs:(bindings r)}) $ do
+    e' <- desugarExp (unLoc e)
+    let f (HpBind x ty) = typed ty x
+    return $ foldl (\a -> \b -> (Lambda (f b) a)) e' bs
+
 desugarExp e = error "Expression must not occur in that phase"
 
 freshVar :: (MonadState Int m, Monad m, Symbol a) => m a

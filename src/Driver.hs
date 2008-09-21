@@ -142,13 +142,14 @@ bye s     = putStrLn s >> exitWith ExitSuccess
 sayYes    = putStrLn "Yes"
 sayNo     = putStrLn "No"
 
+{-
 showSolutions []  = liftIO $ sayNo
 showSolutions [s] = liftIO $ pprint s >> sayYes
 showSolutions (s:sols) = do
     liftIO $ pprint s
     c <- liftIO $ getChar
     when (not $ c == 'q') $ showSolutions sols
-
+-}
 
 -- consumeSolutions :: Infer a b -> HopesIO ()
 consumeSolutions i = do

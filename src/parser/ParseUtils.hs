@@ -171,21 +171,26 @@ mkQuantForm xs ys =
         symbols'' (HpAnn e t)  = symbols'' (unLoc e)
     in  (HpClause vars' xs ys)
 
+mkLambda x (L _ (HpLam ys e'))  = HpLam ((HpBind (liftSym (tokId x)) bogusType):ys) e'
+mkLambda x e = HpLam [(HpBind (liftSym (tokId x)) bogusType)] e
+
 mkList elems tl = 
     unLoc $ foldr (\x -> \y -> located x $ HpApp consE [x,y]) lastel elems
-    where consE   = located bogusLoc consSym
+    where consE   = located bogusLoc $ HpSym (mkBuildin ".")
           lastel  = case tl of
-                        Nothing -> located bogusLoc nilSym
+                        Nothing -> located bogusLoc $ HpSym (mkBuildin "[]")
                         Just e  -> e
 
 -- put some hardcoded building numerics
 mkSym s
-    | all isDigit (tokId s) = unLoc $ mkInt (read (tokId s))
+    | all isDigit (show (unLoc s)) = unLoc $ mkInt (read (show (unLoc s)))
+    | isBuildin (show (unLoc s))   = HpSym $ mkBuildin (show (unLoc s))
     | otherwise             = HpSym (tokSym s)
 
-mkInt 0 = located bogusLoc zeroSym
-mkInt i = located bogusLoc $ HpApp (located bogusLoc succSym) [minus_one]
+mkInt 0 = located bogusLoc $ HpSym (mkBuildin "0")
+mkInt i = located bogusLoc $ HpApp (located bogusLoc $ HpSym (mkBuildin "s")) [minus_one]
     where minus_one = mkInt (i-1)
+
 
 data HpType   =
       HpTyGrd String           -- ground type
