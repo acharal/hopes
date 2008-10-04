@@ -75,6 +75,8 @@ initializeShell = do
 readline = liftIO . Readline.readline
 addHistory = liftIO . Readline.addHistory
 
+#endif
+
 prompt = readline promptStr
     where promptStr = "-? "
 

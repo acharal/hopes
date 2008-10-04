@@ -103,3 +103,4 @@ toCommand cli = collectFiles cli ++ getGoal cli ++ mustHalt cli
                             [] -> []
                             (CliRunFile _):_ -> [CHalt]
                             (_:rcli) -> mustHalt rcli
+

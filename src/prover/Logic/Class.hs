@@ -83,3 +83,4 @@ bagofN (Just n) _ | n <= 0  = return []
 bagofN n m = msplit m >>= bagofN'
     where bagofN' Nothing = return []
           bagofN' (Just (a,m')) = bagofN (fmap (-1 +) n) m' >>= (return . (a:))
+

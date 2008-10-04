@@ -55,3 +55,4 @@ branch :: (MonadReader m, MonadPlus m) => a ->  m (KnowledgeBase a) Clause
 typeof :: (MonadReader m) => a ->  m (KnowledgeBase a) Type
 
 -}
+

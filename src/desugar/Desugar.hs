@@ -134,3 +134,4 @@ freshVar = do
     r <- get
     modify (+1)
     return $ liftSym $ "_" ++ (show r)
+ 
