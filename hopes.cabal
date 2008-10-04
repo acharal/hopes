@@ -23,11 +23,16 @@ Flag split-base
 
 Executable      hopes
   Main-Is:	  Main.hs
-  Build-Depends:  haskell98, mtl, readline
+  Build-Depends:  haskell98, mtl
   if flag(split-base)
     Build-Depends: base >= 3.0, array, pretty
   else
     Build-Depends: base < 3.0
+
+  if os(windows)
+    CPP-Options: -DBUILD_WINDOWS
+  else
+    Build-Depends: readline
 
   Hs-Source-Dirs: src
                   src/basic
@@ -47,5 +52,6 @@ Executable      hopes
                   TypeSynonymInstances
                   FlexibleContexts
                   FunctionalDependencies
+                  CPP
   Ghc-Options:    -fwarn-unused-imports -fno-monomorphism-restriction -fallow-undecidable-instances
 

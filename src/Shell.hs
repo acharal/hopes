@@ -23,7 +23,14 @@ import Char(isSpace)
 import IO
 -- import Flags(Command(..), userCommands, mkCom, short)
 import System.Console.GetOpt
+
+#ifdef BUILD_WINDOWS
+
+#else
 import qualified System.Console.Readline as Readline
+
+#endif
+
 import Control.Monad.State
 
 trim :: String -> String
@@ -61,11 +68,20 @@ mkCom c s =
 
 userCommands =
  [ Command ['c','l'] (ReqArg CConsult "FILE")
- , Command ['t']     (ReqArg CShowType "SYMBOL")
+ , Command ['t']     (ReqArg CShowType "SYMBOL") 
  , Command ['q']     (NoArg  CHalt)
  , Command ['p']     (OptArg CShowDef "PREDICATE")
  ]
 
+#ifdef BUILD_WINDOWS
+
+initializeShell = liftIO $ return ()
+readline s = do 
+   liftIO $ putStr s
+   s' <- liftIO $ readLn
+   return $ Just s'
+addHistory s = liftIO $ return ()
+#else
 
 initializeShell = do
     -- liftIO $ Readline.setCatchSignals False
