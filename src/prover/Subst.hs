@@ -70,6 +70,6 @@ combine theta zeta  =
     in  subst theta zeta ++ zeta'
 
 
-instance (Pretty a, Eq a, Symbol a, HasConstants (Expr a)) => Pretty (Subst a) where
+instance (Pretty a, Eq a, Symbol a, HasLogicConstants (Expr a)) => Pretty (Subst a) where
     ppr xs = vcat $ map ppr_bind xs
         where ppr_bind (v,t) = sep [ ppr v <+> text "=", ppr t ]

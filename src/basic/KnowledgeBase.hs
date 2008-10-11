@@ -30,7 +30,7 @@ data KnowledgeBase a =
         clauses :: [Clause a]
     }
 
-instance HasSignature (KnowledgeBase a) a where
+instance Symbol a => HasSignature (KnowledgeBase a) a where
 	sig cs = mconcat $ map sig $ clauses cs
 
 instance Monoid (KnowledgeBase a) where

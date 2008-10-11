@@ -130,7 +130,7 @@ instance Pretty a => Pretty (HpClause a) where
 instance Pretty a => Pretty (HpSrc a) where
     ppr p = vcat $ map (ppr.unLoc) (clauses p)
 
-instance (Pretty a, Eq a, Symbol a, HasConstants (Expr a), HasSignature (Expr a) a) => Pretty (Expr a) where
+instance (Pretty a, Eq a, Symbol a, HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (Expr a) where
     ppr a =  pprPrec1 v' 1 a
         where {- v x = case lookup x vlist of
                       Nothing -> ppr x
@@ -157,10 +157,10 @@ pprPrec1 f p e@(App e1 e2) =
 pprPrec1 f p (Lambda a e) =
     text "\\" <> (f a) <> text "." <+> (pprPrec1 f p e)
 
-instance (Pretty a, Eq a, Symbol a,  HasConstants (Expr a), HasSignature (Expr a) a) => Pretty (Clause a) where
+instance (Pretty a, Eq a, Symbol a,  HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (Clause a) where
     ppr (C h b) = hang ((ppr h) <+> text "<:=") 4 $ ppr b
 
-instance (Pretty a, Eq a, Symbol a,  HasConstants (Expr a), HasSignature (Expr a) a) => Pretty (KB.KnowledgeBase a) where
+instance (Pretty a, Eq a, Symbol a,  HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (KB.KnowledgeBase a) where
     ppr a = vcat $ map ppr (KB.clauses a)
 
 

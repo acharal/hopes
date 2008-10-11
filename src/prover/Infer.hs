@@ -51,7 +51,7 @@ prove g =  do
 -- refute :: Goal a -> Infer a (Subst a)
 refute g
     | isContra g = return success
-    | otherwise  = trace ("deriving " ++ (show (ppr g))) $ derive g >>- \(g',  s)  ->
+    | otherwise  = derive g >>- \(g',  s)  ->
                    refute (subst s g') >>- \ans ->
                    return (s `combine` ans)
 
@@ -105,7 +105,6 @@ resolve g e =
 substExp (App e a) b = (App (substExp e b) a)
 substExp _ b = b
 
-
 resolve g =
     clauseOf (functor g) >>- \c ->
     variant c >>- \(C p b) ->
@@ -154,15 +153,6 @@ lubExp e1 e2 =
             where e'' = foldl (\x -> \y -> (App x (Flex y))) e' bs
     in  lubExp1 e1 e2 []
 
-comb e' (Lambda x e) = (Lambda x (comb e' e))
-comb e' e = (App (App cand e') e)
-
-appInst e = do
-    case typeOf e of
-        TyFun t1 t2 -> do
-            a <- basicInstance t1
-            appInst (App e a)
-        _ -> return e
 
 
 disjLambda [] = return cbot
@@ -178,27 +168,35 @@ disjLambda (e:es) =
             return (Lambda x e')
         _ -> return $ foldl (\x -> \y -> (App (App cor x) y)) e es
 
+comb e' (Lambda x e) = (Lambda x (comb e' e))
+comb e' e = (App (App cand e') e)
 
 basicInstance ty@(TyFun ty_arg ty_res) =
     msum (map return [1..]) >>- \n ->
-    (sequence $ take n $ repeat (singleInstance ty)) >>- \le ->
+    (replicateM n (singleInstance ty)) >>- \le ->
     disjLambda le
 basicInstance x = singleInstance x
 
+appInst e = do
+    case typeOf e of
+        TyFun t1 t2 -> do
+            a <- basicInstance t1
+            appInst (App e a)
+        _ -> return e
 
 singleInstance (TyFun ty_arg ty_res) = do
     x   <- freshVarOfType ty_arg
     xe  <- case ty_arg of
              TyFun a b ->
                     msum (map return [1..]) >>- \n ->
-                    (sequence $ take n $ repeat $ appInst (Flex x)) >>- \le -> 
+                    (replicateM n $ appInst (Flex x)) >>- \le -> 
                     return $ foldl (\e -> \e2 -> (App (App cand e) e2)) (head le) (tail le)
              _ -> if ty_arg == tyAll then do
                         y <- singleInstance ty_arg
                         return (App (App ceq (Flex x)) y)
                   else if ty_arg == tyBool then do
                         y <- singleInstance ty_arg
-                        return $ if y == ctop then (Flex x) else ctop
+                        return $ if y == ctop then (Flex x) else y
                   else
                         fail ""
     res <- singleInstance ty_res
@@ -209,22 +207,9 @@ singleInstance ty
     | ty == tyAll  = freshVarOfType ty >>= \x -> return (Flex x)
     | otherwise = fail "cannot instantiate from type"
 
-
-
-{-
-resolvS g (App (Set ss vs) e) = do
-    let v = last vs             -- SEARCH ME: any solutions lost? discard all variables except the last one (which is continuous?)
-    let TyFun a r = typeOf v
-    x  <- freshIt v
-    let x' = typed a (unTyp x)
-    (Flex x') `waybelow` e >>- \s -> do
-        v' <- freshIt v
-        return (g, (bind v (Set [(Flex x')] [v'])) `combine` s)
--}
-
 -- unification
 
-unify :: (Eq a, Monad m) => Expr a -> Expr a -> m (Subst a)
+unify :: (Symbol a, Eq a, Monad m) => Expr a -> Expr a -> m (Subst a)
 
 unify (Flex v1) e@(Flex v2)
     | v1 == v2  = return success
@@ -249,64 +234,10 @@ unify (Rigid p) (Rigid q)
 
 unify _ _ = fail "Should not happen"
 
-{-
-listUnify  :: (Eq a, Monad m) => [Expr a] -> [Expr a] -> m (Subst a)
-listUnify [] [] = return success
-listUnify (e1:es1) (e2:es2) = do
-    s <- unify e1 e2
-    s' <- listUnify (map (subst s) es1) (map (subst s) es2)
-    return (s `combine` s')
-
-listUnify _ _   = fail "lists of different length"
--}
-
-occurCheck :: (Eq a, Monad m) => a -> Expr a -> m ()
+occurCheck :: (Symbol a, Eq a, Monad m) => a -> Expr a -> m ()
 occurCheck a e = when (a `occursIn` e) $ fail "Occur Check"
 
 occursIn a e = a `elem` (vars e)
-
-
-{-
-    (waybelow x y) successed with a substitution if x is waybelow of y
-    waybelow can successed more than once e.g. for all x that are waybelow y
-    waybelow fails if no substitution exists to make x waybelow y
--}
--- waybelow :: MonadLogic m => Expr a -> Expr a -> m Subst
--- if p is higher order we want a finitary subset S
--- if p is zero order just unify x with p
-
-{-
-waybelow (Flex x) (Rigid p)
-    | order p == 0 = unify (Flex x) (Rigid p)
-    | otherwise    = error "last to implement"
-        -- prove (p(X1, ..., XN)) = [s1, s2, ...]
-
--- possibly a function symbol application (remember no partial applications allowed, so that can't be higher order)
-waybelow e1@(Flex _) e2@(App _ _) = unify e1 e2
-
-waybelow (Flex x) (Set sl vs@(v:_)) = do
-    v' <- freshIt v
-    return $ bind v (Set [] [x, v'])
-
-waybelow e1@(Flex _) e2@(Flex v)
-    | order v == 0 = unify e1 e2
-    | otherwise    = waybelow e1 (liftSet e2)
-
-waybelow (Flex x) e@(Tup es) = do
-    xs <- mapM (\e -> freshIt x) es
-    let xs' = Tup (map Flex xs)
-    s <- waybelow xs' e
-    return $ combine (bind x xs') s
-
-waybelow (Tup es) (Tup es') = do
-    ss <- zipWithM waybelow es es'
-    return (foldl combine success ss)
-
--- can't go in this case. Defined just for completeness.
-waybelow (Rigid p) (Rigid q) 
-    | p == q    = return success -- same intensions -> same extensions
-    | otherwise = fail "cannot compute if one rigid symbol is waybelow of some other rigid symbol"
--}
 
 -- utils
 
@@ -316,23 +247,11 @@ waybelow (Rigid p) (Rigid q)
 split []     = fail "Empty goal. Can't pick an atom"
 split (x:xs) = return (x, xs)
 
-{-
-clausesOf (App q _) = do
-    p <- asks clauses
-    let cl = filter (\(App r _, b)-> r == q) p
-    msum (map return cl)
--}
 clauseOf (Rigid r) = do
     p <- asks clauses
     let cl = filter (\(C p' _) -> p' == r) p
     msum (map return cl)
 clauseOf e = fail "expression must be rigid (parameter)"
-
--- make a fresh variant of a clause.
--- monadic computation because of freshVar.
--- variant :: Clause a -> Infer a (Clause a)
--- FIXME: subst assumed to be list 
--- PITFALL: flexs are computed every time
 
 variant c =
     let vs = vars c
@@ -348,11 +267,3 @@ freshVarOfType ty = do
     a' <- get
     modify (+1)
     return $ hasType ty $ liftSym ("_S" ++ show a')
-{-
-freshIt :: (MonadState Int m, Functor f, Symbol a) => f a -> m (f a)
-freshIt s = do
-    a' <- get
-    modify (+1)
-    return $ fmap (const (liftSym ("_S" ++ show a'))) s
--}
-

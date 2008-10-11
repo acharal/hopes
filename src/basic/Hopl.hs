@@ -36,7 +36,7 @@ clauseBody (C _ b) = b
 
 type Goal a = Expr a
 
-instance (Eq a, Symbol a) => HasConstants (Expr a) where
+instance (Symbol a, Eq a)  => HasLogicConstants (Expr a) where
     ctop    = Rigid $ liftSym "true"
     cbot    = Rigid $ liftSym "false"
     ceq     = Rigid $ liftSym "="
@@ -69,19 +69,19 @@ instance (Eq a, Symbol a) => HasConstants (Expr (Typed a)) where
     isExistsQ (Const (T s _)) = s == liftSym "exists"
 -}
 
-contradiction :: HasConstants a => a
+contradiction :: HasLogicConstants a => a
 contradiction = ctop
 
-isContra :: HasConstants a => a -> Bool
+isContra :: HasLogicConstants a => a -> Bool
 isContra = (==contradiction)
 
-instance HasSignature (Expr a) a where
+instance Symbol a => HasSignature (Expr a) a where
 	sig (App e1 e2) = sig e1 `mappend` sig e2
 	sig (Flex a)  = varSig a
 	sig (Rigid a) = rigSig a
         sig (Lambda a x) = varSig a `mappend` sig x
 
-instance HasSignature (Clause a) a where
+instance Symbol a => HasSignature (Clause a) a where
 	sig (C p e2) = rigSig p `mappend` sig e2 `mappend` mempty
 
 --instance HasSignature (Goal a) a where
