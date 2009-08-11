@@ -30,6 +30,7 @@ import Types
 import List (nub)
 import Hopl
 import qualified KnowledgeBase as KB
+import Subst
 
 class Pretty a where
     ppr :: a -> Doc
@@ -164,6 +165,10 @@ instance (Pretty a, Eq a, Symbol a,  HasLogicConstants (Expr a), HasSignature (E
     ppr a = vcat $ map ppr (KB.clauses a)
 
 
+instance (Pretty a, Eq a, Symbol a, HasLogicConstants (Expr a)) => Pretty (Subst a) where
+    ppr xs = vcat $ map ppr_bind xs
+        where ppr_bind (v,t) = sep [ ppr v <+> text "=", ppr t ]
+
 {-
 instance Pretty a => Pretty (Expr a) where
     ppr (Flex  sym)        = ppr sym
@@ -184,3 +189,17 @@ instance Pretty a => Pretty (KB.KnowledgeBase a) where
     ppr p = vcat $ map ppr (KB.clauses p)
 -}
 
+class Pretty a => AnswerPrintable a where
+    printanswer :: a -> Doc
+
+instance (Symbol a, Pretty a, Eq a) => AnswerPrintable (Subst a) where
+    printanswer xs = vcat $ map ppr_bind xs
+        where ppr_bind (v,t) = sep [ ppr v <+> text "=", printanswer t ]
+
+instance (Symbol a, Pretty a, Eq a) =>  AnswerPrintable (Expr a) where
+    printanswer a = praPrec 1 a 
+
+isbs (Rigid x) s = x == s
+isbs _ _ = False
+
+praPrec n p = ppr p

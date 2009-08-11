@@ -158,6 +158,6 @@ consumeSolutions i = do
         Nothing -> liftIO $ sayNo
         Just (a, rest) -> do
             liftIO $ sayYes
-            liftIO $ pprint a
+            liftIO $ print $ printanswer a
             c <- liftIO $ getChar
             when (not $ c == 'q') $ consumeSolutions rest

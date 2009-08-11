@@ -30,8 +30,8 @@ import Control.Monad.State
 import Control.Monad.Identity
 -- import Data.Monoid
 -- import List (last)
-import Debug.Trace
-import Pretty
+-- import Debug.Trace
+-- import Pretty
 
 
 type Infer a = ReaderT (KnowledgeBase a) (StateT Int (LogicT Identity))
@@ -61,9 +61,15 @@ derive g
   | isContra g = return (contradiction, success)
   | otherwise =
     let f g = case functor g of
-                 Rigid _    -> trace ("Rigid resolution") $ resolve g
-                 Flex _     -> trace ("Flex resolution") $ resolveF g
-                 Lambda _ _ -> trace ("Beta reduce" ++ (show (ppr g))) $ betareduce g
+                 Rigid _    -> 
+                      -- trace ("Rigid resolution") $ 
+                      resolve g
+                 Flex _     ->
+                      -- trace ("Flex resolution") $ 
+                      resolveF g
+                 Lambda _ _ -> 
+                      -- trace ("Beta reduce" ++ (show (ppr g))) $ 
+                      betareduce g
                  _ -> error  "Cannot derive anything from that atom"
     -- in undefined -- split g  >>- \(a, g') -> f g' a
     in case g of
@@ -71,16 +77,16 @@ derive g
             if c == cand then
                 derive a >>- \(g', s) ->
                     if isContra g' then
-                        trace ("cand contra derived " ++ (show (ppr a))) $ return (b, s)
+                        return (b, s)
                     else
-                        trace ("cand derived " ++ (show (ppr a)) ++ " yielding " ++ (show (ppr g'))) $ return ((App (App cand g') b), s)
+                        return ((App (App cand g') b), s)
             else if c == cor then
                 return a `mplus` return b >>- \g ->
                     derive g
             else if c == ceq then
                 unify a b >>= \s ->
-                trace ("Unify " ++ (show (ppr a)) ++ " and " ++
-                      (show (ppr b)) ++ " subst " ++ (show (ppr s))) $
+                --trace ("Unify " ++ (show (ppr a)) ++ " and " ++
+                --      (show (ppr b)) ++ " subst " ++ (show (ppr s))) $
                 return (contradiction, s)
             else if c == ctop then
                 return (contradiction, success)

@@ -18,8 +18,6 @@
 module Subst where
 
 import Hopl
-import Pretty
-import Lang
 -- import Data.Monoid (mconcat)
 
 type Subst a = [ (a, Expr a) ]
@@ -69,7 +67,3 @@ combine theta zeta  =
         zeta' = [ (v, e) | (v, e) <- zeta, v `notElem` ss ]
     in  subst theta zeta ++ zeta'
 
-
-instance (Pretty a, Eq a, Symbol a, HasLogicConstants (Expr a)) => Pretty (Subst a) where
-    ppr xs = vcat $ map ppr_bind xs
-        where ppr_bind (v,t) = sep [ ppr v <+> text "=", ppr t ]
