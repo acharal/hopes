@@ -51,5 +51,7 @@ Executable      hopes
                   FlexibleContexts
                   FunctionalDependencies
                   CPP
-  Ghc-Options:    -fwarn-unused-imports -fno-monomorphism-restriction -fallow-undecidable-instances
+                  UndecidableInstances
+                  NoMonomorphismRestriction
+  Ghc-Options:    -fwarn-unused-imports
 
