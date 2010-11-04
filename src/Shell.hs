@@ -15,23 +15,16 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-module Shell(initializeShell, getCommand, Command(..)) where
+module Shell(runShell, ShellT, getCommand, Command(..)) where
 
-import Error(catchError)
 import List(find)
 import Char(isSpace)
-import IO
 -- import Flags(Command(..), userCommands, mkCom, short)
 import System.Console.GetOpt
 
-#ifdef BUILD_WINDOWS
+import System.Console.Haskeline
 
-#else
-import qualified System.Console.Readline as Readline
-
-#endif
-
-import Control.Monad.State
+-- import Control.Monad.State
 
 trim :: String -> String
 trim xs = dropWhile (isSpace) $ reverse $ dropWhile (isSpace) $ reverse xs
@@ -73,25 +66,25 @@ userCommands =
  , Command ['p']     (OptArg CShowDef "PREDICATE")
  ]
 
-#ifdef BUILD_WINDOWS
 
-initializeShell = liftIO $ return ()
-readline s = do 
-   liftIO $ putStr s
-   s' <- liftIO $ readLn
-   return $ Just s'
-addHistory s = liftIO $ return ()
-#else
-
-initializeShell = do
+--initializeShell = do
     -- liftIO $ Readline.setCatchSignals False
-    liftIO $ Readline.initialize
-    liftIO $ Readline.setCompletionEntryFunction (Just (Readline.filenameCompletionFunction))
+--    liftIO $ Readline.initialize
+--    liftIO $ Readline.setCompletionEntryFunction (Just (Readline.filenameCompletionFunction))
 
-readline = liftIO . Readline.readline
-addHistory = liftIO . Readline.addHistory
+--readline = liftIO . Readline.readline
+--addHistory = liftIO . Readline.addHistory
 
-#endif
+initializeShell = return ()
+
+readline  = getInputLine 
+
+-- addHistory s = liftIO $ return ()
+
+type ShellT = InputT
+
+runShell m = runInputT defaultSettings (initializeShell >> m)
+
 
 prompt = readline promptStr
     where promptStr = "-? "
@@ -102,9 +95,8 @@ getCommand = do
         Nothing -> getCommand
         Just "" -> getCommand
         Just str -> do
-            addHistory str
-            parseCommand' str `catchError`
-                        (\e -> (liftIO $ print e) >> getCommand)
+            parseCommand' str --`catchError`
+--                        (\e -> (liftIO $ print e) >> getCommand)
 
 
 -- completion

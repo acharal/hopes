@@ -23,7 +23,7 @@ Flag split-base
 
 Executable      hopes
   Main-Is:	  Main.hs
-  Build-Depends:  haskell98, mtl
+  Build-Depends:  haskell98, mtl, haskeline
   if flag(split-base)
     Build-Depends: base >= 3.0, array, pretty
   else
@@ -31,8 +31,6 @@ Executable      hopes
 
   if os(windows)
     CPP-Options: -DBUILD_WINDOWS
-  else
-    Build-Depends: readline
 
   Hs-Source-Dirs: src
                   src/basic

@@ -35,7 +35,6 @@ import Syntax
 import Types
 import Loc
 import ParseUtils
-import Control.Monad.State
 }
 
 %tokentype { (Located Token) }

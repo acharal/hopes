@@ -30,8 +30,8 @@ import Infer
 import Pretty
 import System.IO
 import System(exitWith, ExitCode(..))
-import Error(catchError, when)
-import Control.Monad.State(StateT, liftIO, modify, gets, evalStateT)
+--import Error(catchError, when)
+import Control.Monad.State(StateT, modify, gets, evalStateT)
 import Shell
 -- import Data.Function( fix )
 import Data.Monoid
@@ -45,7 +45,7 @@ data HopeEnv =
         kb         :: KnowledgeBase (Typed HpSymbol)
     }
 
-type HopesIO = StateT HopeEnv IO
+type HopesIO = StateT HopeEnv (ShellT IO)
 
 
 buildin_preds :: [(String, Int, [String]-> HopesIO (), String -> IO [String])]
@@ -121,22 +121,17 @@ dispatch com =
                     liftIO $ pprint $ vcat (map ppr cl)
         CHalt -> liftIO $ bye "Leaving..."
 
-runWith commands = evalStateT (runWithM commands) tabulaRasa
+runWith commands = runShell $ evalStateT (runWithM commands) tabulaRasa
     where tabulaRasa = HEnv mempty mempty
 
 runWithM commands = do
-    forM_ commands dispatch
+  --  forM_ commands dispatch
     runLoopM
 
--- runLoop' :: (Command -> HopesIO ()) -> HopesIO ()
 runLoopM = do
-    enterTopLevel
-    forever $ do
-        command <- getCommand
-        dispatch command `catchError`
-            (\e -> (liftIO $ print e))
-
-enterTopLevel = initializeShell
+        command <- lift $ getCommand
+        dispatch command -- `catch` (\e -> (liftIO $ print e))
+        runLoopM
 
 bye s     = putStrLn s >> exitWith ExitSuccess
 sayYes    = putStrLn "Yes"

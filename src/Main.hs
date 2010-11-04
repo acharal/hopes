@@ -22,7 +22,6 @@ import System.Exit(exitWith, ExitCode(..))
 import System.Environment(getArgs, getProgName)
 import System.Console.GetOpt
 import Data.Version(showVersion)
-import IO
 import Driver
 import Shell
 
