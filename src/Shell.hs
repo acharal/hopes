@@ -21,7 +21,6 @@ import List(find)
 import Char(isSpace)
 -- import Flags(Command(..), userCommands, mkCom, short)
 import System.Console.GetOpt
-
 import System.Console.Haskeline
 
 -- import Control.Monad.State
@@ -83,8 +82,8 @@ readline  = getInputLine
 
 type ShellT = InputT
 
-runShell m = runInputT defaultSettings (initializeShell >> m)
-
+runShell m = runInputT defaultShellSettings (initializeShell >> m)
+        where defaultShellSettings = defaultSettings
 
 prompt = readline promptStr
     where promptStr = "-? "

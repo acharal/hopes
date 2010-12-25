@@ -46,6 +46,9 @@ clean: setup
 	rm -rf dist
 	rm -f *.hi *.o
 
+full-clean: clean
+	rm $(SETUP)
+
 maintainer-clean: clean
 	rm -f .setup-config
 	rm -f $(SETUP)

@@ -23,8 +23,7 @@ import System.Environment(getArgs, getProgName)
 import System.Console.GetOpt
 import Data.Version(showVersion)
 import Driver
-import Shell
-
+import Shell(Command(..))
 
 data CLIFlag =
       CliConsultFile String
