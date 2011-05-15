@@ -31,6 +31,12 @@ data Expr a =
 
 data Clause a = C a (Expr a) deriving Eq
 
+isFlex (Flex _) = True
+isFlex _ = False
+
+isRigid (Rigid _) = True
+isRigid _ = False
+
 clauseHead (C a _) = a
 clauseBody (C _ b) = b
 

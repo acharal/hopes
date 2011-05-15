@@ -202,4 +202,21 @@ instance (Symbol a, Pretty a, Eq a) =>  AnswerPrintable (Expr a) where
 isbs (Rigid x) s = x == s
 isbs _ _ = False
 
-praPrec n p = ppr p
+praPrec n p = ppr p --ppr p
+
+bSet e =
+   let getB (Lambda x e) = let (e',r) = (getB e) in (e', x:r)
+       getB e = (e, [])
+       getA (App e a) = let (e', r) = (getA e) in (e', a:r)
+       getA e = (e,[])
+       getElements e@(App (App x y) z) = 
+                if x == ceq then
+                        [(y, z)]
+                else if x == cand then
+                        getElements y ++ getElements z
+                else if isFlex (functor e) then
+                        undefined
+                else
+                        undefined
+   in undefined
+

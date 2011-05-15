@@ -63,13 +63,13 @@ derive g
     let f g = case functor g of
                  Rigid _    -> 
                       -- trace ("Rigid resolution") $ 
-                      resolve g
+                      resolveRigid g
                  Flex _     ->
                       -- trace ("Flex resolution") $ 
-                      resolveF g
+                      resolveFlex g
                  Lambda _ _ -> 
                       -- trace ("Beta reduce" ++ (show (ppr g))) $ 
-                      betareduce g
+                      lambdaReduce g
                  _ -> error  "Cannot derive anything from that atom"
     -- in undefined -- split g  >>- \(a, g') -> f g' a
     in case g of
@@ -85,8 +85,6 @@ derive g
                     derive g
             else if c == ceq then
                 unify a b >>= \s ->
-                --trace ("Unify " ++ (show (ppr a)) ++ " and " ++
-                --      (show (ppr b)) ++ " subst " ++ (show (ppr s))) $
                 return (contradiction, s)
             else if c == ctop then
                 return (contradiction, success)
@@ -95,52 +93,30 @@ derive g
             else f g
         _ -> f g
 
--- derive by resolution (the common rigid case)
--- FIXME: clause assumed to be a tuple.
---        goal assumed to be equivalent to the body of a clause
--- resolve :: Goal a -> Expr a -> Infer a (Goal a, Subst a)
-{-
-resolve g e = 
-    clausesOf e >>- \c     ->
-    variant c   >>- \(h,b) ->
-    unify e h   >>- \s     ->
-    return (b `mappend` g, s)
--}
 
+substFunc (App e a) b = (App (substFunc e b) a)
+substFunc _ b = b
 
-substExp (App e a) b = (App (substExp e b) a)
-substExp _ b = b
-
-resolve g =
+resolveRigid g =
     clauseOf (functor g) >>- \c ->
     variant c >>- \(C p b) ->
-    return (substExp g b, success)
+    return (substFunc g b, success)
 
-{-
-betareduce (App (Lambda x e) a) =
-    let subst (Flex v) = if v == x then a else (Flex v)
-        subst (App e e') = (App (subst e) (subst e'))
-        subst (Lambda y e) = (Lambda y (subst e))
-        subst (Const c) = (Const c)
-        subst (Rigid r) = (Rigid r)
-    in  betareduce (subst e)
--}
-
-betareduce (App e a) = do
-        (e',s) <- betareduce e
+lambdaReduce (App e a) = do
+        (e',s) <- lambdaReduce e
         case e' of
             Lambda x e'' ->
                 return (subst (bind x a) e'', s)
             _ -> return ((App e' a), s)
-betareduce e = return (e, success)
+lambdaReduce e = return (e, success)
 
-resolveF g =
+resolveFlex g =
     let f = functor g
     in case f of
           (Flex x) ->
               singleInstance (typeOf f) >>- \fi -> do
               r <- freshVarOfType (typeOf f)
-              return ((substExp g fi), (bind x (lubExp fi (Flex r))))
+              return ((substFunc g fi), (bind x (lubExp fi (Flex r))))
           _ -> fail "resolveF: cannot resolve a non flexible"
 
 
@@ -152,13 +128,13 @@ lambdaInstance ty
         case ty of
             TyFun f a -> undefined
 -}
+-- Makes an instance e1 \lub e2 where e2 is a variable.
 lubExp e1 e2 =
     let lubExp1 (Lambda x e) e' bs =
-            (Lambda x (lubExp1 e e' (x:bs)))
+            (Lambda x (lubExp1 e e' (bs ++ [x])))
         lubExp1 e e' bs = (App (App cor e) e'')
             where e'' = foldl (\x -> \y -> (App x (Flex y))) e' bs
     in  lubExp1 e1 e2 []
-
 
 
 disjLambda [] = return cbot

@@ -31,11 +31,10 @@ import Pretty
 import System.IO
 import System(exitWith, ExitCode(..))
 import Control.Monad.State(StateT, modify, gets, evalStateT)
-import Shell
 import Data.Monoid
 import KnowledgeBase
 import Control.Monad.Cont
-import Control.Monad.Error
+import System.Console.GetOpt
 
 data HopeEnv =
     HEnv {  
@@ -44,6 +43,35 @@ data HopeEnv =
     }
 
 type HopesIO = StateT HopeEnv IO
+
+data Command =
+      CRefute    String
+    | CConsult   FilePath
+    | CShowType  String
+    | CShowDef   (Maybe String)
+    | CHalt
+    | CBuildin   String [String]
+
+data CommandDesc a =
+    Command {
+        short :: String,
+        argDescr :: ArgDescr a
+    }
+
+mkCom :: CommandDesc a -> String -> a
+mkCom c s =
+    case argDescr c of
+        NoArg a -> a
+        ReqArg f _ ->  f s
+        OptArg f _ ->  f (Just s)
+
+userCommands =
+ [ Command ['c','l'] (ReqArg CConsult "FILE")
+ , Command ['t']     (ReqArg CShowType "SYMBOL") 
+ , Command ['q']     (NoArg  CHalt)
+ , Command ['p']     (OptArg CShowDef "PREDICATE")
+ ]
+
 
 
 buildin_preds :: [(String, Int, [String]-> HopesIO (), String -> IO [String])]
@@ -55,6 +83,7 @@ buildin_preds =
  -- , ("assert",    0, undefined, undefined)
  -- , ("retract",    0, undefined, undefined)
  ]
+
 
 parseFromFile fname parser = do
     file     <- liftIO $ openFile fname ReadMode
@@ -119,30 +148,13 @@ dispatch com =
                     liftIO $ pprint $ vcat (map ppr cl)
         CHalt -> liftIO $ bye "Leaving..."
 
-runWith commands = evalStateT (runWithM commands) tabulaRasa
+
+runDriverM m = evalStateT m tabulaRasa
     where tabulaRasa = HEnv mempty mempty
-
-runWithM commands = do
-  --  forM_ commands dispatch
-  runShell runLoopM
-
-runLoopM = do
-        command <- getCommand
-        lift $ dispatch command `catchError` (\e -> (liftIO $ print e))
-        runLoopM
 
 bye s     = putStrLn s >> exitWith ExitSuccess
 sayYes    = putStrLn "Yes"
 sayNo     = putStrLn "No"
-
-{-
-showSolutions []  = liftIO $ sayNo
-showSolutions [s] = liftIO $ pprint s >> sayYes
-showSolutions (s:sols) = do
-    liftIO $ pprint s
-    c <- liftIO $ getChar
-    when (not $ c == 'q') $ showSolutions sols
--}
 
 -- consumeSolutions :: Infer a b -> HopesIO ()
 consumeSolutions i = do

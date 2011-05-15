@@ -22,8 +22,8 @@ import System.Exit(exitWith, ExitCode(..))
 import System.Environment(getArgs, getProgName)
 import System.Console.GetOpt
 import Data.Version(showVersion)
-import Driver
-import Shell(Command(..))
+-- import Driver
+import Shell
 
 data CLIFlag =
       CliConsultFile String
@@ -48,7 +48,7 @@ mainWith args =
             prog <- getProgName
             bye (usageInfo (usageHeader prog) argInfo)
         (cli,_,[]) ->
-            runWith $ toCommand cli
+            runInteractive $ toCommand cli
         (_,_,errors) -> do
             prog <- getProgName
             die (concat errors ++
@@ -60,8 +60,8 @@ copyright = unlines [
   "Copyright (c) 2006-2008 Angelos Charalambidis"
   ] 
 
---bye :: String -> IO a
---bye s = putStr s >> exitWith ExitSuccess
+bye :: String -> IO a
+bye s = putStr s >> exitWith ExitSuccess
 
 die :: String -> IO a
 die s = putStr s >> exitWith (ExitFailure 1)

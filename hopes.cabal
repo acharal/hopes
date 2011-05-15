@@ -1,12 +1,12 @@
 Cabal-Version:  >= 1.2
-Build-type:	Simple
+Build-Type:	Simple
 Name:           hopes
 Version:        0.0.5
 License:        GPL
 License-File:   LICENSE
 Author:         Angelos Charalambidis
 Maintainer:     Angelos Charalambidis <a.charalambidis@di.uoa.gr>
-Copyright:	2006-2008 Angelos Charalambidis
+Copyright:	2006-2011 Angelos Charalambidis
 Stability:      Experimental
 Synopsis:       Higher Order Prolog with Extensional Semantics
 Description:
