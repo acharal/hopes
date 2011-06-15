@@ -1,4 +1,4 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2011 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -162,8 +162,9 @@ basicInstance x = singleInstance x
 appInst e = do
     case typeOf e of
         TyFun t1 t2 -> do
-            a <- basicInstance t1
-            appInst (App e a)
+--            a <- basicInstance t1
+            a <- freshVarOfType (typeOf t1)
+            appInst (App e (Flex a))
         _ -> return e
 
 singleInstance (TyFun ty_arg ty_res) = do
