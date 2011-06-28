@@ -159,10 +159,12 @@ sayNo     = putStrLn "No"
 -- consumeSolutions :: Infer a b -> HopesIO ()
 consumeSolutions i = do
     src  <- gets kb
+    liftIO $ hSetBuffering stdin NoBuffering
     case infer src i of
         Nothing -> liftIO $ sayNo
         Just (a, rest) -> do
             liftIO $ sayYes
             liftIO $ print $ printanswer a
             c <- liftIO $ getChar
-            when (not $ c == 'q') $ consumeSolutions rest
+            when (c == ';') $ do { liftIO $ putChar '\n';    consumeSolutions rest }
+--            when (not $ c == 'q') $ consumeSolutions rest

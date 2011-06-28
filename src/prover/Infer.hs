@@ -30,8 +30,8 @@ import Control.Monad.State
 import Control.Monad.Identity
 -- import Data.Monoid
 -- import List (last)
--- import Debug.Trace
--- import Pretty
+import Debug.Trace
+import Pretty
 
 
 type Infer a = ReaderT (KnowledgeBase a) (StateT Int (LogicT Identity))
@@ -113,7 +113,7 @@ lambdaReduce e = return (e, success)
 resolveFlex g =
     let f = functor g
     in case f of
-          (Flex x) ->
+          (Flex x) -> 
               singleInstance (typeOf f) >>- \fi -> do
               r <- freshVarOfType (typeOf f)
               return ((substFunc g fi), (bind x (lubExp fi (Flex r))))
@@ -182,8 +182,11 @@ singleInstance (TyFun ty_arg ty_res) = do
                         return $ if y == ctop then (Flex x) else y
                   else
                         fail ""
-    res <- singleInstance ty_res
-    return $ if (ty_res == tyBool) then (Lambda x xe) else (Lambda x (comb xe res))
+    if (ty_res == tyBool)
+       then return (Lambda x xe)
+       else singleInstance ty_res >>- \res -> return (Lambda x (comb xe res))
+--    res <- singleInstance ty_res
+--    return $ if (ty_res == tyBool) then (Lambda x xe) else (Lambda x (comb xe res))
 
 singleInstance ty
     | ty == tyBool = return cbot `mplus` return ctop

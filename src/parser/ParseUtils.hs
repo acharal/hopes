@@ -183,7 +183,7 @@ mkList elems tl =
 
 -- put some hardcoded building numerics
 mkSym s
-    | all isDigit (show (unLoc s)) = unLoc $ mkInt (read (show (unLoc s)))
+--    | all isDigit (show (unLoc s)) = unLoc $ mkInt (read (show (unLoc s)))
     | isBuildin (show (unLoc s))   = HpSym $ mkBuildin (show (unLoc s))
     | otherwise             = HpSym (tokSym s)
 

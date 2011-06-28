@@ -52,6 +52,7 @@ dot     = char '.'
 entails = text ":-"
 -- semi = text ";"
 curly a = text "{" <+> a <+> text "}"
+--brackets a = text "[" <+> a <+> text "]"
 
 instance Pretty Loc where
     ppr (Loc _ (-1) (-1)) = text "<no-location>"
@@ -152,11 +153,26 @@ pprPrec1 f p e@(App e1 e2) =
             (sep (punctuate comma (map (pprPrec1 f p) $ args e)))
        else if fu == cor then
             (sep (punctuate semi (map (pprPrec1 f p) $ args e)))
-       else
+       else if fu == (Rigid (liftSym ".")) then
+            pprList f p e
+       else 
             (pprPrec1 f p (functor e)) <> parens (sep (punctuate comma (map (pprPrec1 f p) $ args e)))
 
 pprPrec1 f p (Lambda a e) =
     text "\\" <> (f a) <> text "." <+> (pprPrec1 f p e)
+
+pprList f p (Rigid x) = ppr x
+pprList f p e = 
+    let listelem (App (App (Rigid x) e1) e2) = if (x == liftSym ".") then e1:(listelem e2) else []
+	listelem _ = []
+	listtail (App (App (Rigid x) _) e2) = if (x == liftSym ".") then listtail e2 else Nothing
+        listtail e1@(Flex x) = Just e1
+	listtail (Rigid x) = Nothing
+        xs = listelem e
+	t = listtail e
+    in case t of 
+	Nothing -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)))
+	Just e' -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)) <> text "|" <> (pprPrec1 f p e'))
 
 instance (Pretty a, Eq a, Symbol a,  HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (Clause a) where
     ppr (C h b) = hang ((ppr h) <+> text "<:=") 4 $ ppr b
@@ -202,21 +218,33 @@ instance (Symbol a, Pretty a, Eq a) =>  AnswerPrintable (Expr a) where
 isbs (Rigid x) s = x == s
 isbs _ _ = False
 
-praPrec n p = ppr p --ppr p
+praPrec n p@(Lambda _ _) = ppr p --pprBasicSet p --ppr p
+praPrec n p = ppr p
 
-bSet e =
-   let getB (Lambda x e) = let (e',r) = (getB e) in (e', x:r)
-       getB e = (e, [])
-       getA (App e a) = let (e', r) = (getA e) in (e', a:r)
-       getA e = (e,[])
-       getElements e@(App (App x y) z) = 
-                if x == ceq then
-                        [(y, z)]
-                else if x == cand then
-                        getElements y ++ getElements z
-                else if isFlex (functor e) then
-                        undefined
-                else
-                        undefined
-   in undefined
+pprBasicSet e = 
+   let getbindings (Lambda x e) = x:(getbindings e)
+       getbindings e = []
+       getbody (Lambda x e) = getbody e
+       getbody e = e
+
+       pprElemsList e = 
+         let xs = getbindings e
+             bd = getbody e
+	 in case bd of 
+             (App (App x y) e') -> if x == cor then ((pprElem xs y):(pprElemsList (removeapp (reverse xs) e'))) else if (xs == []) then [ppr bd] else error ""
+             e -> [ppr e]
+
+       removeapp (x:xs) (App e (Flex y)) = if (x == y) then removeapp xs e else error ""
+       removeapp [] e = e
+
+       splitand e@(App (App x e1) e2) = if (x == cand) then e1:(splitand e2) else [e]
+       splitand e = [e]
+
+       pprElem xs e = if length pes == 1 then sep (punctuate comma pes) else parens (sep (punctuate comma pes))
+	     where es = map spliteq (splitand e)
+                   pes = map (ppr.snd) es
+       spliteq (App (App x e1) e2) = if (x == ceq) then (e1, e2) else error ""
+       spliteq e = (undefined, e)
+       pprElems e = pprElemsList e
+   in curly (sep (punctuate comma (pprElems e)))
 
