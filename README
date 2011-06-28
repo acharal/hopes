@@ -29,6 +29,15 @@ the console to compile the program.
 Microsoft Windows compilations are not yet supported but this should
 be no problem as far as GHC and cabal are installed in the system.
 
+
+Getting Started
+
+In pl/examples directory there are some hopes examples to getting
+started. To load an example you must type
+
+-? :l pl/examples/file.pl
+
+
 References
 
 [1] Extensional Higher-Order Logic Programming,
