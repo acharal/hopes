@@ -24,7 +24,7 @@ import Loc
 import Error
 import Pretty
 import Buildins
-import Char (isUpper, isDigit)
+import Char (isUpper)
 import List (partition, nub)
 import Control.Monad.State
 

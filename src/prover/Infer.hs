@@ -30,8 +30,6 @@ import Control.Monad.State
 import Control.Monad.Identity
 -- import Data.Monoid
 -- import List (last)
-import Debug.Trace
-import Pretty
 
 
 type Infer a = ReaderT (KnowledgeBase a) (StateT Int (LogicT Identity))
