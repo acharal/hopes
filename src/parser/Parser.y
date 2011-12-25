@@ -26,19 +26,18 @@
 
 {
 module Parser (
-        module Parser,
-        module ParseUtils
+        parseSrc, parseGoal, runParser, withInput, fromFile
 ) where
 
-import Lexer
+import Loc (Located(..), located, unLoc, bogusLoc)
+import Lexer (lexer)
 import Syntax
-import Types
-import Loc
+import Types (unTyp, TySig, Type)
 import ParseUtils
 }
 
 %tokentype { (Located Token) }
-%token 
+%token
       ':-'      { (L _ TKgets)    }
       '.'       { (L _ TKdot)     }
       ','       { (L _ TKcomma)   }
@@ -68,7 +67,7 @@ import ParseUtils
 %left '::'
 %left ID
 
-%% 
+%%
 
 src :: { PHpSrc }
     : stmts                     {% mkSrc (reverse $1) }

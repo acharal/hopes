@@ -107,7 +107,7 @@ setTok :: Monad m =>  Located Token -> ParserT m ()
 setTok tok = modify (\s -> s{ ptok = tok })
 
 parseErrorWithLoc :: Monad m => Loc -> ErrDesc -> ParserT m a
-parseErrorWithLoc loc msg = 
+parseErrorWithLoc loc msg =
     throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg
 
 parseError :: Monad m => ErrDesc -> ParserT m a
@@ -141,7 +141,7 @@ tokId _ = error "not a valid token"
 type HpStmt a = Either (LHpClause a) (TySig a)
 
 --mkSrc :: [HpStmt a] -> Parser (HpProg a)
-mkSrc stmts = 
+mkSrc stmts =
     let (l, r) = collectEither stmts
     in  return HpSrc { clauses = l, tyEnv = r }
 
@@ -157,7 +157,7 @@ isCapitalized (Sym s) = isUpper $ head s
 
 
 --mkClause :: LHpExpr a -> [LHpExpr a] -> HpClause a
-mkQuantForm xs ys = 
+mkQuantForm xs ys =
     let syms   = concatMap symbols' (xs ++ ys)
         bind x = HpBind x bogusType
         vars' = map bind $ nub $ filter isCapitalized syms
@@ -174,7 +174,7 @@ mkQuantForm xs ys =
 mkLambda x (L _ (HpLam ys e'))  = HpLam ((HpBind (liftSym (tokId x)) bogusType):ys) e'
 mkLambda x e = HpLam [(HpBind (liftSym (tokId x)) bogusType)] e
 
-mkList elems tl = 
+mkList elems tl =
     unLoc $ foldr (\x -> \y -> located x $ HpApp consE [x,y]) lastel elems
     where consE   = located bogusLoc $ HpSym (mkBuildin ".")
           lastel  = case tl of
@@ -215,7 +215,7 @@ mkTyp (L _ (HpTyRel t))    = do
 mkTyp (L _ (HpTyTup tl))   = do
     tl' <- mapM mkTyp tl
     case tl' of
-        [t] -> return t 
+        [t] -> return t
         _ -> return (TyTup tl')
 -}
 

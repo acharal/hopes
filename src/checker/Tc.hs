@@ -18,26 +18,25 @@
 -- | type checker monad
 module Tc where
 
-import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.Reader (ReaderT, runReaderT, local, asks)
+import Control.Monad.State (StateT, runStateT, modify, gets)
 
-import Loc
+import Loc (MonadLoc, getLoc, loc, HasLocation, locSpan, unLoc)
 import Error
-
 import Syntax
 import Lang
 import Types
 import Pretty
-import Data.IORef
+import Data.IORef (newIORef, readIORef, writeIORef)
 
 
 data TcEnv =
-    TcEnv { 
+    TcEnv {
         tcTyEnv :: TyEnv HpSymbol,
         ctxt  :: [Context]
     }
 
-data TcState = 
+data TcState =
     TcState {
         uniq   :: Int,
         msgs   :: Messages
@@ -59,7 +58,7 @@ runTc m =  run >>= \res -> case res of
 runTcWithEnv env m = runTc (extendEnv env m)
 
 recoverTc :: Tc a -> Tc a -> Tc a
-recoverTc main recov = 
+recoverTc main recov =
     catchError main (\msgs -> addMsgs msgs >> recov)
 
 addMsgs m = modify (\s -> s{ msgs = concatMsgs m (msgs s) })
@@ -93,12 +92,12 @@ lookupTy (Tv i r) = liftIO $ readIORef r
 addConstraint :: TyVar -> MonoType -> Tc ()
 addConstraint (Tv i r) ty = do
     maybet <- liftIO $ readIORef r
-    case maybet of 
+    case maybet of
         Just ty' -> typeError (sep [text "tyvar", quotes (int i), text "already bind with type", ppr ty'])
         Nothing ->  liftIO $ writeIORef r (Just ty)
 
 
-normEnv = 
+normEnv =
     let aux (v,t) = do
             t' <- normType t
             return (v, t')
@@ -112,7 +111,7 @@ normType (TyFun t1 t2) = do
 normType tvy@(TyVar tv) = do
     ty <- lookupTy tv
     case ty of
-        Just t  -> do 
+        Just t  -> do
             ty' <- normType t
             let (Tv _ r) = tv
             liftIO $ writeIORef r (Just ty')
@@ -152,7 +151,7 @@ enterContext c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}
 
 
-data Context = 
+data Context =
       CtxtExpr (LHpExpr   HpSymbol)
     | CtxtAtom (LHpExpr   HpSymbol)
     | CtxtForm (LHpClause HpSymbol)

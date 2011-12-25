@@ -22,10 +22,10 @@ import Hopl
 -- import qualified KnowledgeBase as KB
 import Syntax hiding(bindings)
 import Lang
-import Types
-import Loc
-import Control.Monad.Reader
-import Control.Monad.State
+import Types (TyEnv, Typed, tyAll, typed, order, typeOf, MonoTypeV(..))
+import Loc (unLoc, Located(..))
+import Control.Monad.Reader (ReaderT, runReaderT, local, asks)
+import Control.Monad.State (StateT, evalStateT, get, modify)
 
 
 data DesugarEnv = DSEnv { rigty :: TyEnv HpSymbol, bindings :: [HpBindings HpSymbol] }
@@ -112,12 +112,12 @@ desugarExp (HpSym a)  =
         Nothing -> do
             case le of
                 []    -> error ("wtf? no definition for variable "++ show a)
-                (l:_) -> 
+                (l:_) ->
                     case lookupBind a l of
                         Nothing -> error "not implemented yet"
                         Just (HpBind v' ty) -> return $ Flex (typed (grd ty) v')
-        Just ty -> 
-             case ty of 
+        Just ty ->
+             case ty of
                 TyVar _ -> error (show a)
                 _ -> return $ Rigid (typed ty a)
 
@@ -129,9 +129,9 @@ desugarExp (HpLam bs e) =
 
 desugarExp e = error "Expression must not occur in that phase"
 
-freshVar :: (MonadState Int m, Monad m, Symbol a) => m a
+-- freshVar :: (MonadState Int m, Monad m, Symbol a) => m a
 freshVar = do
     r <- get
     modify (+1)
     return $ liftSym $ "_" ++ (show r)
- 
+

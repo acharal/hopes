@@ -20,17 +20,16 @@ module Shell(runInteractive, Command(..)) where
 import List(find,nub)
 import Data.List(isPrefixOf)
 import Char(isSpace)
-import Driver
-import KnowledgeBase
-import Hopl
-import Types
-import Pretty
-import Control.Monad.Error
-import Control.Monad.State
+import Driver (mkCom, dispatch, runDriverM, Command(..), CommandDesc(..), HopeEnv(..), userCommands)
+import KnowledgeBase (clauses)
+import Hopl (clauseHead)
+import Types (unTyp)
+import Pretty (ppr)
+import Control.Monad.Error (catchError)
+import Control.Monad.State (lift, liftIO, gets)
 
-import System.Console.Haskeline
+import System.Console.Haskeline (getInputLine, setComplete, defaultSettings, completeWord, simpleCompletion, InputT, runInputT)
 
--- import Control.Monad.State
 
 trim :: String -> String
 trim xs = dropWhile (isSpace) $ reverse $ dropWhile (isSpace) $ reverse xs
@@ -74,11 +73,11 @@ runInteractive commands = runDriverM $ runInteractiveM commands
 
 -- completion
 
-completePredicates = -- completeQuotedWord Nothing "\'" listPredicates $ 
+completePredicates = -- completeQuotedWord Nothing "\'" listPredicates $
                         completeWord Nothing "" listPredicates
 
-listPredicates s = 
-        let predicates kb = nub $ map (show.ppr.unTyp.clauseHead) $ clauses kb 
+listPredicates s =
+        let predicates kb = nub $ map (show.ppr.unTyp.clauseHead) $ clauses kb
         in do
              k <- gets kb
              return $ map simpleCompletion $ filter (isPrefixOf s) $ predicates k

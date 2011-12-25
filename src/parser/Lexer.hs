@@ -15,12 +15,13 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-module Lexer where
+module Lexer (lexer)
+where
 
-import Loc
-import ParseUtils
+import Loc (Loc(..), Located, located, getLocSpan, spanEnd)
+import ParseUtils (ParserT, ParserInput, Token(..), getInput, setInput, setTok, parseErrorWithLoc)
 import Char (isSpace, isUpper, isLower, isDigit, isAlpha)
-import Pretty
+import Pretty (sep,text,quotes,char)
 
 
 lexer :: Monad m => (Located Token -> ParserT m a) -> ParserT m a
@@ -52,9 +53,9 @@ lexToken' inp l = do
             setInput inp2
             return $ located (l,l2) t
 
-data ScanResult = 
+data ScanResult =
     Tok Token Int String
-  | TokEnd 
+  | TokEnd
   | TokSkip  Loc String
   | TokError Loc String
 
@@ -96,7 +97,7 @@ scanName cstr cs l   = Tok (cstr name) (length name) rest
          isNameChar c = isAlpha c || isDigit c || (c == '_')
 
 scanSkip :: ScanAction
-scanSkip inp lo = 
+scanSkip inp lo =
     let scanSkip_aux o l (c:cs) lo
                  | c == '\n'              = scanSkip_aux 1 (l+1) cs lo
                  | isSpace c              = scanSkip_aux (o+1) l cs lo

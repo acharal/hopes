@@ -18,7 +18,7 @@
 module Types where
 
 import List (nub)
-import Data.IORef -- that's ugly
+import Data.IORef (IORef) -- that's ugly
 import Prelude hiding (concatMap, foldl, foldr)
 import Data.Foldable hiding (maximum)
 import Data.Monoid
@@ -107,7 +107,7 @@ instance Functor Typed where
 
 
 order :: HasType a => a -> Int
-order a = 
+order a =
     case typeOf a of
         (TyFun t t') -> max (1 + (order t)) (order t')
        --(TyTup tys)  -> maximum (map order tys)
@@ -115,7 +115,7 @@ order a =
         _            -> 0
 
 arity :: HasType a => a -> Int
-arity a = 
+arity a =
     let --count (TyTup tys) = length tys
         count _ = 1
     in  case typeOf a of
