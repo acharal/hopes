@@ -16,7 +16,7 @@
 --  Boston, MA 02110-1301, USA.
 
 -- | check for well typed expressions and formulas
-module TypeCheck where
+module TypeCheck (tcProg,tcExpr, tiExpr, tcForm) where
 
 import Syntax
 import Buildins
@@ -195,7 +195,7 @@ tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
     where auxM v = lookupTy v >>= \mayv' ->
             case mayv' of
                 Nothing -> return []
-                Just ty -> do 
+                Just ty -> do
                     vs <- tyvarsM ty
                     return (v:vs)
 
@@ -208,8 +208,8 @@ tySym = return . id   --no annotation
 unificationErr inf_ty exp_ty = do
         inf_ty' <- normType inf_ty
         exp_ty' <- normType exp_ty
-        let desc = hang (text "Could not match types:") 4 
-                        (vcat [ text "Inferred:" <+> ppr inf_ty', 
+        let desc = hang (text "Could not match types:") 4
+                        (vcat [ text "Inferred:" <+> ppr inf_ty',
                                 text "Expected:" <+> ppr exp_ty' ])
         typeError desc
 

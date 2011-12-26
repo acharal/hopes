@@ -4,7 +4,7 @@ Name:           hopes
 Version:        0.0.5
 License:        GPL
 License-File:   LICENSE
-Author:         Angelos Charalambidis
+Author:         Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 Maintainer:     Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 Copyright:	2006-2011 Angelos Charalambidis
 Stability:      Experimental
@@ -15,9 +15,11 @@ Description:
 Category:       Compilers/Interpreters
 Tested-With:	GHC==6.8.2
 Extra-Source-Files:
+                pl/examples/*.pl
                 Makefile
 		README
-
+                AUTHORS
+                COPYING
 Flag split-base
   Description:    Choose the new, split-up base package.
 

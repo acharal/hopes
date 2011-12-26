@@ -16,14 +16,14 @@
 --  Boston, MA 02110-1301, USA.
 
 -- | checking well formatted formulas
-module WellForm where
+module WellForm (wfp, wfg) where
 
 import Syntax
 import Types
 import Loc
 import Tc
-import TypeCheck
-import Restrict
+import TypeCheck (tcProg, tcForm)
+import Restrict (restrictProg, restrictForm)
 
 
 -- well formatted program
@@ -50,7 +50,7 @@ wfg g = do
 
 -- head must not contain "other than" higher order variables in higher-order arg positions
 zonkEnv :: (TyEnv a) -> Tc (TyEnv a)
-zonkEnv env = 
+zonkEnv env =
     let aux (v,t) = do
             t' <- zonkType t
             return (v, t')
@@ -68,7 +68,7 @@ zonkType (TyFun t1 t2) = do
 zonkType t = return t
 
 -- normProg :: HpProg a -> Tc (HpProg a)
-normSrc p = do 
+normSrc p = do
     cl <- mapM normForm (clauses p)
     return (p { clauses = cl })
 

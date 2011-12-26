@@ -18,17 +18,15 @@
 -- | type checker monad
 module Tc where
 
-import Control.Monad.Reader (ReaderT, runReaderT, local, asks)
-import Control.Monad.State (StateT, runStateT, modify, gets)
-
 import Loc (MonadLoc, getLoc, loc, HasLocation, locSpan, unLoc)
 import Error
-import Syntax
-import Lang
+import Syntax (LHpExpr, LHpClause, HpSymbol, isFact)
+import Lang (rigids)
 import Types
 import Pretty
 import Data.IORef (newIORef, readIORef, writeIORef)
-
+import Control.Monad.Reader (ReaderT, runReaderT, local, asks)
+import Control.Monad.State (StateT, runStateT, modify, gets)
 
 data TcEnv =
     TcEnv {

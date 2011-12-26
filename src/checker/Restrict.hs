@@ -18,9 +18,9 @@
 module Restrict where
 
 import Syntax
-import Tc
-import TypeCheck
 import Types
+import Tc
+import TypeCheck (tiExpr, tcExpr)
 import Error (catchError)
 import Loc
 import Pretty
@@ -96,7 +96,7 @@ restrictForm f@(L _ (HpClause _ xs ys)) = enterContext (CtxtForm f) $ do
     extendEnv locals $ do
         mapM_ restrictFunc xs
         --mapM_ restrictFunc ys
-        restrictHead f 
+        restrictHead f
 
 -- function symbol application must be (i, ..., i) -> i
 -- restrictFunc
@@ -147,15 +147,15 @@ multiHoOccurErr occlist =
                      text "must occur only once as argument in the head of a clause"]))
     where ppr_aux e = quotes $ ppr $ unLoc e
 
-predInHeadErr preds = 
+predInHeadErr preds =
     typeError (sep ([text "Predicate variables:",
                      nest 4 (sep (punctuate comma (map ppr_aux preds))),
                      text "must not occur as argument in the head of a clause"]))
     where ppr_aux e = quotes $ ppr $ unLoc e
 
 
-varInHead var = 
-    typeError (sep ([text "Bounded variable:", 
+varInHead var =
+    typeError (sep ([text "Bounded variable:",
                      nest 4 (quotes (ppr (unLoc var))),
                      text "must not occur as functor in the head of a clause"]))
 
