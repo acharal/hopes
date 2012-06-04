@@ -21,7 +21,7 @@ import Lang
 import Loc
 import Types
 import Data.Monoid(mappend, mconcat, mempty)
-import List (find)
+import Data.List (find)
 {-
     Preliminaries
     1. Symbols

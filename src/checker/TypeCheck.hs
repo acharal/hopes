@@ -27,7 +27,7 @@ import Tc
 import Loc
 import Pretty
 
-import Monad (mapAndUnzipM, when)
+import Control.Monad (mapAndUnzipM, when)
 import Data.Foldable (foldlM)
 import Data.Monoid (mappend)
 

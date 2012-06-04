@@ -29,7 +29,7 @@ import Hopl
 import Infer
 import Pretty
 import System.IO
-import System(exitWith, ExitCode(..))
+import System.Exit(exitWith, ExitCode(..))
 import Control.Monad.State(StateT, modify, gets, evalStateT)
 import Data.Monoid
 import KnowledgeBase

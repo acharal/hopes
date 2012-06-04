@@ -25,7 +25,7 @@ Flag split-base
 
 Executable      hopes
   Main-Is:	  Main.hs
-  Build-Depends:  haskell98, mtl, haskeline
+  Build-Depends:  base, mtl, haskeline
   if flag(split-base)
     Build-Depends: base >= 3.0, array, pretty
   else

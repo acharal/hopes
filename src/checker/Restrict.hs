@@ -24,9 +24,9 @@ import TypeCheck (tiExpr, tcExpr)
 import Error (catchError)
 import Loc
 import Pretty
-import Monad (when)
-import List (partition)
-import Maybe (catMaybes)
+import Control.Monad (when)
+import Data.List (partition)
+import Data.Maybe (catMaybes)
 
 {-
     Well-formated formulas

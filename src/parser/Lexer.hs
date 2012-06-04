@@ -20,7 +20,7 @@ where
 
 import Loc (Loc(..), Located, located, getLocSpan, spanEnd)
 import ParseUtils (ParserT, ParserInput, Token(..), getInput, setInput, setTok, parseErrorWithLoc)
-import Char (isSpace, isUpper, isLower, isDigit, isAlpha)
+import Data.Char (isSpace, isUpper, isLower, isDigit, isAlpha)
 import Pretty (sep,text,quotes,char)
 
 

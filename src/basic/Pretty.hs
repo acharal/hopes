@@ -26,7 +26,8 @@ import Loc
 import Lang
 import Syntax
 import Types
-import List (nub)
+import Data.List (nub)
+-- import List (nub)
 import Hopl
 import qualified KnowledgeBase as KB
 import Subst

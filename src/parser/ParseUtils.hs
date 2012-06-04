@@ -24,8 +24,8 @@ import Loc
 import Error
 import Pretty
 import Buildins
-import Char (isUpper)
-import List (partition, nub)
+import Data.Char (isUpper)
+import Data.List (partition, nub)
 import Control.Monad.State
 
 type ParserInput = String

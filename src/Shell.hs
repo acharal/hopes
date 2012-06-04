@@ -17,9 +17,8 @@
 
 module Shell(runInteractive, Command(..)) where
 
-import List(find,nub)
-import Data.List(isPrefixOf)
-import Char(isSpace)
+import Data.List(find,nub,isPrefixOf)
+import Data.Char(isSpace)
 import Driver (mkCom, dispatch, runDriverM, Command(..), CommandDesc(..), HopeEnv(..), userCommands)
 import KnowledgeBase (clauses)
 import Hopl (clauseHead)
