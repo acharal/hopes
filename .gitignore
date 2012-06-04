@@ -1,0 +1,40 @@
+# -----------------------------------------------------------------------------
+# generic generated file patterns
+
+Thumbs.db
+.DS_Store
+
+*~
+#*#
+*.bak
+*.BAK
+*.orig
+*.prof
+*.rej
+
+*.hi
+*.hi-boot
+*.o-boot
+*.p_o
+*.t_o
+*.debug_o
+*.thr_o
+*.thr_p_o
+*.thr_debug_o
+*.o
+*.a
+*.o.cmd
+*.depend*
+log
+tags
+
+autom4te.cache
+config.log
+config.status
+configure
+
+# -----------------------------------------------------------------------------
+# Ignore any overlapped darcs repos and back up files
+
+*-darcs-backup*
+_darcs/
