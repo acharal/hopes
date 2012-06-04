@@ -29,7 +29,7 @@ Executable      hopes
   if flag(split-base)
     Build-Depends: base >= 3.0, array, pretty
   else
-    Build-Depends: base < 3.0
+    Build-Depends: haskell98, base < 3.0
 
   if os(windows)
     CPP-Options: -DBUILD_WINDOWS
