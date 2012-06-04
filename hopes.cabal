@@ -20,6 +20,13 @@ Extra-Source-Files:
 		README
                 AUTHORS
                 COPYING
+Bug-Reports:	https://github.com/acharal/hopes/issues
+Homepage:	https://github.com/acharal/hopes
+
+Source-Repository head
+  type:		git
+  location:	https://github.com/acharal/hopes.git
+
 Flag split-base
   Description:    Choose the new, split-up base package.
 
