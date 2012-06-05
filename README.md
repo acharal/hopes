@@ -38,10 +38,4 @@ started. To load an example you must type
     -? :l pl/examples/file.pl
 
 
-## References
-
-[1] Extensional Higher-Order Logic Programming,
-    Angelos Charalambidis, Konstantinos Handjopoulos,
-    Panos Rondogiannis, William W. Wadge, Logics in Artificial
-    Intelligence, Lecture Notes in Computer Science 2010
-    http://www.springerlink.com/content/f127ru366p77vux3/
+[1]: http://www.springerlink.com/content/f127ru366p77vux3/ "Extensional Higher-Order Logic Programming, Angelos Charalambidis, Konstantinos Handjopoulos, Panos Rondogiannis, William W. Wadge, Logics in Artificial Intelligence, Lecture Notes in Computer Science 2010"
