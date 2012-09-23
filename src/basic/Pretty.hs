@@ -22,9 +22,9 @@ module Pretty (
 
 import Text.PrettyPrint
 
-import Loc
-import Lang
-import Types
+import Loc (Loc(..), LocSpan(..))
+import Lang (Sym(..))
+import Types (Typed(..), TyVar(..), MonoTypeV(..), GrdType(..), TyEnv(..), TySig(..), tyvars)
 import Data.List (nub)
 
 class Pretty a where

@@ -19,21 +19,21 @@
 module Driver where
 
 import Lang(liftSym)
+import Language.Hopl
 import Language.Hopl.Syntax(HpSymbol)
 import Parser(runParser, withInput, parseSrc, parseGoal, fromFile)
 import Types(TyEnv, Typed, findTySig)
 import Tc(runTc, withSig, withTypeEnv)
 import WellForm(wfp, wfg)
 import Desugar
-import Language.Hopl
 import Infer
 import Pretty
 import Subst.Pretty
+import Data.Monoid
+import Control.Monad.State(StateT, modify, gets, evalStateT)
+import Control.Monad.Cont
 import System.IO
 import System.Exit(exitWith, ExitCode(..))
-import Control.Monad.State(StateT, modify, gets, evalStateT)
-import Data.Monoid
-import Control.Monad.Cont
 import System.Console.GetOpt
 
 data HopeEnv =

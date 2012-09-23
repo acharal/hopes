@@ -17,7 +17,7 @@
 
 module Language.Hopl.Parser () where
 
-import Parser
+import Parser ()
 
 {- 
 --loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)

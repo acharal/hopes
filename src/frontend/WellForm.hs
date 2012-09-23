@@ -19,9 +19,9 @@
 module WellForm (wfp, wfg) where
 
 import Language.Hopl.Syntax
-import Types
-import Loc
-import Tc
+import Types (MonoTypeV(..), TyEnv, tyAll, hasType, typeOf)
+import Loc (Located(..))
+import Tc (Tc, getTypeEnv, normType)
 import TypeCheck (tcProg, tcForm)
 import Restrict (restrictProg, restrictForm)
 

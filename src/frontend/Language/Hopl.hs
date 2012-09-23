@@ -42,6 +42,7 @@ clauseBody (C _ b) = b
 
 type Goal a = Expr a
 
+
 instance (Symbol a, Eq a)  => HasLogicConstants (Expr a) where
     ctop    = Rigid $ liftSym "true"
     cbot    = Rigid $ liftSym "false"
@@ -75,11 +76,13 @@ instance (Eq a, Symbol a) => HasConstants (Expr (Typed a)) where
     isExistsQ (Const (T s _)) = s == liftSym "exists"
 -}
 
+{-
 contradiction :: HasLogicConstants a => a
 contradiction = ctop
 
 isContra :: HasLogicConstants a => a -> Bool
 isContra = (==contradiction)
+-}
 
 instance Symbol a => HasSignature (Expr a) a where
 	sig (App e1 e2) = sig e1 `mappend` sig e2

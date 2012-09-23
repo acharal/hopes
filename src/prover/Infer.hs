@@ -15,14 +15,14 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-module Infer where
+-- | Proof procedure of Hopl
+module Infer (runInfer, infer, prove) where
 
 import Language.Hopl
 import Subst
 import Logic
-
-import Types
-import Lang
+import Types (Type(..), MonoTypeV(..), tyBool, tyAll, HasType(..), hasType)
+import Lang (cor, cand, ceq, ctop, cbot, vars, liftSym, Symbol, contradiction, isContra)
 
 import Control.Monad.Reader
 import Control.Monad.State
@@ -192,7 +192,7 @@ singleInstance ty
 
 -- unification
 
-unify :: (Symbol a, Eq a, Monad m) => Expr a -> Expr a -> m (Subst a)
+-- unify :: (Symbol a, Eq a, Monad m) => Expr a -> Expr a -> m (Subst a)
 
 unify (Flex v1) e@(Flex v2)
     | v1 == v2  = return success
@@ -217,7 +217,7 @@ unify (Rigid p) (Rigid q)
 
 unify _ _ = fail "Should not happen"
 
-occurCheck :: (Symbol a, Eq a, Monad m) => a -> Expr a -> m ()
+-- occurCheck :: (Symbol a, Eq a, Monad m) => a -> Expr a -> m ()
 occurCheck a e = when (a `occursIn` e) $ fail "Occur Check"
 
 occursIn a e = a `elem` (vars e)

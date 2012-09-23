@@ -16,15 +16,15 @@
 --  Boston, MA 02110-1301, USA.
 
 -- | check for well typed expressions and formulas
-module TypeCheck (tcProg,tcExpr, tiExpr, tcForm) where
+module TypeCheck (tcProg, tcExpr, tiExpr, tcForm) where
 
 import Language.Hopl.Syntax
-import Buildins
-import Lang
-import Types
+import Buildins (buildinsigs)
+import Lang (Sym(AnonSym))
+import Types (tyBool, MonoType, MonoTypeV(..))
 import Tc
 
-import Loc
+import Loc (Located(..))
 import Pretty
 
 import Control.Monad (mapAndUnzipM, when)

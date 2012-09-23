@@ -17,7 +17,7 @@
 
 module Lang where
 
-import Types
+import Types (Typed(..))
 
 type Name = String
 
@@ -82,4 +82,11 @@ class Eq a => HasLogicConstants a where
     cand     :: a
     ceq      :: a
     cexists  :: a
+
+
+contradiction :: HasLogicConstants a => a
+contradiction = ctop
+
+isContra :: HasLogicConstants a => a -> Bool
+isContra = (==contradiction)
 

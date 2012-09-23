@@ -17,12 +17,12 @@
 
 module Shell(runInteractive, Command(..)) where
 
-import Data.List(find,nub,isPrefixOf)
-import Data.Char(isSpace)
 import Driver (mkCom, dispatch, runDriverM, Command(..), CommandDesc(..), HopeEnv(..), userCommands)
 import Language.Hopl (clauseHead, clauses)
 import Types (unTyp)
 import Pretty (ppr)
+import Data.List(find,nub,isPrefixOf)
+import Data.Char(isSpace)
 import Control.Monad.Error (catchError)
 import Control.Monad.State (lift, liftIO, gets)
 

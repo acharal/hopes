@@ -21,7 +21,7 @@ module Desugar where
 import Language.Hopl hiding (clauses)
 -- import qualified KnowledgeBase as KB
 import Language.Hopl.Syntax hiding(bindings)
-import Lang
+import Lang (cand, ceq, ctop, Sym(AnonSym), liftSym)
 import Types (TyEnv, Typed, tyAll, typed, order, typeOf, MonoTypeV(..))
 import Loc (unLoc, Located(..))
 import Control.Monad.Reader (ReaderT, runReaderT, local, asks)
