@@ -17,10 +17,9 @@
 
 module Types where
 
--- import List (nub)
+import Prelude hiding (concatMap, foldl, foldr)
 import Data.List (nub)
 import Data.IORef (IORef) -- that's ugly
-import Prelude hiding (concatMap, foldl, foldr)
 import Data.Foldable hiding (maximum)
 import Data.Monoid
 

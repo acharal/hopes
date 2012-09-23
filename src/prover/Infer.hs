@@ -17,8 +17,7 @@
 
 module Infer where
 
-import Hopl
-import KnowledgeBase
+import Language.Hopl
 import Subst
 import Logic
 

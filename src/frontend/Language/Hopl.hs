@@ -1,4 +1,4 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2012 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 --  Boston, MA 02110-1301, USA.
 
 -- | Higher Order Predicate Language
-module Hopl where
+module Language.Hopl where
 
 import Lang
 import Types
@@ -135,3 +135,17 @@ functor e = e
 args (App e a) = args2 e ++ [a]
     where args2 (App e a) = args2 e ++ [a]
           args2 e = []
+
+
+data KnowledgeBase a =
+    KB {
+        -- name :: String
+        clauses :: [Clause a]
+    }
+
+instance Symbol a => HasSignature (KnowledgeBase a) a where
+	sig cs = mconcat $ map sig $ clauses cs
+
+instance Monoid (KnowledgeBase a) where
+    mempty  = KB mempty
+    mappend (KB x) (KB y) = KB $ mappend x y

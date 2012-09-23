@@ -17,7 +17,7 @@
 
 module Subst where
 
-import Hopl
+import Language.Hopl (Expr(..), Clause(..))
 -- import Data.Monoid (mconcat)
 
 type Subst a = [ (a, Expr a) ]

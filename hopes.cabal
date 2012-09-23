@@ -45,11 +45,12 @@ Executable      hopes
                   src/basic
                   src/frontend
                   src/prover
+                  src/interpreter
   Other-Modules:  Lexer, Parser, ParseUtils, Language.Hopl.Syntax,
                   Lang, Buildins, Types,
                   Tc, WellForm, TypeCheck, Restrict,
                   Pretty, Error, Loc, Desugar,
-                  Hopl, Logic, Logic.Class, Infer, Subst, KnowledgeBase,
+                  Language.Hopl, Logic, Logic.Class, Infer, Subst, Subst.Pretty
                   Shell, Driver
   Extensions:     RankNTypes
                   MultiParamTypeClasses

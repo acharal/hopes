@@ -25,14 +25,14 @@ import Types(TyEnv, Typed, findTySig)
 import Tc(runTc, withSig, withTypeEnv)
 import WellForm(wfp, wfg)
 import Desugar
-import Hopl
+import Language.Hopl
 import Infer
 import Pretty
+import Subst.Pretty
 import System.IO
 import System.Exit(exitWith, ExitCode(..))
 import Control.Monad.State(StateT, modify, gets, evalStateT)
 import Data.Monoid
-import KnowledgeBase
 import Control.Monad.Cont
 import System.Console.GetOpt
 

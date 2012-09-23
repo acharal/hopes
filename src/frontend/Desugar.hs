@@ -18,7 +18,7 @@
 -- | Transform Syntax to plain Hopl removing superfluous information (e.g. Location)
 module Desugar where
 
-import Hopl
+import Language.Hopl hiding (clauses)
 -- import qualified KnowledgeBase as KB
 import Language.Hopl.Syntax hiding(bindings)
 import Lang
