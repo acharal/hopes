@@ -24,7 +24,6 @@ import Text.PrettyPrint
 
 import Loc
 import Lang
-import Syntax
 import Types
 import Data.List (nub)
 -- import List (nub)
@@ -108,29 +107,6 @@ instance Pretty a => Pretty (TySig a) where
 
 instance Pretty a => Pretty (TyEnv a) where
     ppr ts = vcat $ map ppr ts
-
--- syntax
-
-instance Pretty a => Pretty (HpExpr a) where
-    ppr (HpAnn e ty)  = hsep [ ppr (unLoc e), dcolon, ppr ty ]
-    ppr (HpPar e)     = parens (ppr (unLoc e))
-    ppr (HpSym s)     = ppr s
-    ppr (HpApp e es)  = ppr (unLoc e) <>
-                            parens (sep (punctuate comma (map (ppr.unLoc) es)))
-    ppr (HpTup es)    = parens (sep (punctuate comma (map (ppr.unLoc) es)))
-    ppr (HpLam xs e)  =
-        sep (punctuate (text "->") (map (\x -> text "\\" <> ppr (symbolBind x)) xs)) <>
-            text "->" <+> ppr (unLoc e)
-
-instance Pretty a => Pretty (HpClause a) where
-    ppr (HpClause _ [h] []) = ppr (unLoc h) <> dot
-    ppr (HpClause _ h b)  =
-        hang (  sep (punctuate comma (map (ppr.unLoc)  h)) <> entails) 4 $ 
-                sep (punctuate comma (map (ppr.unLoc)  b)) <> dot
-
-
-instance Pretty a => Pretty (HpSrc a) where
-    ppr p = vcat $ map (ppr.unLoc) (clauses p)
 
 instance (Pretty a, Eq a, Symbol a, HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (Expr a) where
     ppr a =  pprPrec1 v' 1 a

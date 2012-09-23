@@ -18,7 +18,7 @@
 -- | checking well formatted formulas
 module WellForm (wfp, wfg) where
 
-import Syntax
+import Language.Hopl.Syntax
 import Types
 import Loc
 import Tc

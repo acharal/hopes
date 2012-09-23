@@ -18,7 +18,7 @@
 -- | check for well typed expressions and formulas
 module TypeCheck (tcProg,tcExpr, tiExpr, tcForm) where
 
-import Syntax
+import Language.Hopl.Syntax
 import Buildins
 import Lang
 import Types

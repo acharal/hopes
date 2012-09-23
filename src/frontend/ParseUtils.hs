@@ -17,7 +17,7 @@
 
 module ParseUtils where
 
-import Syntax
+import Language.Hopl.Syntax
 import Lang
 import Types
 import Loc

@@ -31,7 +31,7 @@ module Parser (
 
 import Loc (Located(..), located, unLoc, bogusLoc)
 import Lexer (lexer)
-import Syntax
+import Language.Hopl.Syntax
 import Types (unTyp, TySig, Type)
 import ParseUtils
 }

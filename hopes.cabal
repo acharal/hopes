@@ -43,11 +43,9 @@ Executable      hopes
 
   Hs-Source-Dirs: src
                   src/basic
-                  src/parser
-                  src/checker
+                  src/frontend
                   src/prover
-                  src/desugar
-  Other-Modules:  Lexer, Parser, ParseUtils, Syntax,
+  Other-Modules:  Lexer, Parser, ParseUtils, Language.Hopl.Syntax,
                   Lang, Buildins, Types,
                   Tc, WellForm, TypeCheck, Restrict,
                   Pretty, Error, Loc, Desugar,

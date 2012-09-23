@@ -17,7 +17,7 @@
 
 module Restrict where
 
-import Syntax
+import Language.Hopl.Syntax
 import Types
 import Tc
 import TypeCheck (tiExpr, tcExpr)

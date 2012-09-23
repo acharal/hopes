@@ -19,7 +19,7 @@
 module Driver where
 
 import Lang(liftSym)
-import Syntax(HpSymbol)
+import Language.Hopl.Syntax(HpSymbol)
 import Parser(runParser, withInput, parseSrc, parseGoal, fromFile)
 import Types(TyEnv, Typed, findTySig)
 import Tc(runTc, withSig, withTypeEnv)

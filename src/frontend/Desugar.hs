@@ -20,7 +20,7 @@ module Desugar where
 
 import Hopl
 -- import qualified KnowledgeBase as KB
-import Syntax hiding(bindings)
+import Language.Hopl.Syntax hiding(bindings)
 import Lang
 import Types (TyEnv, Typed, tyAll, typed, order, typeOf, MonoTypeV(..))
 import Loc (unLoc, Located(..))

@@ -20,10 +20,11 @@ module Tc where
 
 import Loc (MonadLoc, getLoc, loc, HasLocation, locSpan, unLoc)
 import Error
-import Syntax (LHpExpr, LHpClause, HpSymbol, isFact)
+import Language.Hopl.Syntax (LHpExpr, LHpClause, HpSymbol, isFact)
+import Language.Hopl.Pretty ()
+import Pretty
 import Lang (rigids)
 import Types
-import Pretty
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Control.Monad.Reader (ReaderT, runReaderT, local, asks)
 import Control.Monad.State (StateT, runStateT, modify, gets)
