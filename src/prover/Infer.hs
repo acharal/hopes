@@ -29,6 +29,9 @@ import Control.Monad.State
 import Control.Monad.Identity
 -- import Data.Monoid
 -- import List (last)
+import Debug.Trace
+import Language.Hopl.Pretty ()
+import Pretty
 
 
 type Infer a = ReaderT (KnowledgeBase a) (StateT Int (LogicT Identity))
@@ -46,10 +49,13 @@ prove g =  do
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute g
+
+refute = refuteRec
+
+refute' g
     | isContra g = return success
-    | otherwise  = derive g >>- \(g',  s)  ->
-                   refute (subst s g') >>- \ans ->
+    | otherwise  = derive g >>= \(g',  s)  ->
+                   refute (subst s g') >>= \ans ->
                    return (s `combine` ans)
 
 -- a derivation
@@ -59,26 +65,26 @@ derive g
   | otherwise =
     let f g = case functor g of
                  Rigid _    -> 
-                      -- trace ("Rigid resolution") $ 
+                      -- trace ("R " ++ (show (ppr g))) $ 
                       resolveRigid g
                  Flex _     ->
                       -- trace ("Flex resolution") $ 
                       resolveFlex g
                  Lambda _ _ -> 
-                      -- trace ("Beta reduce" ++ (show (ppr g))) $ 
+                      -- trace ("L " ++ (show (ppr g))) $ 
                       lambdaReduce g
                  _ -> error  "Cannot derive anything from that atom"
     -- in undefined -- split g  >>- \(a, g') -> f g' a
     in case g of
         (App (App c a) b) ->
             if c == cand then
-                derive a >>- \(g', s) ->
+                derive a >>= \(g', s) ->
                     if isContra g' then
                         return (b, s)
                     else
                         return ((App (App cand g') b), s)
             else if c == cor then
-                return a `mplus` return b >>- \g ->
+                return a `mplus` return b >>= \g ->
                     derive g
             else if c == ceq then
                 unify a b >>= \s ->
@@ -90,13 +96,40 @@ derive g
             else f g
         _ -> f g
 
+refuteRec g
+    | isContra g = return success
+    | otherwise = 
+        let f g = case functor g of
+                      Rigid _ -> trace "call" $ call (resolveRigid g >>= \(g', _) -> refuteRec g')
+                      Flex  _ -> resolveFlex g >>= \(g', s') -> refuteRec (subst s' g') >>= \s'' -> return (s' `combine` s'')
+                      Lambda _ _ -> lambdaReduce g >>= \(g', _) -> refuteRec g'
+        in trace (show $ ppr g) $ case g of 
+            (App (App c a) b) ->
+                if c == cand
+                then refuteRec a            >>= \s'  ->
+                     refuteRec (subst s' b) >>= \s'' -> 
+                     return (s' `combine` s'')
+                else if c == cor
+                then refuteRec a `mplus` refuteRec b
+                else if c == ceq
+                then unify a b
+                else if c == ctop
+                then return success
+                else if c == cbot
+                then fail "cbot"
+                else f g
+            _ -> if isCut g
+                 then cut >> return success
+                 else f g
+
+refuteRigid g = call $ refute g
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b
 
-resolveRigid g =
-    clauseOf (functor g) >>- \c ->
-    variant c >>- \(C p b) ->
+resolveRigid g =  do
+    c <- clauseOf (functor g)
+    (C _ b) <- variant c
     return (substFunc g b, success)
 
 lambdaReduce (App e a) = do
@@ -219,8 +252,7 @@ unify _ _ = fail "Should not happen"
 
 -- occurCheck :: (Symbol a, Eq a, Monad m) => a -> Expr a -> m ()
 occurCheck a e = when (a `occursIn` e) $ fail "Occur Check"
-
-occursIn a e = a `elem` (vars e)
+   where occursIn a e = a `elem` (vars e)
 
 -- utils
 

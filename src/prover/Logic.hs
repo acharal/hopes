@@ -31,44 +31,47 @@ import Control.Monad.Trans
 import Logic.Class
 
 
-newtype LogicT m a  = SFKT (forall ans. SK (m ans) a -> FK (m ans) -> m ans)
+newtype LogicT m a  = SFKT (forall ans. SK (m ans) a -> FK (m ans) -> FK (m ans) -> m ans)
 unSFKT (SFKT a) = a
 
 type FK ans = ans
-type SK ans a = a -> FK ans -> ans
+type SK ans a = a -> FK ans -> FK ans -> ans
 
 instance MonadTrans LogicT where
-    lift m = SFKT (\sk fk -> m >>= (\a -> sk a fk))
+    lift m = SFKT (\sk fk ck -> m >>= (\a -> sk a fk ck))
 
 instance Monad m => Monad (LogicT m) where
-    return e = SFKT (\sk fk -> sk e fk)
+    return e = SFKT (\sk fk ck -> sk e fk ck)
     m >>= f  =
-      SFKT (\sk fk ->
-           unSFKT m (\a fk' -> unSFKT (f a) sk fk')
-             fk)
-    fail s   = SFKT (\_ fk -> fk)
+      SFKT (\sk fk ck ->
+           unSFKT m (\a fk' ck' -> unSFKT (f a) sk fk' ck')
+             fk ck)
+    fail s   = SFKT (\_ fk _ -> fk)
 
 instance Monad m => MonadPlus (LogicT m) where
-    mzero = SFKT (\_ fk -> fk)
-    m1 `mplus` m2 = SFKT (\sk fk -> unSFKT m1 sk (unSFKT m2 sk fk))
+    mzero = SFKT (\_ fk _ -> fk)
+    m1 `mplus` m2 = SFKT (\sk fk ck -> unSFKT m1 sk (unSFKT m2 sk fk ck) ck)
 
 instance MonadIO m => MonadIO (LogicT m) where
     liftIO = lift . liftIO
 
 instance Monad m => MonadLogic (LogicT m) where
-    msplit m = lift $ unSFKT m ssk (return Nothing)
-        where ssk a fk = return $ Just (a, (lift fk >>= reflect))
+    msplit m = lift $ unSFKT m ssk (return Nothing) (return Nothing)
+        where ssk a fk ck = return $ Just (a, (lift fk >>= reflect))
 
+instance Monad m => MonadCut (LogicT m) where
+    call m = SFKT (\sk fk _ -> unSFKT m sk fk fk)
+    cut    = SFKT (\sk _ ck -> sk () ck ck)
 
 -- observe . lift = id
-observe m = unSFKT m (\a fk -> return a) (fail "no answer")
+observe m = unSFKT m (\a fk ck -> return a) (fail "no answer") (fail "no answer")
 
 runL n m = observe (bagofN n m)
 
 runLogic :: (Monad m) => Maybe Int -> LogicT m a -> m [a]
-runLogic  Nothing (SFKT m) = m (\a fk -> fk >>= (return . (a:))) (return [])
+runLogic  Nothing (SFKT m) = m (\a fk ck -> fk >>= (return . (a:))) (return []) (return [])
 runLogic (Just n) (SFKT m) | n <=0 = return []
-runLogic (Just 1) (SFKT m) = m (\a fk -> return [a]) (return [])
-runLogic (Just n) m = unSFKT (msplit m) runM' (return [])
-    where runM' Nothing _ = return []
-          runM' (Just (a,m')) _ = runLogic (Just (n-1)) m' >>= (return . (a:))
+runLogic (Just 1) (SFKT m) = m (\a fk ck -> return [a]) (return []) (return [])
+runLogic (Just n) m = unSFKT (msplit m) runM' (return []) (return [])
+    where runM' Nothing _ _ = return []
+          runM' (Just (a,m')) _ _ = runLogic (Just (n-1)) m' >>= (return . (a:))
