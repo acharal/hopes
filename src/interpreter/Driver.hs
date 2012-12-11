@@ -30,7 +30,7 @@ import Infer
 import Pretty
 import Subst.Pretty
 import Data.Monoid
-import Control.Monad.State(StateT, modify, gets, evalStateT)
+import Control.Monad.Trans.State.Strict (StateT, modify, gets, evalStateT)
 import Control.Monad.Cont
 import System.IO
 import System.Exit(exitWith, ExitCode(..))

@@ -32,7 +32,7 @@ Flag split-base
 
 Executable      hopes
   Main-Is:	  Main.hs
-  Build-Depends:  base, mtl, haskeline
+  Build-Depends:  base, mtl, transformers, haskeline
   if flag(split-base)
     Build-Depends: base >= 3.0, array, pretty
   else
