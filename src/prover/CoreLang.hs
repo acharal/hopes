@@ -59,6 +59,7 @@ fv (Var a)      = [a]
 fv (Rigid _)    = []
 fv (CTrue)      = []
 fv (CFalse)     = []
+fv (Cut)        = []
 fv (App e1 e2)  = fv e1 `union` fv e2
 fv (And e1 e2)  = fv e1 `union` fv e2
 fv (Or  e1 e2)  = fv e1 `union` fv e2
