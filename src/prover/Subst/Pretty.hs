@@ -2,14 +2,11 @@
 module Subst.Pretty where
 
 import Pretty
-import Subst
--- import Language.Hopl
--- import Language.Hopl.Pretty ()
+import Subst (Subst)
 import Lang
 import CoreLang
 import Data.List (elemIndex, sortBy, groupBy)
 import Data.Either (rights)
-import Debug.Trace
 
 instance (Pretty a, Eq a, Symbol a) => Pretty (Subst a) where
     ppr xs = vcat $ map ppr_bind xs

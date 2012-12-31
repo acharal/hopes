@@ -18,21 +18,16 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
--- import Language.Hopl
-import Subst
 import Logic
-import Types (Type(..), MonoTypeV(..), tyBool, tyAll, HasType(..), hasType)
--- import Lang (cor, cand, ceq, ctop, cbot, vars, liftSym, Symbol, contradiction, isContra)
-import Lang (liftSym, Symbol)
+import Types (MonoTypeV(..), tyBool, tyAll, HasType(..), hasType)
+import Subst (subst, bind, restrict, combine, success)
+import Lang (liftSym)
 
-import CoreLang
+import CoreLang (Expr(..), Program, fv, functor, clausesOf)
 
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Identity
--- import Data.Monoid
--- import List (last)
-import Debug.Trace
 
 type Infer a = ReaderT (Program a) (StateT Int (LogicT Identity))
 
@@ -51,8 +46,8 @@ prove g =  do
 -- refute :: Goal a -> Infer a (Subst a)
 refute g
     | g == CTrue = return success
-    | otherwise  = derive g >>- \(g',  s)  ->
-                   refute (subst s g') >>- \ans ->
+    | otherwise  = derive g  >>- \(g',  s)  ->
+                   refute g' >>- \ans ->
                    return (s `combine` ans)
 
 -- single step derivation
@@ -73,15 +68,16 @@ derive (Exists v e)  = do
     v' <- freshVarOfType (typeOf v)
     return (subst (bind v (Var v')) e, success)
 
-derive e = case functor e of
-            Rigid _    -> resolveRigid e
-            Var _      -> resolveFlex  e
-            Lambda _ _ -> lambdaReduce e
-            _          -> return (expandApp e, success)
+derive e =
+    case functor e of
+       Rigid _    -> resolveRigid e
+       Var _      -> resolveFlex  e
+       Lambda _ _ -> lambdaReduce e
+       _          -> return (expandApp e, success)
     where expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
           expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
           expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
-          expandApp e                   = error ("expandApp" ++ show e)
+          expandApp e                   = error "expandApp"
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b
@@ -122,45 +118,14 @@ resolveFlex g =
           Var x -> 
               singleInstance (typeOf x) >>- \fi -> do
               r <- freshVarOfType (typeOf x)
-              return ((substFunc g fi), (bind x (lubExp fi (Var r))))
+              let s  = bind x (lubExp fi (Var r))
+              let g' = subst s (substFunc g fi)
+              return (g', s)
           _ -> fail "resolveF: cannot resolve a non flexible"
 
-
-{-
-lambdaInstance ty
-    | ty == tyBool = return cbot `mplus` return ctop
-    | ty == tyAll  = error "cannot lambda instantiate an individual"
-    | otherwise    =
-        case ty of
-            TyFun f a -> undefined
--}
 -- Makes an instance e1 \lub e2 where e2 is a variable.
-{-
-lubExp e1 e2 =
-    let lubExp1 (Lambda x e) e' bs =
-            (Lambda x (lubExp1 e e' (bs ++ [x])))
-        lubExp1 e e' bs = (App (App cor e) e'')
-            where e'' = foldl (\x -> \y -> (App x (Flex y))) e' bs
-    in  lubExp1 e1 e2 []
--}
 lubExp e1 e2  = disjLambda [e1,e2]
 disjLambda es = foldl1 Or es
-
-{-
-disjLambda [] = return cbot
-disjLambda (e:es) =
-    case typeOf e of
-        TyFun t1 t2 -> do
-            x <- freshVarOfType t1
-            let vs'  = map (\(Lambda v _) -> v) (e:es)
-            let es'  = map (\(Lambda _ e') -> e') (e:es)
-            let ss'  = zip (map (\v -> bind v (Flex x)) vs') es'
-            let es'' = map (\(s,e) -> subst s e) ss'
-            e' <- disjLambda es''
-            return (Lambda x e')
-        _ -> return $ foldl (\x -> \y -> (App (App cor x) y)) e es
--}
-
 
 basicInstance ty@(TyFun _ _) =
     msum (map return [1..])          >>- \n ->
@@ -236,29 +201,12 @@ occursIn a e = a `elem` (fv e)
 
 -- utils
 
--- split a goal to an atom and the rest goal
--- deterministic computation picking always the left-most atom
--- split :: Goal a -> Infer a (Expr a, Goal a)
-split []     = fail "Empty goal. Can't pick an atom"
-split (x:xs) = return (x, xs)
-
 clauseOf (Rigid r) = do
     cl <- asks (clausesOf r)
     msum (map return cl)
 clauseOf e = fail "expression must be rigid (parameter)"
 
-{- 
-variant c =
-    let vs = vars c
-        bindWithFresh v = do
-            v' <- freshVarOfType (typeOf v)
-            return (v, Flex v')
-    in do
-    s <- mapM bindWithFresh vs
-    return $ subst s c
--}
-
-freshVarOfType :: (MonadState Int m, Symbol a, HasType a) => Type -> m a
+-- freshVarOfType :: (MonadState Int m, Symbol a, HasType a) => Type -> m a
 freshVarOfType ty = do
     a' <- get
     modify (+1)
