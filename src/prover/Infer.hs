@@ -70,9 +70,6 @@ refuteRec e =
              s'' <- refuteRec e'
              return (s' `combine` s'')
 
-refuteRigid g = call $ refute g
-
-
 -- single step derivation
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
 derive (Eq  e1 e2)   = do
