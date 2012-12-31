@@ -17,8 +17,9 @@
 
 module Subst where
 
-import Language.Hopl (Expr(..), Clause(..))
+-- import Language.Hopl (Expr(..), Clause(..))
 -- import Data.Monoid (mconcat)
+import CoreLang
 
 type Subst a = [ (a, Expr a) ]
 
@@ -30,30 +31,28 @@ bind v e = [(v, e)]
 
 
 isTaut :: Eq a => (a, Expr a) -> Bool
-isTaut (v, Flex v') = v == v'
+isTaut (v, Var v') = v == v'
 isTaut _ = False
-
 
 class (Substitutable a b) | a -> b where
 	subst :: Substitutable a b => (Subst b) -> a -> a
 
 instance Eq a => (Substitutable (Expr a) a) where
-        subst theta (App e1 e2) = App (subst theta e1) (subst theta e2)
-        subst theta (Lambda x e) =
-            case lookup x theta of
-                Nothing -> Lambda x (subst theta e)
-                Just e' -> case e' of
-                            Flex y -> (Lambda y (subst theta e))
-                            _ -> error "Cannot substitute lambda bound vars with expr"
-        subst theta e@(Flex x) =
-            case lookup x theta of
-                Nothing -> e
-                Just e' -> e'
+        subst theta (App e1 e2)  = App (subst theta e1) (subst theta e2)
+        subst theta (And e1 e2)  = And (subst theta e1) (subst theta e2)
+        subst theta (Or  e1 e2)  = Or  (subst theta e1) (subst theta e2)
+        subst theta (Eq  e1 e2)  = Eq  (subst theta e1) (subst theta e2)
+        subst theta (Lambda x e) = maybe (Lambda x (subst theta e)) aux $ lookup x theta
+            where aux (Var y) = Lambda y (subst theta e)
+                  aux _ = error "Cannot substitute lambda bounds vars with expr"
+        subst theta (Exists x e) = maybe (Exists x (subst theta e)) aux $ lookup x theta
+            where aux (Var y) = Exists y (subst theta e)
+                  aux _ = error "Cannot substitute lambda bounds vars with expr"
+        subst theta (Forall x e) = maybe (Forall x (subst theta e)) aux $ lookup x theta
+            where aux (Var y) = Forall y (subst theta e)
+                  aux _ = error "Cannot substitute lambda bounds vars with expr"
+        subst theta e@(Var x) = maybe e id $ lookup x theta
         subst theta e = e
-
-instance Eq a => (Substitutable (Clause a) a) where
-	subst theta (C h b) = (C h (subst theta b))
-
 
 instance Eq a => (Substitutable (Subst a) a) where
 	subst theta zeta = [ (v, e') | (v, e) <- theta, let e' = subst zeta e, not (isTaut (v, e')) ]

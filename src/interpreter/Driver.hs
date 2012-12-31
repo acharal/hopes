@@ -27,6 +27,7 @@ import Tc(runTc, withSig, withTypeEnv)
 import WellForm(wfp, wfg)
 import Desugar
 import Infer
+import CoreLang (Program, kbtoProgram, hopltoCoreGoal)
 import Pretty
 import Subst.Pretty
 import Data.Monoid
@@ -39,7 +40,8 @@ import System.Console.GetOpt
 data HopeEnv =
     HEnv {  
         currentEnv :: TyEnv HpSymbol,
-        kb         :: KnowledgeBase (Typed HpSymbol)
+        kb         :: KnowledgeBase (Typed HpSymbol),
+        p          :: Program (Typed HpSymbol)
     }
 
 type HopesIO = StateT HopeEnv IO
@@ -117,14 +119,14 @@ loadGoal inp env = do
     case tcres of
         Just (tcgoal, env') -> do
             cg <- runDesugarT $ desugarGoal (tcgoal, env')
-            return cg
+            return (hopltoCoreGoal cg)
         Nothing -> processMsgs msgs
 
 consultFile :: FilePath -> HopesIO ()
 consultFile f = do
     (src, env) <- loadSource f
     liftIO $ putStrLn ("% consulted " ++ show f ++ "")
-    modify (\s -> s{ kb = KB src, currentEnv = env})
+    modify (\s -> s{ kb = KB src, p = (kbtoProgram (KB src)), currentEnv = env})
 
 dispatch com =
     case com of
@@ -150,7 +152,7 @@ dispatch com =
 
 
 runDriverM m = evalStateT m tabulaRasa
-    where tabulaRasa = HEnv mempty mempty
+    where tabulaRasa = HEnv mempty mempty mempty
 
 bye s     = putStrLn s >> exitWith ExitSuccess
 sayYes    = putStrLn "Yes"
@@ -158,7 +160,7 @@ sayNo     = putStrLn "No"
 
 -- consumeSolutions :: Infer a b -> HopesIO ()
 consumeSolutions i = do
-    src  <- gets kb
+    src  <- gets p
     liftIO $ hSetBuffering stdin NoBuffering
     case infer src i of
         Nothing -> liftIO $ sayNo
