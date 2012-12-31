@@ -18,224 +18,192 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
-import Language.Hopl
-import Subst
 import Logic
-import Types (Type(..), MonoTypeV(..), tyBool, tyAll, HasType(..), hasType)
-import Lang (cor, cand, ceq, ctop, cbot, vars, liftSym, Symbol, contradiction, isContra)
+import Types (MonoTypeV(..), tyBool, tyAll, HasType(..), hasType)
+import Subst (subst, bind, restrict, combine, success)
+import Lang (liftSym)
+
+import CoreLang (Expr(..), Program, fv, functor, clausesOf)
 
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Identity
--- import Data.Monoid
--- import List (last)
-import Debug.Trace
-import Language.Hopl.Pretty ()
-import Pretty
 
-
-type Infer a = ReaderT (KnowledgeBase a) (StateT Int (LogicT Identity))
+type Infer a = ReaderT (Program a) (StateT Int (LogicT Identity))
 
 runInfer p m = runIdentity $ runLogic Nothing $ evalStateT (runReaderT m p) 0
 
-infer :: KnowledgeBase a -> Infer a b -> Maybe (b, Infer a b)
+infer :: Program a -> Infer a b -> Maybe (b, Infer a b)
 infer p m =  runIdentity $ observe $ evalStateT (runReaderT (msplit m) p) 0
 
 -- try prove a formula by refutation
 -- prove  :: Goal a -> Infer a (Subst a)
 prove g =  do
     ans <- refute g
-    return (restrict (vars g) ans)
+    return (restrict (fv g) ans)
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-
 refute = refuteRec
 
 refute' g
-    | isContra g = return success
-    | otherwise  = derive g >>= \(g',  s)  ->
-                   refute (subst s g') >>= \ans ->
+    | g == CTrue = return success
+    | otherwise  = derive g   >>- \(g',  s)  ->
+                   refute' g' >>- \ans ->
                    return (s `combine` ans)
 
--- a derivation
--- derive :: Goal a -> Infer a (Goal a, Subst a)
-derive g
-  | isContra g = return (contradiction, success)
-  | otherwise =
-    let f g = case functor g of
-                 Rigid _    -> 
-                      -- trace ("R " ++ (show (ppr g))) $ 
-                      resolveRigid g
-                 Flex _     ->
-                      -- trace ("Flex resolution") $ 
-                      resolveFlex g
-                 Lambda _ _ -> 
-                      -- trace ("L " ++ (show (ppr g))) $ 
-                      lambdaReduce g
-                 _ -> error  "Cannot derive anything from that atom"
-    -- in undefined -- split g  >>- \(a, g') -> f g' a
-    in case g of
-        (App (App c a) b) ->
-            if c == cand then
-                derive a >>= \(g', s) ->
-                    if isContra g' then
-                        return (b, s)
-                    else
-                        return ((App (App cand g') b), s)
-            else if c == cor then
-                return a `mplus` return b >>= \g ->
-                    derive g
-            else if c == ceq then
-                unify a b >>= \s ->
-                return (contradiction, s)
-            else if c == ctop then
-                return (contradiction, success)
-            else if c == cbot then
-                fail "cbot"
-            else f g
-        _ -> f g
-
-refuteRec g
-    | isContra g = return success
-    | otherwise = 
-        let f g = case functor g of
-                      Rigid _ -> trace "call" $ call (resolveRigid g >>= \(g', _) -> refuteRec g')
-                      Flex  _ -> resolveFlex g >>= \(g', s') -> refuteRec (subst s' g') >>= \s'' -> return (s' `combine` s'')
-                      Lambda _ _ -> lambdaReduce g >>= \(g', _) -> refuteRec g'
-        in trace (show $ ppr g) $ case g of 
-            (App (App c a) b) ->
-                if c == cand
-                then refuteRec a            >>= \s'  ->
-                     refuteRec (subst s' b) >>= \s'' -> 
-                     return (s' `combine` s'')
-                else if c == cor
-                then refuteRec a `mplus` refuteRec b
-                else if c == ceq
-                then unify a b
-                else if c == ctop
-                then return success
-                else if c == cbot
-                then fail "cbot"
-                else f g
-            _ -> if isCut g
-                 then cut >> return success
-                 else f g
+refuteRec (And e1 e2) = do
+    s1 <- refuteRec e1
+    s2 <- refuteRec (subst s1 e2)
+    return (s1 `combine` s2)
+refuteRec (Or e1 e2)  = refuteRec e1 `mplus` refuteRec e2
+refuteRec (Eq e1 e2)  = unify e1 e2
+refuteRec (CTrue)     = return success
+refuteRec (CFalse)    = fail ""
+refuteRec (Cut)       = cut >> return success
+refuteRec e =
+    case functor e of 
+        Rigid _ -> call (refuteRec' e)
+        _ -> refuteRec' e
+    where refuteRec' e = do
+             (e', s') <- derive e
+             s'' <- refuteRec e'
+             return (s' `combine` s'')
 
 refuteRigid g = call $ refute g
+
+
+-- single step derivation
+-- derive :: Goal a -> Infer a (Goal a, Subst a)
+derive (Eq  e1 e2)   = do
+    mgu <- unify e1 e2
+    return (CTrue, mgu)
+
+derive (And CTrue e) = return (e, success)
+derive (And e CTrue) = return (e, success)
+derive (And e1 e2)   = do
+    (e1',theta) <- derive e1
+    return ((And e1' (subst theta e2)), theta)
+
+derive (Or  e1 e2)   = mplus (return (e1, success)) (return (e2, success))
+derive (Exists v e)  = do
+    v' <- freshVarOfType (typeOf v)
+    return (subst (bind v (Var v')) e, success)
+
+derive e =
+    case functor e of
+       Rigid _    -> resolveRigid e
+       Var _      -> resolveFlex  e
+       Lambda _ _ -> lambdaReduce e
+       _          -> return (expandApp e, success)
+    where expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
+          expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
+          expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
+          expandApp e                   = error "expandApp"
+
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b
 
-resolveRigid g =  do
-    c <- clauseOf (functor g)
-    (C _ b) <- variant c
-    return (substFunc g b, success)
 
-lambdaReduce (App e a) = do
-        (e',s) <- lambdaReduce e
+resolveRigid g = do
+    e <- clauseOf (functor g)
+    return (substFunc g e, success)
+
+lambdaReduce = betaReduce
+
+alphaConvert (Lambda x e) = do
+    x' <- freshVarOfType (typeOf x)
+    e' <- alphaConvert e
+    return $ Lambda x' (subst (bind x (Var x')) e')
+alphaConvert (Exists x e) = do
+    x' <- freshVarOfType (typeOf x)
+    e' <- alphaConvert e
+    return $ Exists x' (subst (bind x (Var x')) e')
+alphaConvert (Forall x e) = do
+    x' <- freshVarOfType (typeOf x)
+    e' <- alphaConvert e
+    return $ Forall x' (subst (bind x (Var x')) e')
+alphaConvert e = return e
+
+betaReduce (App e a) = do
+        (e',s) <- betaReduce e
         case e' of
             Lambda x e'' ->
                 return (subst (bind x a) e'', s)
             _ -> return ((App e' a), s)
-lambdaReduce e = return (e, success)
+betaReduce e = do
+    e' <- alphaConvert e
+    return (e', success)
 
 resolveFlex g =
     let f = functor g
     in case f of
-          (Flex x) -> 
-              singleInstance (typeOf f) >>- \fi -> do
-              r <- freshVarOfType (typeOf f)
-              return ((substFunc g fi), (bind x (lubExp fi (Flex r))))
+          Var x -> 
+              singleInstance (typeOf x) >>- \fi -> do
+              r <- freshVarOfType (typeOf x)
+              let s  = bind x (lubExp fi (Var r))
+              let g' = subst s (substFunc g fi)
+              return (g', s)
           _ -> fail "resolveF: cannot resolve a non flexible"
 
-
-{-
-lambdaInstance ty
-    | ty == tyBool = return cbot `mplus` return ctop
-    | ty == tyAll  = error "cannot lambda instantiate an individual"
-    | otherwise    =
-        case ty of
-            TyFun f a -> undefined
--}
 -- Makes an instance e1 \lub e2 where e2 is a variable.
-lubExp e1 e2 =
-    let lubExp1 (Lambda x e) e' bs =
-            (Lambda x (lubExp1 e e' (bs ++ [x])))
-        lubExp1 e e' bs = (App (App cor e) e'')
-            where e'' = foldl (\x -> \y -> (App x (Flex y))) e' bs
-    in  lubExp1 e1 e2 []
+lubExp e1 e2  = disjLambda [e1,e2]
+disjLambda es = foldl1 Or es
 
-
-disjLambda [] = return cbot
-disjLambda (e:es) =
-    case typeOf e of
-        TyFun t1 t2 -> do
-            x <- freshVarOfType t1
-            let vs'  = map (\(Lambda v _) -> v) (e:es)
-            let es'  = map (\(Lambda _ e') -> e') (e:es)
-            let ss'  = zip (map (\v -> bind v (Flex x)) vs') es'
-            let es'' = map (\(s,e) -> subst s e) ss'
-            e' <- disjLambda es''
-            return (Lambda x e')
-        _ -> return $ foldl (\x -> \y -> (App (App cor x) y)) e es
-
-comb e' (Lambda x e) = (Lambda x (comb e' e))
-comb e' e = (App (App cand e') e)
-
-basicInstance ty@(TyFun ty_arg ty_res) =
-    msum (map return [1..]) >>- \n ->
-    (replicateM n (singleInstance ty)) >>- \le ->
-    disjLambda le
+basicInstance ty@(TyFun _ _) =
+    msum (map return [1..])          >>- \n ->
+    replicateM n (singleInstance ty) >>- \le ->
+    return $ disjLambda le
 basicInstance x = singleInstance x
 
-appInst e = do
-    case typeOf e of
-        TyFun t1 t2 -> do
---            a <- basicInstance t1
-            a <- freshVarOfType (typeOf t1)
-            appInst (App e (Flex a))
-        _ -> return e
 
-singleInstance (TyFun ty_arg ty_res) = do
-    x   <- freshVarOfType ty_arg
-    xe  <- case ty_arg of
-             TyFun a b ->
-                    msum (map return [1..]) >>- \n ->
-                    (replicateM n $ appInst (Flex x)) >>- \le -> 
-                    return $ foldl (\e -> \e2 -> (App (App cand e) e2)) (head le) (tail le)
-             _ -> if ty_arg == tyAll then do
-                        y <- singleInstance ty_arg
-                        return (App (App ceq (Flex x)) y)
-                  else if ty_arg == tyBool then do
-                        y <- singleInstance ty_arg
-                        return $ if y == ctop then (Flex x) else y
-                  else
-                        fail ""
-    if (ty_res == tyBool)
-       then return (Lambda x xe)
-       else singleInstance ty_res >>- \res -> return (Lambda x (comb xe res))
---    res <- singleInstance ty_res
---    return $ if (ty_res == tyBool) then (Lambda x xe) else (Lambda x (comb xe res))
+singleInstance (TyFun ty_arg ty_res) = 
+    let argExpr (TyFun _ _) x       = msum (map return [1..])        >>- \n -> 
+                                      replicateM n (appInst (Var x)) >>- \le ->
+                                      return $ foldl1 And le
+        argExpr ty x | ty == tyAll  = do { y <- singleInstance ty
+                                         ; return $ Eq (Var x) y
+                                         }
+                     | ty == tyBool = do { y <- singleInstance ty
+                                         ; return $ if y == CTrue then (Var x) else y
+                                         }
+                     | otherwise    = fail ""
+        comb e' (Lambda x e) = (Lambda x (comb e' e))
+        comb e' e = And e' e
+        appInst e = do
+             case typeOf e of
+                 TyFun t1 _ -> do
+                      a <- freshVarOfType (typeOf t1)
+                      appInst (App e (Var a))
+                 _ -> return e
+    in do
+       x   <- freshVarOfType ty_arg
+       xe  <- argExpr ty_arg x
+
+       if (ty_res == tyBool)
+        then return (Lambda x xe)
+        else singleInstance ty_res >>- \res -> 
+             return (Lambda x (comb xe res))
 
 singleInstance ty
-    | ty == tyBool = return cbot `mplus` return ctop
-    | ty == tyAll  = freshVarOfType ty >>= \x -> return (Flex x)
-    | otherwise = fail "cannot instantiate from type"
+    | ty == tyBool = return CFalse `mplus` return CTrue
+    | ty == tyAll  = freshVarOfType ty >>= \x -> return (Var x)
+    | otherwise    = fail "cannot instantiate from type"
 
 -- unification
 
 -- unify :: (Symbol a, Eq a, Monad m) => Expr a -> Expr a -> m (Subst a)
 
-unify (Flex v1) e@(Flex v2)
+unify (Var v1) e@(Var v2)
     | v1 == v2  = return success
     | otherwise = return (bind v1 e)
 
-unify (Flex v) t = do
+unify (Var v) t = do
     occurCheck v t
     return (bind v t)
 
-unify t1 t2@(Flex v) = unify t2 t1
+unify t1 t2@(Var v) = unify t2 t1
 
 unify (App e1 e2) (App e1' e2') = do
     s1 <- unify e1 e1'
@@ -252,33 +220,17 @@ unify _ _ = fail "Should not happen"
 
 -- occurCheck :: (Symbol a, Eq a, Monad m) => a -> Expr a -> m ()
 occurCheck a e = when (a `occursIn` e) $ fail "Occur Check"
-   where occursIn a e = a `elem` (vars e)
+   where occursIn a e = a `elem` (fv e)
 
 -- utils
 
--- split a goal to an atom and the rest goal
--- deterministic computation picking always the left-most atom
--- split :: Goal a -> Infer a (Expr a, Goal a)
-split []     = fail "Empty goal. Can't pick an atom"
-split (x:xs) = return (x, xs)
-
 clauseOf (Rigid r) = do
-    p <- asks clauses
-    let cl = filter (\(C p' _) -> p' == r) p
+    cl <- asks (clausesOf r)
     msum (map return cl)
 clauseOf e = fail "expression must be rigid (parameter)"
 
-variant c =
-    let vs = vars c
-        bindWithFresh v = do
-            v' <- freshVarOfType (typeOf v)
-            return (v, Flex v')
-    in do
-    s <- mapM bindWithFresh vs
-    return $ subst s c
-
-freshVarOfType :: (MonadState Int m, Symbol a, HasType a) => Type -> m a
+-- freshVarOfType :: (MonadState Int m, Symbol a, HasType a) => Type -> m a
 freshVarOfType ty = do
     a' <- get
     modify (+1)
-    return $ hasType ty $ liftSym ("_S" ++ show a')
+    return $ hasType ty $ liftSym ("V" ++ show a')
