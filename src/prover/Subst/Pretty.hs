@@ -41,8 +41,8 @@ ppr_basic e =
                  compare' Nothing Nothing = EQ
                  compare' Nothing _       = GT
                  compare' _ Nothing       = LT
-       f' [] [e] = [ppr e]
-       f' vs es = map snd $ sortBy (\(x,_)-> \(y,_) -> orderref vs x y) $ q $ map ppr_simple es
+       f' [] [e] = Left [ppr e]
+       f' vs es  = Right $ map snd $ sortBy (\(x,_)-> \(y,_) -> orderref vs x y) $ q $ map ppr_simple es
        q es = map q'' $ map q' $ groupBy (\(x,_) -> \(y,_) -> x == y) es
        q'' (x, [Left y])  = (x, y)
        q'' (x, [Right y]) = (x, ppr_set [y])
@@ -56,7 +56,7 @@ ppr_basic e =
        ppr_tuple [x] = x
        ppr_tuple xs  = parens $ sep $ punctuate comma xs
        ppr_set xs = curly $ sep $ punctuate comma xs
-   in  ppr_set $ map (\e -> ppr_tuple (l f' [] e)) $ splitOr e
+   in  ppr_set $ map ppr_tuple $ rights $ map (l f' []) $ splitOr e
 
 instance (Pretty a, Symbol a) => Pretty (Expr a) where
     ppr (CTrue)     = text "true"
@@ -64,3 +64,6 @@ instance (Pretty a, Symbol a) => Pretty (Expr a) where
     ppr (Rigid p)   = ppr p
     ppr (Var v)     = ppr v
     ppr e@(App _ _) = ppr (functor e) <> parens (sep $ punctuate comma (map ppr (args e)))
+    ppr (And e1 e2) = sep $ punctuate comma [ppr e1, ppr e2]
+    ppr (Or e1 e2)  = sep $ punctuate (text ";") [ppr e1, ppr e2]
+    ppr (Eq e1 e2) = sep $ [ppr e1, text "=" , ppr e2]
