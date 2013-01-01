@@ -102,7 +102,9 @@ derive e =
        Rigid _    -> resolveRigid e
        Var _      -> resolveFlex  e
        Lambda _ _ -> lambdaReduce e
-       _          -> return (expandApp e, success)
+       And _ _    -> return (expandApp e, success)
+       Or  _ _    -> return (expandApp e, success)
+       _          -> fail "No derivation for that expression"
     where expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
           expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
           expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
