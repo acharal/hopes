@@ -18,7 +18,7 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
-import Logic (runLogic, observe, msplit, (>>-), LogicT)
+import Logic (runLogic, observe, msplit, (>>-), LogicT, call, cut)
 import Types (MonoTypeV(..), tyBool, tyAll, typeOf, hasType)
 import Subst (subst, bind, restrict, combine, success)
 import Lang (liftSym)
@@ -53,15 +53,13 @@ refute' g
                    refute' g' >>- \ans ->
                    return (s `combine` ans)
 
-refuteRec (And e1 e2) = do
+refuteRec (CTrue)     = return success
+refuteRec e@(And _ _) = do
+    (e1,e2) <- select e
     s1 <- refuteRec e1
     s2 <- refuteRec (subst s1 e2)
     return (s1 `combine` s2)
 refuteRec (Or e1 e2)  = refuteRec e1 `mplus` refuteRec e2
-refuteRec (Eq e1 e2)  = unify e1 e2
-refuteRec (CTrue)     = return success
-refuteRec (CFalse)    = fail ""
-refuteRec (Cut)       = cut >> return success
 refuteRec e =
     case functor e of 
         Rigid _ -> call (refuteRec' e)
@@ -70,6 +68,13 @@ refuteRec e =
              (e', s') <- derive e
              s'' <- refuteRec e'
              return (s' `combine` s'')
+
+-- selection rule - always select leftmost
+select (And e1@(And _ _) e2) = do 
+    (e1', e2') <- select e1
+    return (e1', And e2' e2)
+select (And e1 e2) = return (e1, e2)
+select _ = error "cannot select subexpression"
 
 -- single step derivation
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
@@ -87,6 +92,10 @@ derive (Or  e1 e2)   = mplus (return (e1, success)) (return (e2, success))
 derive (Exists v e)  = do
     v' <- freshVarOfType (typeOf v)
     return (subst (bind v (Var v')) e, success)
+
+derive (CFalse) = fail ""
+derive (CTrue)  = return (CTrue, success)
+derive (Cut)    = cut >> return (CTrue, success)
 
 derive e =
     case functor e of
