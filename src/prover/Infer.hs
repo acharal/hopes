@@ -69,6 +69,9 @@ derive (Exists v e)  = do
     v' <- freshVarOfType (typeOf v)
     return (subst (bind v (Var v')) e, success)
 
+derive (CFalse) = fail ""
+derive (CTrue)  = return (CTrue, success)
+
 derive e =
     case functor e of
        Rigid _    -> resolveRigid e
