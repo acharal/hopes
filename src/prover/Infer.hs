@@ -18,16 +18,17 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
-import Logic
-import Types (MonoTypeV(..), tyBool, tyAll, HasType(..), hasType)
+import Logic (runLogic, observe, msplit, (>>-), LogicT)
+import Types (MonoTypeV(..), tyBool, tyAll, typeOf, hasType)
 import Subst (subst, bind, restrict, combine, success)
 import Lang (liftSym)
 
 import CoreLang (Expr(..), Program, fv, functor, clausesOf)
 
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Identity
+import Control.Monad (msum, mplus, when, replicateM)
+import Control.Monad.Reader (asks, runReaderT, ReaderT)
+import Control.Monad.State (get, modify, evalStateT, StateT)
+import Control.Monad.Identity (runIdentity, Identity)
 
 type Infer a = ReaderT (Program a) (StateT Int (LogicT Identity))
 
@@ -103,34 +104,30 @@ alphaConvert (Forall x e) = do
 alphaConvert e = return e
 
 betaReduce (App e a) = do
-        (e',s) <- betaReduce e
-        case e' of
-            Lambda x e'' ->
-                return (subst (bind x a) e'', s)
-            _ -> return ((App e' a), s)
+    (e',s) <- betaReduce e
+    case e' of
+        Lambda x e'' ->
+           return (subst (bind x a) e'', s)
+        _ ->
+           return ((App e' a), s)
 betaReduce e = do
     e' <- alphaConvert e
     return (e', success)
 
 resolveFlex g =
-    let f = functor g
-    in case f of
-          Var x -> 
-              singleInstance (typeOf x) >>- \fi -> do
-              r <- freshVarOfType (typeOf x)
-              let s  = bind x (lubExp fi (Var r))
-              let g' = subst s (substFunc g fi)
-              return (g', s)
-          _ -> fail "resolveF: cannot resolve a non flexible"
-
--- Makes an instance e1 \lub e2 where e2 is a variable.
-lubExp e1 e2  = disjLambda [e1,e2]
-disjLambda es = foldl1 Or es
+    case functor g of
+        Var x -> 
+            singleInstance (typeOf x) >>- \fi -> do
+            r <- freshVarOfType (typeOf x)
+            let s  = bind x (Or fi (Var r))
+            let g' = subst s (substFunc g fi)
+            return (g', s)
+        _ -> fail "resolveF: cannot resolve a non flexible"
 
 basicInstance ty@(TyFun _ _) =
     msum (map return [1..])          >>- \n ->
     replicateM n (singleInstance ty) >>- \le ->
-    return $ disjLambda le
+    return $ foldl1 Or le
 basicInstance x = singleInstance x
 
 
@@ -146,7 +143,7 @@ singleInstance (TyFun ty_arg ty_res) =
                                          }
                      | otherwise    = fail ""
         comb e' (Lambda x e) = (Lambda x (comb e' e))
-        comb e' e = And e' e
+        comb e' e            = And e' e
         appInst e = do
              case typeOf e of
                  TyFun t1 _ -> do
@@ -196,8 +193,7 @@ unify _ _ = fail "Should not happen"
 
 -- occurCheck :: (Symbol a, Eq a, Monad m) => a -> Expr a -> m ()
 occurCheck a e = when (a `occursIn` e) $ fail "Occur Check"
-
-occursIn a e = a `elem` (fv e)
+    where occursIn a e = a `elem` (fv e)
 
 -- utils
 
