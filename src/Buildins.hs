@@ -38,4 +38,5 @@ buildins' =
     , (",",     TyFun tyBool (TyFun tyBool tyBool))
     , (";",     TyFun tyBool (TyFun tyBool tyBool))
     , ("_",     tyAll)
+    , ("not",   TyFun tyBool tyBool)
     ]

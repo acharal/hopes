@@ -23,12 +23,17 @@ import Types (MonoTypeV(..), tyBool, tyAll, typeOf, hasType)
 import Subst (subst, bind, restrict, combine, success)
 import Lang (liftSym)
 
-import CoreLang (Expr(..), Program, fv, functor, clausesOf)
+import CoreLang (Expr(..), Program, fv, functor)
+import qualified CoreLang (clausesOf)
 
 import Control.Monad (msum, mplus, when, replicateM)
 import Control.Monad.Reader (asks, runReaderT, ReaderT)
 import Control.Monad.State (get, modify, evalStateT, StateT)
 import Control.Monad.Identity (runIdentity, Identity)
+
+import Debug.Trace (trace)
+import Pretty
+import Subst.Pretty
 
 type Infer a = ReaderT (Program a) (StateT Int (LogicT Identity))
 
@@ -45,12 +50,12 @@ prove g =  do
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute = refuteRec
+refute = refute'
 
 refute' g
     | g == CTrue = return success
     | otherwise  = derive g   >>- \(g',  s)  ->
-                   refute' g' >>- \ans ->
+                   trace (show (ppr g) ++ "\n") $ refute' g' >>- \ans ->
                    return (s `combine` ans)
 
 refuteRec (CTrue)     = return success
@@ -97,6 +102,32 @@ derive (CFalse) = fail ""
 derive (CTrue)  = return (CTrue, success)
 derive (Cut)    = cut >> return (CTrue, success)
 
+derive (Forall _ CTrue) = return (CTrue, success)
+derive (Forall v e) = do 
+    (e', s') <- derive e 
+    case (subst s' (Var v)) of
+        Var v' -> return (Forall v' e', s')
+        _     -> fail ""
+
+derive (Not CTrue)   = fail ""
+derive (Not CFalse)  = return (CTrue, success)
+derive (Not (Not e)) = return (e, success)
+derive (Not (And e1 e2))  = return (Or  (Not e1) (Not e2), success)
+derive (Not (Or e1 e2))   = return (And (Not e1) (Not e2), success)
+derive (Not (Exists v e)) = return (Forall v (Not e), success)
+derive (Not (Forall v e)) = return (Exists v (Not e), success)
+
+derive (Not e@(Eq _ _))   = inverse (derive e) (CTrue, success) ""
+    where inverse m s f = call $ (m >> cut >> fail f) `mplus` return s
+
+derive e@(Not e') = 
+    case functor e' of
+        Var _   -> resolveFlex  e
+        _       -> derive_trivial e
+    where derive_trivial (Not e) = do 
+            (e', s) <- derive e
+            return (Not e', success)
+
 derive e =
     case functor e of
        Rigid _    -> resolveRigid e
@@ -105,19 +136,28 @@ derive e =
        And _ _    -> return (expandApp e, success)
        Or  _ _    -> return (expandApp e, success)
        _          -> fail "No derivation for that expression"
-    where expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
-          expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
-          expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
-          expandApp e                   = error "expandApp"
 
+expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
+expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
+expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
+expandApp e                   = error "expandApp"
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b
 
 
-resolveRigid g = do
-    e <- clauseOf (functor g)
-    return (substFunc g e, success)
+resolveRigid g = 
+    let lam e (TyFun a b) = do
+            l <- lam e b
+            v <- freshVarOfType a
+            return (Lambda v l)
+        lam e ty = return e
+        body [] = lam CFalse (typeOf (functor g))
+        body bs = return $ foldl1 Or bs
+    in do
+       es <- clausesOf (functor g)
+       e  <- body es
+       return (substFunc g e, success)
 
 lambdaReduce = betaReduce
 
@@ -146,6 +186,15 @@ betaReduce e = do
     e' <- alphaConvert e
     return (e', success)
 
+resolveFlex (Not g) = 
+    case functor g of
+        Var x -> 
+            negSingleInstance (typeOf x) >>- \fi -> do
+            r <- freshVarOfType (typeOf x)
+            let s  = bind x (And fi (Var r))
+            let g' = subst s (substFunc g fi)
+            return (Not g', s)
+            
 resolveFlex g =
     case functor g of
         Var x -> 
@@ -156,12 +205,20 @@ resolveFlex g =
             return (g', s)
         _ -> fail "resolveF: cannot resolve a non flexible"
 
+
 basicInstance ty@(TyFun _ _) =
     msum (map return [1..])          >>- \n ->
     replicateM n (singleInstance ty) >>- \le ->
     return $ foldl1 Or le
 basicInstance x = singleInstance x
 
+negSingleInstance ty@(TyFun _ _) = 
+    let neg (Lambda x e) = Lambda x (neg e)
+        neg e = Not e
+    in do
+        i <- singleInstance ty
+        return $ neg i
+negSingleInstance ty = singleInstance ty
 
 singleInstance (TyFun ty_arg ty_res) = 
     let argExpr (TyFun _ _) x       = msum (map return [1..])        >>- \n -> 
@@ -229,10 +286,12 @@ occurCheck a e = when (a `occursIn` e) $ fail "Occur Check"
 
 -- utils
 
-clauseOf (Rigid r) = do
-    cl <- asks (clausesOf r)
+clausesOf (Rigid r) = asks (CoreLang.clausesOf r)
+clausesOf e = fail "expression must be rigid (parameter)" 
+
+clauseOf e = do
+    cl <- clausesOf e
     msum (map return cl)
-clauseOf e = fail "expression must be rigid (parameter)"
 
 -- freshVarOfType :: (MonadState Int m, Symbol a, HasType a) => Type -> m a
 freshVarOfType ty = do

@@ -15,7 +15,7 @@ data Expr a =
     | Lambda a (Expr a)
     | App (Expr a) (Expr a)
     | Eq  (Expr a) (Expr a)	-- Expr :=: Expr 
---    | Not (Expr a)		-- :~: Expr
+    | Not (Expr a)		    -- :~: Expr
     | Exists a (Expr a)
     | Forall a (Expr a)
     | Var  a			-- variable
@@ -60,6 +60,7 @@ fv (Rigid _)    = []
 fv (CTrue)      = []
 fv (CFalse)     = []
 fv (Cut)        = []
+fv (Not e)      = fv e
 fv (App e1 e2)  = fv e1 `union` fv e2
 fv (And e1 e2)  = fv e1 `union` fv e2
 fv (Or  e1 e2)  = fv e1 `union` fv e2
@@ -77,7 +78,8 @@ hoplToCoreExpr e@(H.App (H.App op e1) e2)
          c2 = hoplToCoreExpr e2
 hoplToCoreExpr e = hoplToCoreExpr' e
 
-hoplToCoreExpr' (H.App e1 e2)  = App (hoplToCoreExpr e1) (hoplToCoreExpr e2)
+hoplToCoreExpr' (H.App e1 e2)  | H.isNot e1  = Not (hoplToCoreExpr e2)
+                               | otherwise   = App (hoplToCoreExpr e1) (hoplToCoreExpr e2)
 hoplToCoreExpr' (H.Lambda a e) = Lambda a (hoplToCoreExpr e)
 hoplToCoreExpr' (H.Flex a)     = Var a
 hoplToCoreExpr' c@(H.Rigid a)  | c == ctop = CTrue
