@@ -1,6 +1,10 @@
 eq(X, X).
 
+eq2(X, Y, X, Y).
+
 neq(X, Y) :- not(eq(X,Y)).
+
+neq2(X, Y, Z, K) :- not(eq2(X,Y,Z,K)).
 
 nonempty(R)  :- R(X).
 nonempty2(R) :- R(X, Y).
@@ -9,7 +13,7 @@ empty(R)  :- not(nonempty(R)).
 empty2(R) :- not(nonempty2(R)).
 
 minus(R, X, Z) :- R(Z), neq(X, Z).
-minus2(R, X, Y, Z, K) :- R(Z, K), neq(Z,X), neq(K,Y).
+minus2(R, X, Y, Z, K) :- R(Z, K), neq2(X,Y,Z,K).
 
 threecolor(Graph,R,G,B) :- empty2(Graph).
 threecolor(Graph,R,G,B) :-
@@ -33,5 +37,3 @@ check(X, Y, R) :- R(Y), not(R(X)).
 
 
 graph(a,b).
-graph(a,d).
-graph(b,e).
