@@ -58,7 +58,10 @@ desugarClause (HpClause b [x] ys) =
 
 bindAndUnify ls b =
     let bindAndUnify' body [] vs es      = return $ foldr Lambda body' (reverse vs)
-                where body' = foldr (\e -> \e' -> (App (App cand e) e')) body es
+                where appAnd e e' = App (App cand e) e' 
+                      body' = if body == ctop && not(null es)
+                              then foldr1 appAnd (reverse es)
+                              else foldr appAnd body (reverse es)
         bindAndUnify' body as@((Flex vv):xs) vs es | vv `elem` vs = bindAndUnify'' body as vs es
                                                    | otherwise    = bindAndUnify' body xs (vv:vs) es
         bindAndUnify' body as vs es = bindAndUnify'' body as vs es
