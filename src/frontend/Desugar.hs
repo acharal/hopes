@@ -55,26 +55,23 @@ desugarClause (HpClause b [x] ys) =
     body <- bindAndUnify (map unLoc (argsOf x)) b2
     return (C p body)
 
-bindAndUnify [] b = return b
-bindAndUnify (l:ls) b =
-    let injExp e (Lambda x e') = Lambda x (injExp e e')
-        injExp e e' = (App (App cand e) e')
+
+bindAndUnify ls b =
+    let bindAndUnify' body [] vs es      = return $ foldr Lambda body' vs
+                where body' = foldr (\e -> \e' -> (App (App cand e) e')) body es
+        bindAndUnify' body as@((Flex vv):xs) vs es | vv `elem` vs = bindAndUnify'' body as vs es
+                                                   | otherwise    = bindAndUnify' body xs (vv:vs) es
+        bindAndUnify' body as vs es = bindAndUnify'' body as vs es
+
+        bindAndUnify'' body (a:as) vs es =
+             if order a == 0 then do
+                 v' <- freshVar >>= \x -> return (typed (typeOf a) x)
+                 bindAndUnify' body as (v':vs) ((App (App ceq (Flex v')) a):es) 
+             else 
+                 fail ("Higher order term, not variable" ++ (show a) )
     in do
-    e <- bindAndUnify ls b
-    a <- desugarExp l
-    v <- if (order a) == 0 then do
-            v <- freshVar
-            return $ typed (typeOf a) v
-         else
-            case a of
-              Flex vv -> return vv
-              _ -> fail "Higher order term, not a variable"
-    e' <- if (order a) == 0 then do
-            let eqexp = (App (App ceq (Flex v)) a)
-            return $ injExp eqexp e
-          else
-            return e
-    return (Lambda v e')
+        as <- mapM desugarExp ls
+        bindAndUnify' b as [] []
 
 desugarAppTup a ls =
     return $ foldl (\e -> \b -> App e b) a ls
