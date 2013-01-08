@@ -50,15 +50,23 @@ prove g =  do
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute = refute'
+refute = refuteRec
 
 refute' g
     | g == CTrue = return success
-    | otherwise  = derive g   >>- \(g',  s)  ->
-                   trace (show (ppr g) ++ "\n") $ refute' g' >>- \ans ->
+    | otherwise  = trace (show (ppr g) ++ "\n") $ derive g   >>= \(g',  s)  ->
+                   refute' g' >>= \ans ->
                    return (s `combine` ans)
 
 refuteRec (CTrue)     = return success
+refuteRec (Not e)     = 
+    case functor e of 
+        Var _ -> refuteRec' (Not e)
+        _ -> neg_refuteRec e
+    where refuteRec' e = do
+             (e', s') <- derive e
+             s'' <- refuteRec e'
+             return (s' `combine` s'')
 refuteRec e@(And _ _) = do
     (e1,e2) <- select e
     s1 <- refuteRec e1
@@ -74,6 +82,24 @@ refuteRec e =
              s'' <- refuteRec e'
              return (s' `combine` s'')
 
+neg_refuteRec (CFalse) = return success
+neg_refuteRec (Not e) = refuteRec e
+neg_refuteRec e@(Or _ _) =  do
+    (e1, e2) <- neg_select e
+    s1 <- neg_refuteRec e1
+    s2 <- neg_refuteRec (subst s1 e2)
+    return (s1 `combine` s2)
+neg_refuteRec (And e1 e2) = call $ (neg_refuteRec e1 >>= \s -> cut >> return s) `mplus` neg_refuteRec e2
+neg_refuteRec e = 
+    case functor e of
+        Rigid _ -> call (neg_refuteRec' e)
+        Var _ -> refuteRec (Not e)
+        _ -> neg_refuteRec' e
+    where neg_refuteRec' e = do
+              (e', s') <- trace (show (ppr e)) $ neg_derive e
+              s'' <- neg_refuteRec e'
+              return (s' `combine` s'')
+
 -- selection rule - always select leftmost
 select (And e1@(And _ _) e2) = do 
     (e1', e2') <- select e1
@@ -81,8 +107,40 @@ select (And e1@(And _ _) e2) = do
 select (And e1 e2) = return (e1, e2)
 select _ = error "cannot select subexpression"
 
+neg_select (Or e1@(Or _ _) e2) = do 
+    (e1', e2') <- neg_select e1
+    return (e1', Or e2' e2)
+neg_select (Or e1 e2) = return (e1, e2)
+neg_select _ = error "cannot select subexpression"
+
+
+ifte m th el = call $ (m >> cut >> th) `mplus` el
+ifte' m th el = call $ (m >>= \s -> cut >> th s) `mplus` el
+
+reduce (Not (Not e)) = return (e, success)
+reduce (Exists v e)  = do
+    v' <- freshVarOfType (typeOf v)
+    return (subst (bind v (Var v')) e, success)
+reduce e = 
+    case functor e of 
+        Rigid _    -> resolveRigid e
+        Lambda _ _ -> lambdaReduce e        
+        And _ _    -> return (expandApp e, success)
+        Or  _ _    -> return (expandApp e, success)
+        _ -> error $ "cannot reduce" ++ show (ppr e)
+
+expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
+expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
+expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
+expandApp e                   = error "expandApp"
+
+
 -- single step derivation
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
+derive (CFalse) = fail ""
+derive (CTrue)  = return (CTrue, success)
+derive (Cut)    = cut >> return (CTrue, success)
+
 derive (Eq  e1 e2)   = do
     mgu <- unify e1 e2
     return (CTrue, mgu)
@@ -94,53 +152,49 @@ derive (And e1 e2)   = do
     return ((And e1' (subst theta e2)), theta)
 
 derive (Or  e1 e2)   = mplus (return (e1, success)) (return (e2, success))
-derive (Exists v e)  = do
-    v' <- freshVarOfType (typeOf v)
-    return (subst (bind v (Var v')) e, success)
 
-derive (CFalse) = fail ""
-derive (CTrue)  = return (CTrue, success)
-derive (Cut)    = cut >> return (CTrue, success)
-
-derive (Forall _ CTrue) = return (CTrue, success)
-derive (Forall v e) = do 
-    (e', s') <- derive e 
-    case (subst s' (Var v)) of
-        Var v' -> return (Forall v' e', s')
-        _     -> fail ""
+derive e@(Exists _ _) = reduce e
 
 derive (Not CTrue)   = fail ""
 derive (Not CFalse)  = return (CTrue, success)
-derive (Not (Not e)) = return (e, success)
-derive (Not (And e1 e2))  = return (Or  (Not e1) (Not e2), success)
-derive (Not (Or e1 e2))   = return (And (Not e1) (Not e2), success)
-derive (Not (Exists v e)) = return (Forall v (Not e), success)
-derive (Not (Forall v e)) = return (Exists v (Not e), success)
 
-derive (Not e@(Eq _ _))   = inverse (derive e) (CTrue, success) ""
-    where inverse m s f = call $ (m >> cut >> fail f) `mplus` return s
-
-derive e@(Not e') = 
-    case functor e' of
-        Var _   -> resolveFlex  e
-        _       -> derive_trivial e
-    where derive_trivial (Not e) = do 
-            (e', s) <- derive e
-            return (Not e', success)
-
-derive e =
+derive (Not e) =
     case functor e of
-       Rigid _    -> resolveRigid e
-       Var _      -> resolveFlex  e
-       Lambda _ _ -> lambdaReduce e
-       And _ _    -> return (expandApp e, success)
-       Or  _ _    -> return (expandApp e, success)
-       _          -> fail "No derivation for that expression"
+        Var _ -> resolveFlex (Not e)
+        Not _ -> reduce (Not e)
+        _     -> neg e
+    where neg e = do
+            (e',s) <- neg_derive e
+            return (Not e', s)
 
-expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
-expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
-expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
-expandApp e                   = error "expandApp"
+derive e = 
+    case functor e of 
+        Var _ -> resolveFlex e
+        _     -> reduce e
+
+
+neg_derive (CFalse) = return (CFalse, success)
+neg_derive (CTrue)  = fail ""
+
+neg_derive (Eq e1 e2) =  ifte (unify e1 e2) (fail "") (return (CFalse, success))
+
+neg_derive (Or CFalse e) = return (e, success)
+neg_derive (Or e CFalse) = return (e, success)
+neg_derive (Or e1 e2) = do
+    (e1', s1) <- neg_derive e1
+    return (Or e1' (subst s1 e2), s1)
+
+neg_derive (And e1 e2) = derive (Or e1 e2)
+
+neg_derive (Not CTrue)  = return (CFalse, success)
+neg_derive (Not CFalse) = fail ""
+
+neg_derive (Not (Not e)) = return (e, success)
+neg_derive (Not e) = do
+    (e', s) <- derive e
+    return (Not e', s)
+
+neg_derive e = reduce e
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b

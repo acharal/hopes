@@ -2,6 +2,8 @@ eq(X, X).
 
 eq2(X, Y, X, Y).
 
+eqalt(X, Y) :- X = Z, Y = Z.
+
 neq(X, Y) :- not(eq(X,Y)).
 
 neq2(X, Y, Z, K) :- not(eq2(X,Y,Z,K)).
@@ -35,5 +37,11 @@ two_colorable(G, R) :-
 check(X, Y, R) :- R(X), not(R(Y)).
 check(X, Y, R) :- R(Y), not(R(X)).
 
+graph2(a,b).
+
+graph3(a,b).
+graph3(a,d).
 
 graph(a,b).
+graph(a,d).
+graph(d,e).
