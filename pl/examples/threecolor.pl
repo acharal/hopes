@@ -30,7 +30,7 @@ has_color(X,Y,R,G,B) :- G(X),not(G(Y)),not(B(X)),not(R(X)).
 
 two_colorable(G, R) :- empty2(G).
 two_colorable(G, R) :- 
-       G(X, Y), 
+       G(X, Y), !,
        check(X, Y, R), 
        two_colorable(minus2(G, X, Y), R).
 

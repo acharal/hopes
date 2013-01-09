@@ -18,7 +18,7 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
-import Logic (runLogic, observe, msplit, (>>-), LogicT, call, cut)
+import Logic (runLogic, observe, LogicT, msplit, call, cut, ifte, once)
 import Types (MonoTypeV(..), tyBool, tyAll, typeOf, hasType)
 import Subst (subst, bind, restrict, combine, success)
 import Lang (liftSym)
@@ -33,7 +33,9 @@ import Control.Monad.Identity (runIdentity, Identity)
 
 import Debug.Trace (trace)
 import Pretty
-import Subst.Pretty
+
+
+(>>-) = (>>=)
 
 type Infer a = ReaderT (Program a) (StateT Int (LogicT Identity))
 
@@ -41,6 +43,10 @@ runInfer p m = runIdentity $ runLogic Nothing $ evalStateT (runReaderT m p) 0
 
 infer :: Program a -> Infer a b -> Maybe (b, Infer a b)
 infer p m =  runIdentity $ observe $ evalStateT (runReaderT (msplit m) p) 0
+
+
+-- ifte m th el = call $ (m >> cut >> th) `mplus` el
+-- ifte' m th el = call (m >>= \s -> cut >> th s `mplus` el) --call $ (m >>= \s -> cut >> th s) `mplus` el
 
 -- try prove a formula by refutation
 -- prove  :: Goal a -> Infer a (Subst a)
@@ -50,7 +56,13 @@ prove g =  do
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute = refuteRec
+refute =  refute'' 30
+
+refute'' n g
+    | g == CTrue || n == 0 = return success
+    | otherwise = trace (show (ppr g) ++ "\n") $ derive g   >>= \(g',  s)  ->
+                   refute'' (n-1) g' >>= \ans ->
+                   return (s `combine` ans)
 
 refute' g
     | g == CTrue = return success
@@ -84,19 +96,24 @@ refuteRec e =
 
 neg_refuteRec (CFalse) = return success
 neg_refuteRec (Not e) = refuteRec e
+{-
 neg_refuteRec e@(Or _ _) =  do
     (e1, e2) <- neg_select e
     s1 <- neg_refuteRec e1
     s2 <- neg_refuteRec (subst s1 e2)
     return (s1 `combine` s2)
-neg_refuteRec (And e1 e2) = call $ (neg_refuteRec e1 >>= \s -> cut >> return s) `mplus` neg_refuteRec e2
+-}
+neg_refuteRec e@(Or e1 e2)  = ifte (neg_refuteRec e1) (return) (neg_refuteRec e2)
+neg_refuteRec e@(And e1 e2) = once (neg_refuteRec e1 `mplus` neg_refuteRec e2)
+    -- ifte' (neg_refuteRec e1) (return) (neg_refuteRec e2)
+    -- neg_refuteRec e1 `mplus` neg_refuteRec e2
 neg_refuteRec e = 
     case functor e of
         Rigid _ -> call (neg_refuteRec' e)
         Var _ -> refuteRec (Not e)
         _ -> neg_refuteRec' e
     where neg_refuteRec' e = do
-              (e', s') <- trace (show (ppr e)) $ neg_derive e
+              (e', s') <- neg_derive e
               s'' <- neg_refuteRec e'
               return (s' `combine` s'')
 
@@ -113,9 +130,6 @@ neg_select (Or e1@(Or _ _) e2) = do
 neg_select (Or e1 e2) = return (e1, e2)
 neg_select _ = error "cannot select subexpression"
 
-
-ifte m th el = call $ (m >> cut >> th) `mplus` el
-ifte' m th el = call $ (m >>= \s -> cut >> th s) `mplus` el
 
 reduce (Not (Not e)) = return (e, success)
 reduce (Exists v e)  = do
@@ -176,15 +190,25 @@ derive e =
 neg_derive (CFalse) = return (CFalse, success)
 neg_derive (CTrue)  = fail ""
 
-neg_derive (Eq e1 e2) =  ifte (unify e1 e2) (fail "") (return (CFalse, success))
+neg_derive (Eq e1 e2) =  ifte (unify e1 e2) (\s -> fail "") (return (CFalse, success))
 
 neg_derive (Or CFalse e) = return (e, success)
 neg_derive (Or e CFalse) = return (e, success)
+{-
 neg_derive (Or e1 e2) = do
     (e1', s1) <- neg_derive e1
     return (Or e1' (subst s1 e2), s1)
+-}
 
-neg_derive (And e1 e2) = derive (Or e1 e2)
+neg_derive (Or e1 e2)  = ifte (neg_derive e1 >>= \(e,s) -> return (Or e (subst s e2), success)) return
+                              (neg_derive e2 >>= \(e,s) -> return (Or (subst s e1) e, success))
+
+-- neg_derive (And CFalse e) = return (CFalse, success)
+-- neg_derive (And e CFalse) = return (CFalse, success)
+neg_derive (And e1 e2) = -- derive (Or e1 e2)
+    mplus (neg_derive e2) (neg_derive e1)
+--    ifte (neg_derive e1 >>= \(e,s) -> return (And e (subst s e2), s)) return
+--         (neg_derive e2 >>= \(e,s) -> return (And (subst s e1) e, s))
 
 neg_derive (Not CTrue)  = return (CFalse, success)
 neg_derive (Not CFalse) = fail ""
