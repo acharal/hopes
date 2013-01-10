@@ -56,7 +56,7 @@ prove g =  do
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute =  refute'' 30
+refute =  refute' -- ' 30
 
 refute'' n g
     | g == CTrue || n == 0 = return success
@@ -71,14 +71,7 @@ refute' g
                    return (s `combine` ans)
 
 refuteRec (CTrue)     = return success
-refuteRec (Not e)     = 
-    case functor e of 
-        Var _ -> refuteRec' (Not e)
-        _ -> neg_refuteRec e
-    where refuteRec' e = do
-             (e', s') <- derive e
-             s'' <- refuteRec e'
-             return (s' `combine` s'')
+refuteRec (Not e)     = neg_refuteRec e
 refuteRec e@(And _ _) = do
     (e1,e2) <- select e
     s1 <- refuteRec e1
@@ -153,7 +146,7 @@ expandApp e                   = error "expandApp"
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
 derive (CFalse) = fail ""
 derive (CTrue)  = return (CTrue, success)
-derive (Cut)    = cut >> return (CTrue, success)
+derive (Cut)    = return (CTrue, success) -- cut >> return (CTrue, success)
 
 derive (Eq  e1 e2)   = do
     mgu <- unify e1 e2
@@ -172,14 +165,11 @@ derive e@(Exists _ _) = reduce e
 derive (Not CTrue)   = fail ""
 derive (Not CFalse)  = return (CTrue, success)
 
-derive (Not e) =
-    case functor e of
-        Var _ -> resolveFlex (Not e)
-        Not _ -> reduce (Not e)
-        _     -> neg e
-    where neg e = do
-            (e',s) <- neg_derive e
-            return (Not e', s)
+derive e@(Not (Not _)) = reduce e
+
+derive (Not e) = do
+    (e',s) <- neg_derive e
+    return (Not e', s)
 
 derive e = 
     case functor e of 
@@ -203,12 +193,12 @@ neg_derive (Or e1 e2) = do
 neg_derive (Or e1 e2)  = ifte (neg_derive e1 >>= \(e,s) -> return (Or e (subst s e2), success)) return
                               (neg_derive e2 >>= \(e,s) -> return (Or (subst s e1) e, success))
 
--- neg_derive (And CFalse e) = return (CFalse, success)
--- neg_derive (And e CFalse) = return (CFalse, success)
+neg_derive (And CFalse e) = return (CFalse, success)
+neg_derive (And e CFalse) = return (CFalse, success)
 neg_derive (And e1 e2) = -- derive (Or e1 e2)
-    mplus (neg_derive e2) (neg_derive e1)
---    ifte (neg_derive e1 >>= \(e,s) -> return (And e (subst s e2), s)) return
---         (neg_derive e2 >>= \(e,s) -> return (And (subst s e1) e, s))
+--    mplus (neg_derive e2) (neg_derive e1)
+    ifte (neg_derive e1 >>= \(e,s) -> return (And e (subst s e2), s)) return
+         (neg_derive e2 >>= \(e,s) -> return (And (subst s e1) e, s))
 
 neg_derive (Not CTrue)  = return (CFalse, success)
 neg_derive (Not CFalse) = fail ""
@@ -218,7 +208,10 @@ neg_derive (Not e) = do
     (e', s) <- derive e
     return (Not e', s)
 
-neg_derive e = reduce e
+neg_derive e =
+    case functor e of 
+        Var _ -> resolveFlexNot e
+        _     -> reduce e
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b
@@ -264,14 +257,14 @@ betaReduce e = do
     e' <- alphaConvert e
     return (e', success)
 
-resolveFlex (Not g) = 
+resolveFlexNot g = 
     case functor g of
         Var x -> 
             negSingleInstance (typeOf x) >>- \fi -> do
             r <- freshVarOfType (typeOf x)
             let s  = bind x (And fi (Var r))
             let g' = subst s (substFunc g fi)
-            return (Not g', s)
+            return (g', s)
             
 resolveFlex g =
     case functor g of
