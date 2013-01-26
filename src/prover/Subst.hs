@@ -67,3 +67,6 @@ combine theta zeta  =
         zeta' = [ (v, e) | (v, e) <- zeta, v `notElem` ss ]
     in  subst theta zeta ++ zeta'
 
+
+dom theta = map fst theta
+

@@ -9,7 +9,7 @@ import Data.List (elemIndex, sortBy, groupBy)
 import Data.Either (rights)
 import Data.Monoid (Monoid, mappend, mempty, mconcat)
 
-instance (Pretty a, Eq a, Symbol a) => Pretty (Subst a) where
+instance (Pretty a, Eq a, Symbol a, Show a) => Pretty (Subst a) where
     ppr xs = vcat $ map ppr_bind xs
         where ppr_bind (v,t) = sep [ ppr v <+> text "=", ppr t ]
 
@@ -85,7 +85,7 @@ mkbasic e =
                             compare' _ Nothing = LT
     in  mconcat $ map simple $ splitAndOr e
 
-instance (Symbol a, Pretty a) => Pretty (BasicExprRep a) where
+instance (Symbol a, Pretty a, Show a) => Pretty (BasicExprRep a) where
     ppr = pprbasic
 
 pprbasic (BasicGround e) = ppr e 
@@ -140,7 +140,7 @@ ppr_basic e =
 
    in  ppr_set $ map ppr_tuple $ rights $ map (l f' []) $ splitOr e
 
-instance (Pretty a, Symbol a) => Pretty (Expr a) where
+instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
     ppr (CTrue)      = text "true"
     ppr (CFalse)     = text "false"
     ppr (Rigid p)    = ppr p
@@ -153,3 +153,5 @@ instance (Pretty a, Symbol a) => Pretty (Expr a) where
     ppr (Not e1)     = text "not" <> parens (ppr e1)
     ppr (Exists v e) = parens (text "E" <> ppr v <+> ppr e)
     ppr (Forall v e) = parens (text "F" <> ppr v <+> ppr e)
+    ppr (Cut)        = text "!"
+    ppr e            = error (show e)

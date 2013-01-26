@@ -1,4 +1,4 @@
---  Copyright (C) 2006-2011 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ module Infer (runInfer, infer, prove) where
 
 import Logic (runLogic, observe, LogicT, msplit, call, cut, ifte, once)
 import Types (MonoTypeV(..), tyBool, tyAll, typeOf, hasType)
-import Subst (subst, bind, restrict, combine, success)
+import Subst (subst, bind, restrict, combine, success, dom)
 import Lang (liftSym)
 
 import CoreLang (Expr(..), Program, fv, functor)
@@ -56,7 +56,7 @@ prove g =  do
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute =  refute' -- ' 30
+refute =  refute''' --' 50
 
 refute'' n g
     | g == CTrue || n == 0 = return success
@@ -66,9 +66,22 @@ refute'' n g
 
 refute' g
     | g == CTrue = return success
-    | otherwise  = trace (show (ppr g) ++ "\n") $ derive g   >>= \(g',  s)  ->
+    | otherwise  = trace (show (ppr g) ++ "\n") $ 
+                   derive g   >>= \(g',  s)  ->
                    refute' g' >>= \ans ->
                    return (s `combine` ans)
+
+refute''' CTrue = return success
+refute''' g = ifte (derive' g) cont failed
+    where derive' g  = trace (show (ppr g) ++ "\n") $ derive g
+          cont (g,s) = do
+            s' <- refute''' g
+            return (s `combine` s')
+          failed = if isSuccessful g 
+                   then return success
+                   else fail "not successfull goal"
+          isSuccessful CTrue = True
+          isSuccessful _ = False
 
 refuteRec (CTrue)     = return success
 refuteRec (Not e)     = neg_refuteRec e
@@ -125,9 +138,11 @@ neg_select _ = error "cannot select subexpression"
 
 
 reduce (Not (Not e)) = return (e, success)
+{-
 reduce (Exists v e)  = do
     v' <- freshVarOfType (typeOf v)
     return (subst (bind v (Var v')) e, success)
+-}
 reduce e = 
     case functor e of 
         Rigid _    -> resolveRigid e
@@ -148,9 +163,10 @@ derive (CFalse) = fail ""
 derive (CTrue)  = return (CTrue, success)
 derive (Cut)    = return (CTrue, success) -- cut >> return (CTrue, success)
 
-derive (Eq  e1 e2)   = do
-    mgu <- unify e1 e2
-    return (CTrue, mgu)
+derive (Eq  e1 e2)   = unifyAndReturn e1 e2
+
+derive (And CFalse e) = return (CFalse, success)
+derive (And e CFalse) = return (CFalse, success)
 
 derive (And CTrue e) = return (e, success)
 derive (And e CTrue) = return (e, success)
@@ -160,8 +176,6 @@ derive (And e1 e2)   = do
 
 derive (Or  e1 e2)   = mplus (return (e1, success)) (return (e2, success))
 
-derive e@(Exists _ _) = reduce e
-
 derive (Not CTrue)   = fail ""
 derive (Not CFalse)  = return (CTrue, success)
 
@@ -170,6 +184,10 @@ derive e@(Not (Not _)) = reduce e
 derive (Not e) = do
     (e',s) <- neg_derive e
     return (Not e', s)
+
+derive (Exists v e)  = do
+    v' <- freshVarOfType (typeOf v)
+    return (subst (bind v (Var v')) e, success)
 
 derive e = 
     case functor e of 
@@ -182,36 +200,73 @@ neg_derive (CTrue)  = fail ""
 
 neg_derive (Eq e1 e2) =  ifte (unify e1 e2) (\s -> fail "") (return (CFalse, success))
 
+neg_derive (Or CTrue e) = return (CTrue, success)
+neg_derive (Or e CTrue) = return (CTrue, success)
+
 neg_derive (Or CFalse e) = return (e, success)
 neg_derive (Or e CFalse) = return (e, success)
+
+neg_derive (Or e1 e2)  = ifte (neg_derive e1 >>= \(e,s) -> return (Or e (subst s e2), s)) return
+                              (neg_derive e2 >>= \(e,s) -> return (Or (subst s e1) e, s))
+
 {-
-neg_derive (Or e1 e2) = do
-    (e1', s1) <- neg_derive e1
-    return (Or e1' (subst s1 e2), s1)
--}
-
-neg_derive (Or e1 e2)  = ifte (neg_derive e1 >>= \(e,s) -> return (Or e (subst s e2), success)) return
-                              (neg_derive e2 >>= \(e,s) -> return (Or (subst s e1) e, success))
-
 neg_derive (And CFalse e) = return (CFalse, success)
 neg_derive (And e CFalse) = return (CFalse, success)
-neg_derive (And e1 e2) = -- derive (Or e1 e2)
---    mplus (neg_derive e2) (neg_derive e1)
-    ifte (neg_derive e1 >>= \(e,s) -> return (And e (subst s e2), s)) return
-         (neg_derive e2 >>= \(e,s) -> return (And (subst s e1) e, s))
+-}
+
+neg_derive (And e1 e2) =
+    mplus (neg_derive e1) (neg_derive e2)
+--    ifte (neg_derive e1 >>= \(e,s) -> return (And e (subst s e2), s)) return
+--         (neg_derive e2 >>= \(e,s) -> return (And (subst s e1) e, s))
 
 neg_derive (Not CTrue)  = return (CFalse, success)
-neg_derive (Not CFalse) = fail ""
+neg_derive (Not CFalse) = return (CTrue, success) -- fail ""
 
-neg_derive (Not (Not e)) = return (e, success)
+neg_derive e@(Not (Not _)) = reduce e -- return (e, success)
 neg_derive (Not e) = do
     (e', s) <- derive e
     return (Not e', s)
+
+neg_derive e@(Exists _ _) = uncurry a (collect e)
+    where collect (Exists v e1) = ((v:vs), e')
+            where (vs, e') = collect e1
+          collect e = ([], e)
+          exists vs e = foldr Exists e $ r vs e
+            where r vs e = filter (\x -> x `elem` vars) vs
+                  vars = fv e
+          a vs (Or e1 e2)  = return (Or (exists vs e1) (exists vs e2), success)
+          a vs (And e1 e2) = return (And (exists vs e1) (Not (exists vs (And e1 (Not e2)))), success)
+          a vs e = 
+            if isReducable e 
+            then do
+                (e', s) <- reduce e 
+                return (exists vs e', s)
+            else b vs e
+          b vs e@(Eq e1 e2) = ifte (unify e1 e2) return1 (return (CFalse, success))
+            where return1 mgu = 
+                        if unsatisf vs mgu 
+                        then fail "return1" 
+                        else return (CTrue, success)
+                  unsatisf vs mgu = any (\x -> x `notElem` vs) $ dom mgu
+          b vs e = return (exists vs e, success)
+          isReducable e =   
+            case functor e of
+                Rigid _ -> True
+                Lambda _ _ -> True
+                Or _ _ -> True
+                And _ _ -> True
+                (Not (Not _)) -> True
+                _ -> False
 
 neg_derive e =
     case functor e of 
         Var _ -> resolveFlexNot e
         _     -> reduce e
+
+unifyAndReturn e1 e2 = ifte (unify e1 e2) true false
+    where true mgu = return (CTrue, mgu)
+          false    = return (CFalse, success)
+
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b
