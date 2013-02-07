@@ -1,4 +1,4 @@
-Cabal-Version:  >= 1.2
+Cabal-Version:  >= 1.6
 Build-Type:	Simple
 Name:           hopes
 Version:        0.0.5
@@ -32,9 +32,9 @@ Flag split-base
 
 Executable      hopes
   Main-Is:	  Main.hs
-  Build-Depends:  base, mtl, transformers, haskeline
+  Build-Depends:  mtl, transformers, haskeline
   if flag(split-base)
-    Build-Depends: base >= 3.0, array, pretty
+    Build-Depends: base >= 3.0 && < 5, array, pretty
   else
     Build-Depends: haskell98, base < 3.0
 
