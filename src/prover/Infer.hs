@@ -270,20 +270,29 @@ reduceExist (And CTrue e) = return e
 reduceExist (And e CTrue) = return e
 reduceExist (And (Or e1 e2) e) = return $ Or (And e1 e) (And e2 e)
 -- reduceExist (And e (Or e1 e2)) = return $ Or (And e e1) (And e e2)
+reduceExist (And (And e1 e2) e) = return $ And e1 (And e2 e)
+-- reduceExist (And e (And e1 e2)) = return $ And (And e e1) e2
+
 reduceExist (And e1 e2) = do
     e1' <- reduceExist e1
     return (And e1' e2)
 
+reduceExist (Not (And e1 e2)) = return $ Or  (Not e1) (Not e2)
+reduceExist (Not (Or e1 e2))  = return $ And (Not e1) (Not e2)
+reduceExist e@(Not e') | isReducable e = reduce e
+                       | otherwise     = reduceExist e'
+
 reduceExist e | isReducable e = reduce e
               | otherwise     = fail "not reducable"
-    where isReducable e =   
-            case functor e of
-                Rigid _ -> True
-                Lambda _ _ -> True
-                Or _ _ -> True
-                And _ _ -> True
-                (Not (Not _)) -> True
-                _ -> False
+
+isReducable e =   
+    case functor e of
+            Rigid _ -> True
+            Lambda _ _ -> True
+            Or _ _ -> True
+            And _ _ -> True
+            Not (Not _) -> True
+            _ -> False
 
 unifyAndReturn e1 e2 = ifte (unify e1 e2) true false
     where true mgu = return (CTrue, mgu)
