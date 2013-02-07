@@ -4,6 +4,7 @@ BUILDARGS=
 SETUPHS=./Setup.hs
 #SETUP=runhaskell $(SETUPHS)
 SETUP=./setup
+CABAL=cabal
 HC=ghc
 DARCS=darcs
 HOPEVERSION=0.0.5
@@ -16,15 +17,15 @@ all: build
 build: build-stamp
 
 build-stamp: config
-	$(SETUP) build $(BUILDARGS)
+	$(CABAL) build $(BUILDARGS)
 
 config: .setup-config
 
 setup:
 	$(HC) --make $(SETUPHS) -o $(SETUP)
 
-.setup-config: setup
-	$(SETUP) configure
+.setup-config:
+	$(CABAL) configure
 
 doc: haddock
 
@@ -32,17 +33,17 @@ man:
 	cd docs && $(MAKE) man
 
 haddock: config
-	$(SETUP) haddock --executables
+	$(CABAL) haddock --executables
 
 install-binary: build-stamp
-	$(SETUP) install
+	$(CABAL) install
 
 install: install-binary install-docs
 
 install-docs: man
 
-clean: setup
-	$(SETUP) clean
+clean:
+	$(CABAL) clean
 	rm -rf dist
 	rm -f *.hi *.o
 
