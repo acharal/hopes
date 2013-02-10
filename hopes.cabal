@@ -50,7 +50,7 @@ Executable      hopes
                   Lang, Buildins, Types,
                   Tc, WellForm, TypeCheck, Restrict,
                   Pretty, Error, Loc, Desugar,
-                  Language.Hopl, Logic, Logic.Class, Infer, Subst, Subst.Pretty,
+                  Language.Hopl, Logic, Logic.Class, Infer, Subst, 
                   CoreLang,
                   Shell, Driver
   Extensions:     RankNTypes
