@@ -29,7 +29,7 @@ import Desugar
 import Infer
 import CoreLang (Program, kbtoProgram, hopltoCoreGoal)
 import Pretty
-import Subst.Pretty
+-- import ComputedAnswer ()
 import Data.Monoid
 import Control.Monad.Trans.State.Strict (StateT, modify, gets, evalStateT)
 import Control.Monad.Cont
@@ -166,7 +166,7 @@ consumeSolutions i = do
         Nothing -> liftIO $ sayNo
         Just (a, rest) -> do
             liftIO $ sayYes
-            liftIO $ print $ printanswer a
+            liftIO $ print $ ppr a
             c <- liftIO $ getChar
             when (c == ';') $ do { liftIO $ putChar '\n';    consumeSolutions rest }
 --            when (not $ c == 'q') $ consumeSolutions rest

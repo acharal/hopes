@@ -18,12 +18,14 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
-import Logic (runLogic, observe, LogicT, msplit, call, cut, ifte, once)
+import Logic (runLogic, observe, LogicT, msplit, ifte, once)
+import Logic (call, cut)
 import Types (MonoTypeV(..), tyBool, tyAll, typeOf, hasType)
 import Subst (subst, bind, restrict, combine, success, dom)
 import Lang (liftSym)
 
-import CoreLang (Expr(..), Program, fv, functor)
+import CoreLang (Expr(..), Program, fv, functor, splitExist, exists)
+import ComputedAnswer
 import qualified CoreLang (clausesOf)
 
 import Control.Monad (msum, mplus, when, replicateM)
@@ -45,6 +47,8 @@ infer :: Program a -> Infer a b -> Maybe (b, Infer a b)
 infer p m =  runIdentity $ observe $ evalStateT (runReaderT (msplit m) p) 0
 
 
+
+
 -- ifte m th el = call $ (m >> cut >> th) `mplus` el
 -- ifte' m th el = call (m >>= \s -> cut >> th s `mplus` el) --call $ (m >>= \s -> cut >> th s) `mplus` el
 
@@ -52,7 +56,13 @@ infer p m =  runIdentity $ observe $ evalStateT (runReaderT (msplit m) p) 0
 -- prove  :: Goal a -> Infer a (Subst a)
 prove g =  do
     ans <- refute g
-    return (restrict (fv g) ans)
+    answer (fv g) ans
+
+
+answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
+    where splitAnd (And e1 e2) = splitAnd e1 ++ splitAnd e2
+          splitAnd CTrue = []
+          splitAnd e = [e]
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
@@ -60,7 +70,8 @@ refute =  refute''' --' 50
 
 refute'' n g
     | g == CTrue || n == 0 = return success
-    | otherwise = trace (show (ppr g) ++ "\n") $ derive g   >>= \(g',  s)  ->
+    | otherwise =  trace (show (ppr g) ++ "\n") $ 
+                   derive g   >>= \(g',  s)  ->
                    refute'' (n-1) g' >>= \ans ->
                    return (s `combine` ans)
 
@@ -71,16 +82,22 @@ refute' g
                    refute' g' >>= \ans ->
                    return (s `combine` ans)
 
-refute''' CTrue = return success
+refute''' CTrue = return (CTrue, success)
 refute''' g = ifte (derive' g) cont failed
     where derive' g  = trace (show (ppr g) ++ "\n") $ derive g
           cont (g,s) = do
-            s' <- refute''' g
-            return (s `combine` s')
+            (g', s') <- refute''' g
+            return (g', s `combine` s')
           failed = if isSuccessful g 
-                   then return success
-                   else fail "not successfull goal"
+                   then return (g, success)
+                   else fail "not successful goal"
           isSuccessful CTrue = True
+          isSuccessful (And e1 e2) = isSuccessful e1 && isSuccessful e2
+          isSuccessful (Not e) = 
+            let (v, e') = splitExist e
+            in case e' of
+                  Eq e1 e2 -> True
+                  _ -> False
           isSuccessful _ = False
 
 refuteRec (CTrue)     = return success
@@ -237,17 +254,8 @@ neg_derive e =
         Var _ -> resolveFlexNot e
         _     -> reduce e >>= returnSuccess
 
-neg_deriveExist e@(Exists _ _) = ifte (reduceExist e) returnSuccess (uncurry a (collect e))
-    where collect (Exists v e1) = ((v:vs), e')
-            where (vs, e') = collect e1
-          collect e = ([], e)
-          {-
-          exists vs e = foldr Exists e $ r vs e
-            where r vs e = filter (\x -> x `elem` vars) vs
-                  vars = fv e
-          -}
-          exists vs e = foldr Exists e vs
-          a vs (And e1@(Eq _ _) e2) = returnSuccess $ And (exists vs' e1) (Not (exists vs' (And e1 (Not (exists vs'' e2)))))
+neg_deriveExist e@(Exists _ _) = ifte (reduceExist e) returnSuccess (uncurry a (splitExist e))
+    where a vs (And e1@(Eq _ _) e2) = returnSuccess $ And (exists vs' e1) (Not (exists vs' (And e1 (Not (exists vs'' e2)))))
             where vs'  = filter (\v -> v `elem` fv e1) vs
                   vs'' = filter (\v -> v `notElem` fv e1) vs
           a vs (Eq e1 e2)  = ifte (unify e1 e2) return1 (returnSuccess CFalse)
@@ -294,6 +302,7 @@ isReducable e =
             Not (Not _) -> True
             _ -> False
 
+
 unifyAndReturn e1 e2 = ifte (unify e1 e2) true false
     where true mgu = return (CTrue, mgu)
           false    = returnSuccess CFalse
@@ -326,10 +335,10 @@ alphaConvert (Exists x e) = do
     x' <- freshVarOfType (typeOf x)
     e' <- alphaConvert e
     return $ Exists x' (subst (bind x (Var x')) e')
-alphaConvert (Forall x e) = do
-    x' <- freshVarOfType (typeOf x)
-    e' <- alphaConvert e
-    return $ Forall x' (subst (bind x (Var x')) e')
+--alphaConvert (Forall x e) = do
+--    x' <- freshVarOfType (typeOf x)
+--    e' <- alphaConvert e
+--    return $ Forall x' (subst (bind x (Var x')) e')
 alphaConvert e = return e
 
 betaReduce (App e a) = do

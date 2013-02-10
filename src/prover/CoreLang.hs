@@ -17,11 +17,12 @@ data Expr a =
     | Eq  (Expr a) (Expr a)	-- Expr :=: Expr 
     | Not (Expr a)		    -- :~: Expr
     | Exists a (Expr a)
-    | Forall a (Expr a)
+--    | Forall a (Expr a)
     | Var  a			-- variable
     | Rigid a			-- predicate and function symbol
     | Cut
    deriving (Eq, Show)
+
 
 
 instance HasType a => HasType (Expr a) where
@@ -31,7 +32,7 @@ instance HasType a => HasType (Expr a) where
     typeOf (CTrue)   = tyBool
     typeOf (CFalse)  = tyBool
     typeOf (Exists _ _) = tyBool
-    typeOf (Forall _ _) = tyBool
+--    typeOf (Forall _ _) = tyBool
     typeOf (Rigid p) = typeOf p
     typeOf (Var   v) = typeOf v
     typeOf (App e e') = case typeOf e of 
@@ -67,7 +68,14 @@ fv (Or  e1 e2)  = fv e1 `union` fv e2
 fv (Eq  e1 e2)  = fv e1 `union` fv e2
 fv (Lambda a e) = filter (/= a) $ fv e
 fv (Exists a e) = filter (/= a) $ fv e
-fv (Forall a e) = filter (/= a) $ fv e
+-- fv (Forall a e) = filter (/= a) $ fv e
+
+
+splitExist (Exists v e1) = ((v:vs), e')
+    where (vs, e') = splitExist e1
+splitExist e = ([], e)
+
+exists vs e = foldr Exists e vs
 
 hoplToCoreExpr e@(H.App (H.App op e1) e2) 
     | op == ceq  = Eq  c1 c2
