@@ -77,6 +77,9 @@ splitExist e = ([], e)
 
 exists vs e = foldr Exists e vs
 
+isVar (Var _) = True
+isVar _ = False
+
 hoplToCoreExpr e@(H.App (H.App op e1) e2) 
     | op == ceq  = Eq  c1 c2
     | op == cand = And c1 c2

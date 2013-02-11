@@ -20,6 +20,7 @@ module Subst where
 -- import Language.Hopl (Expr(..), Clause(..))
 -- import Data.Monoid (mconcat)
 import CoreLang
+import Data.List (union)
 
 type Subst a = [ (a, Expr a) ]
 
@@ -68,5 +69,6 @@ combine theta zeta  =
     in  subst theta zeta ++ zeta'
 
 
-dom theta = map fst theta
-
+dom theta   = map fst theta
+range theta = concatMap fv (map snd theta)
+vars theta  = dom theta `union` range theta

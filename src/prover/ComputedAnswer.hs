@@ -1,5 +1,5 @@
 
-module ComputedAnswer where
+module ComputedAnswer (ComputedAnswer(..)) where
 
 import Pretty
 import Subst (Subst)
