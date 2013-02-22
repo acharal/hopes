@@ -23,7 +23,7 @@ instance (Pretty a, Eq a, Symbol a, Show a) => Pretty (ComputedAnswer a) where
               ppr_expr' ies = vcat $ map aux ies
               aux (Not e) = 
                 let (v', Eq t1 t2) = splitExist e
-                in ppr_bind "\\=" v' (t1, t2)
+                in ppr_bind "/=" v' (t1, t2)
 
 ppr_expr vs (Var v) | v `elem` vs = text "*" <> ppr v
                     | otherwise   = ppr v

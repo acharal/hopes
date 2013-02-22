@@ -21,7 +21,7 @@ module Infer (runInfer, infer, prove) where
 import Logic (runLogic, observe, LogicT, msplit, ifte, once)
 import Logic (call, cut)
 import Types (MonoTypeV(..), tyBool, tyAll, typeOf, hasType)
-import Subst (subst, bind, restrict, combine, success, dom, vars)
+import Subst (subst, bind, restrict, combine, success, dom, isRenamingSubst, vars)
 import Lang (liftSym)
 
 import CoreLang (Expr(..), Program, fv, functor, splitExist, exists, isVar, args)
@@ -67,7 +67,7 @@ answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute =  refute''' (-1)
+refute =  refute''' (-1) --(50)
 
 refute'' n g
     | g == CTrue || n == 0 = return success
@@ -187,14 +187,16 @@ reduce e =
     case functor e of 
         Rigid _    -> resolveRigid e
         Lambda _ _ -> lambdaReduce e
-        And _ _    -> return $ expandApp e
-        Or  _ _    -> return $ expandApp e
+        And _ _    -> expandApp e
+        Or  _ _    -> expandApp e
         _ -> fail "cannot reduce"
 
-expandApp (App (And e1 e2) e) = And (App e1 e) (App e2 e)
-expandApp (App (Or  e1 e2) e) = Or  (App e1 e) (App e2 e)
-expandApp (App e1 e)          = expandApp (App (expandApp e1) e)
-expandApp e                   = error "expandApp"
+expandApp (App (And e1 e2) e) = return $ And (App e1 e) (App e2 e)
+expandApp (App (Or  e1 e2) e) = return $ Or  (App e1 e) (App e2 e)
+expandApp (App e1 e)          = do
+    e1' <- (expandApp e1)
+    expandApp (App e1' e)
+expandApp e                   = fail ("expandApp" ++ show (ppr e))
 
 
 returnSuccess e = return (e, success)
@@ -272,18 +274,22 @@ neg_derive' vs (Eq e1 e2) = ifte (unify e1 e2) nonvalid valid
           equality mgu x = returnSuccess $ exists vs $ Eq (Var x) (subst mgu (Var x))
 
 neg_derive' vs (Not e) = 
-    case functor e of
+    let isValid' vs s = isRenamingSubst $ filter (aux vs) s
+            where aux vs (v, t) = all (\v -> v `notElem` fv t) vs && all (\x -> x /= v) vs
+        isValid vs s = all (\x -> x `notElem` vs) $ vars s
+    in case functor e of
         Var x -> 
             if x `elem` vs
             then returnSuccess CTrue
             else do
                 (e', s) <- resolveFlex vs e
-                return (exists vs (Not e'), s)
+                return (CFalse, s)
+                -- return (exists vs (Not e'), s)
         _ -> do
             (e', s) <- derive e
-            if any (\x -> x `elem` vs) (vars s)
+            if not (isValid vs s)
              then returnSuccess CTrue
-             else returnSuccess (exists vs (Not e'))
+             else returnSuccess (subst s (exists vs (Not e')))
 
 neg_derive' vs e@(And e1 e2) = 
     let fv1 = fv e1
@@ -307,13 +313,15 @@ neg_derive' vs e@(And e1 e2) =
                     let s  = bind x (Or b (Var r))
                     let g' = subst s (substFunc g b)
                     let r' = substFunc g (Var r)
-                    return (Or (n g') (m r'), s)
+                    return (subst s (Or (n g') (m r')), s)
                 _ -> fail "resolveF: cannot resolve a non flexible"
     in case functor e1 of 
             Eq _ _ -> 
                 mplus (returnSuccess (exists vs e1)) neg_derive'' 
             Var _ -> 
                 mplus (returnSuccess (exists vs e1)) neg_derive'' 
+            Not (Exists _ _) ->
+                mplus (returnSuccess (exists vs e1)) (returnSuccess (exists vs e2))
             _ -> fail ""
 
 
@@ -324,7 +332,8 @@ neg_derive' vs e =
             then returnSuccess CTrue
             else do
                 (e', s) <- resolveFlexNot vs e
-                return (exists vs e', s)
+                return (CFalse, s)
+                -- return (exists vs e', s)
         _ -> fail ""
 
 substFunc (App e a) b = (App (substFunc e b) a)
@@ -370,27 +379,35 @@ betaReduce (App e a) = do
 betaReduce e = alphaConvert e
 
 resolveFlexNot vs g =  
-    let neg (Lambda x e) = Lambda x (neg e)
-        neg e = Not (exists vs e)
+    let neg vs (Lambda x e) = Lambda x (neg vs e)
+        neg vs e = Not (exists vs' e')
+            where vs'  = map snd vs
+                  vs'' = map (\(x,y) -> (x, Var y)) vs
+                  e'   = subst vs'' e
     in case functor g of
            Var x -> 
                singleInstance (typeOf x) >>- \fi -> do
                fi' <- instantiate fi g
                r <- freshVarOfType (typeOf x)
-               let b  = neg fi'
+               vs' <- mapM (\x -> freshVarOfType (typeOf x) >>= \v -> return (x, v)) vs
+               let b  = neg vs' fi'
                let s  = bind x (And b (Var r))
                let g' = subst s (substFunc g b)
                return (g', s)
 
 resolveFlex vs g =
-    let pos (Lambda x e) = Lambda x (pos e)
-        pos e = (exists vs e)
+    let pos vs (Lambda x e) = Lambda x (pos vs e)
+        pos vs e = (exists  vs' e')
+            where vs'  = map snd vs
+                  vs'' = map (\(x,y) -> (x, Var y)) vs
+                  e'   = subst vs'' e
     in case functor g of
            Var x -> 
                singleInstance (typeOf x) >>- \fi -> do
                fi' <- instantiate fi g
                r <- freshVarOfType (typeOf x)
-               let b  = pos fi'
+               vs' <- mapM (\x -> freshVarOfType (typeOf x) >>= \v -> return (x, v)) vs
+               let b  = pos vs' fi'
                let s  = bind x (Or b (Var r))
                let g' = subst s (substFunc g b)
                return (g', s)

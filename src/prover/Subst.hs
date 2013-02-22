@@ -72,3 +72,7 @@ combine theta zeta  =
 dom theta   = map fst theta
 range theta = concatMap fv (map snd theta)
 vars theta  = dom theta `union` range theta
+
+
+isRenamingSubst s = all (\(_, x) -> isVar x) s
+
