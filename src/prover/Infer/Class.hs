@@ -1,4 +1,4 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  Adapted from the paper
 --  Backtracking, Interleaving, and Terminating Monad Transformers, by
@@ -20,24 +20,22 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+module Infer.Class (
+    module Infer.Class,
+    module Logic.Class
+) where
 
-module Logic(
-#ifdef DCIMPL
-    module Logic.SRReifT
-#else
-    module Logic.SFK
-#endif
---    module Logic.SR
-)where
 
-#ifdef DCIMPL
-import Logic.SRReifT
-#else
-import Logic.SFK
-#endif
+import Logic.Class
 
-import Control.Monad.Identity
+import Lang
+import Types
+import CoreLang
 
-type Logic a = LogicT Identity a
 
-runLogic n m = runIdentity $ runLogicT n m
+class (Symbol a, HasType a) => MonadFreeVarProvider a m where
+    freshVarOfType :: Type -> m a
+
+
+class Monad m => MonadClauseProvider a m where
+    clausesOf :: a -> m [Expr a]

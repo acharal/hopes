@@ -30,6 +30,10 @@ Source-Repository head
 Flag split-base
   Description:    Choose the new, split-up base package.
 
+Flag dc-impl
+  Description:    Choose the alternative implementation of prover using delimited continuations
+  Default: False
+
 Executable      hopes
   Main-Is:	  Main.hs
   Build-Depends:  mtl, transformers, haskeline
@@ -37,6 +41,10 @@ Executable      hopes
     Build-Depends: base >= 3.0 && < 5, array, pretty
   else
     Build-Depends: haskell98, base < 3.0
+
+  if flag(dc-impl)
+    Build-Depends: CC-delcont-cxe
+    CPP-Options: -DDCIMPL
 
   if os(windows)
     CPP-Options: -DBUILD_WINDOWS

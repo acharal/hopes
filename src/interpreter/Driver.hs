@@ -162,8 +162,11 @@ sayNo     = putStrLn "No"
 consumeSolutions i = do
     src  <- gets p
     liftIO $ hSetBuffering stdin NoBuffering
-    case infer src i of
-        Nothing -> liftIO $ sayNo
+    result <- lift $ infer src i
+--    case runIdentity (infer src i) of
+    case result of
+        Nothing -> 
+            liftIO $ sayNo
         Just (a, rest) -> do
             liftIO $ sayYes
             liftIO $ print $ ppr a
