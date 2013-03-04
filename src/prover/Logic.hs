@@ -22,53 +22,14 @@
 
 
 module Logic(
-    module Logic,
-    module Logic.Class
+    module Logic.SRReifT
+--    module Logic.SR
 )where
 
-import Control.Monad
-import Control.Monad.Trans
-import Logic.Class
+import Logic.SRReifT
+-- import Logic.SR
+import Control.Monad.Identity
 
+type Logic a = LogicT Identity a
 
-newtype LogicT m a  = SFKT (forall ans. SK (m ans) a -> FK (m ans) -> m ans)
-unSFKT (SFKT a) = a
-
-type FK ans = ans
-type SK ans a = a -> FK ans -> ans
-
-instance MonadTrans LogicT where
-    lift m = SFKT (\sk fk -> m >>= (\a -> sk a fk))
-
-instance Monad m => Monad (LogicT m) where
-    return e = SFKT (\sk fk -> sk e fk)
-    m >>= f  =
-      SFKT (\sk fk ->
-           unSFKT m (\a fk' -> unSFKT (f a) sk fk')
-             fk)
-    fail s   = SFKT (\_ fk -> fk)
-
-instance Monad m => MonadPlus (LogicT m) where
-    mzero = SFKT (\_ fk -> fk)
-    m1 `mplus` m2 = SFKT (\sk fk -> unSFKT m1 sk (unSFKT m2 sk fk))
-
-instance MonadIO m => MonadIO (LogicT m) where
-    liftIO = lift . liftIO
-
-instance Monad m => MonadLogic (LogicT m) where
-    msplit m = lift $ unSFKT m ssk (return Nothing)
-        where ssk a fk = return $ Just (a, (lift fk >>= reflect))
-
-
--- observe . lift = id
-observe m = unSFKT m (\a fk -> return a) (fail "no answer")
-
-runL n m = observe (bagofN n m)
-
-runLogic :: (Monad m) => Maybe Int -> LogicT m a -> m [a]
-runLogic  Nothing (SFKT m) = m (\a fk -> fk >>= (return . (a:))) (return [])
-runLogic (Just n) (SFKT m) | n <=0 = return []
-runLogic (Just 1) (SFKT m) = m (\a fk -> return [a]) (return [])
-runLogic (Just n) m = unSFKT (msplit m) runM' (return [])
-    where runM' Nothing _ = return []
-          runM' (Just (a,m')) _ = runLogic (Just (n-1)) m' >>= (return . (a:))
+runLogic n m = runIdentity $ runLogicT n m
