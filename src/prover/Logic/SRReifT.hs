@@ -62,7 +62,7 @@ newtype SR m a = SR{unSR:: forall ans. CC (PS (Tree m ans)) m a}
 instance Monad m => Monad (SR m) where
   return x = SR $ return x
   m >>= f  = SR $ unSR m >>= (unSR . f)
-
+  fail s = SR $ abortP ps (return HZero)
 
 instance Monad m => MonadPlus (SR m) where
   mzero = SR $ abortP ps (return HZero)
