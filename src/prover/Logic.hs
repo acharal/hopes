@@ -22,12 +22,20 @@
 
 
 module Logic(
+#ifdef DCIMPL
     module Logic.SRReifT
+#else
+    module Logic.SFK
+#endif
 --    module Logic.SR
 )where
 
+#ifdef DCIMPL
 import Logic.SRReifT
--- import Logic.SR
+#else
+import Logic.SFK
+#endif
+
 import Control.Monad.Identity
 
 type Logic a = LogicT Identity a
