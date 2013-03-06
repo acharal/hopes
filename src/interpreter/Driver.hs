@@ -37,6 +37,8 @@ import System.IO
 import System.Exit(exitWith, ExitCode(..))
 import System.Console.GetOpt
 
+import Trace
+
 data HopeEnv =
     HEnv {  
         currentEnv :: TyEnv HpSymbol,
@@ -128,13 +130,15 @@ consultFile f = do
     liftIO $ putStrLn ("% consulted " ++ show f ++ "")
     modify (\s -> s{ kb = KB src, p = (kbtoProgram (KB src)), currentEnv = env})
 
+nodebug _ cont = cont
+
 dispatch com =
     case com of
         CRefute s   ->  do
             src  <- gets kb
             env  <- gets currentEnv
             goal <- loadGoal s env
-            consumeSolutions $ prove goal
+            consumeSolutions $ debug (prove goal) nodebug
         CConsult f  -> consultFile f
         CShowType p -> do
             env <- gets currentEnv
