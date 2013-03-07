@@ -18,7 +18,8 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
-import Logic (runLogicT, observe, LogicT)
+import Logic (runLogicT, observe)
+import Logic (LogicT)
 import Types (hasType, HasType)
 import Subst (restrict, combine, success)
 import Lang
@@ -28,20 +29,20 @@ import CoreLang (Expr(..), Program, fv)
 import qualified CoreLang
 
 -- import Control.Monad (msum, mplus, replicateM)
-import Control.Monad.Reader (ReaderT, asks, runReaderT)
-import Control.Monad.State (StateT, get, modify, evalStateT)
-import Control.Monad.Trans (lift)
+import Control.Monad.Reader
+import Control.Monad.State
 
 import Infer.Class
+import Trace.Class
 
 import Derive (derive)
 
-type Infer m a = ReaderT (Program a) (StateT Int (LogicT m))
+newtype InferT a m b = InferT { unInferT :: ReaderT (Program a) (StateT Int (LogicT m)) b }
 
-runInfer p m = runLogicT Nothing $ evalStateT (runReaderT m p) 0
+runInfer p m = runLogicT Nothing $ evalStateT (runReaderT (unInferT m) p) 0
 
-infer :: Monad m => Program a -> Infer m a b -> m (Maybe (b, Infer m a b))
-infer p m =  observe $ evalStateT (runReaderT (msplit m) p) 0
+infer :: Monad m => Program a -> InferT a m b -> m (Maybe (b, InferT a m b))
+infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
 
 -- try prove a formula by refutation
 -- prove  :: Goal a -> Infer a (Subst a)
@@ -53,22 +54,49 @@ prove g =  do
 -- refute :: Goal a -> Infer a (Subst a)
 refute g
     | g == CTrue = return success
-    | otherwise  = derive g  >>- \(g',  s)  ->
+    | otherwise  = traceResult (derive g)  >>- \(g',  s)  ->
                    refute g' >>- \ans ->
                    return (s `combine` ans)
 
 
-instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (StateT Int m) where
-    freshVarOfType ty = do
+instance Monad m => Monad (InferT a m) where
+    return a = InferT $ return a
+    m >>= f = InferT $ (unInferT m >>= \a -> unInferT (f a))
+    fail a = InferT $ fail a
+
+instance MonadTrans (InferT a) where
+    lift = InferT . lift . lift . lift
+
+instance Monad m => MonadPlus (InferT a m) where
+    mzero = InferT mzero
+    mplus m1 m2 = InferT (mplus (unInferT m1) (unInferT m2))
+
+instance Monad m => MonadLogic (InferT a m) where
+    msplit m = InferT $ do
+        r <- msplit (unInferT m) 
+        case r of
+            Nothing -> return Nothing
+            Just (a, s) -> return (Just (a, InferT s))
+
+instance MonadIO m => MonadIO (InferT a m) where
+    liftIO = InferT .  liftIO
+
+instance MonadState s m => MonadState s (InferT a m) where
+    get = lift $ get
+    put = lift . put
+
+instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (InferT a m) where
+    freshVarOfType ty = InferT $ do
         a' <- get
         modify (+1)
         return $ hasType ty $ liftSym ("V" ++ show a')
-
+{-
 instance (Symbol a, HasType a, Monad m, MonadFreeVarProvider a m) => MonadFreeVarProvider a (ReaderT s m) where
     freshVarOfType = lift . freshVarOfType
+-}
 
-instance (Symbol a, Eq a, Monad m) => MonadClauseProvider a (ReaderT (Program a) m) where
-    clausesOf r = asks (CoreLang.clausesOf r)
+instance (Symbol a, Eq a, Monad m) => MonadClauseProvider a (InferT a m) where
+    clausesOf r = InferT $ asks (CoreLang.clausesOf r)
 
 instance (Symbol a, Eq a, Monad m, MonadClauseProvider a m) => MonadClauseProvider a (StateT s m) where
     clausesOf = lift . clausesOf

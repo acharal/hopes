@@ -16,6 +16,7 @@ import Trace.Class
 import Trace.Coroutine
 
 
+
 data DebugState = 
     DebugState 
     { verbosity :: Int
@@ -56,6 +57,10 @@ instance (Monad m, MonadClauseProvider a m) => MonadClauseProvider a (DebugT b m
 
 instance MonadIO m => MonadIO (DebugT b m) where
     liftIO =  lift . liftIO
+
+instance MonadState s m => MonadState s (DebugT b m) where
+    get = lift $ get
+    put = lift . put
 
 debug m h = runDebugT st m h
     where st = DebugState { verbosity = 0, outputTrace = True, pauseEachStep = True }

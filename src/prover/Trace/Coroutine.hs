@@ -5,10 +5,12 @@ module Trace.Coroutine where
 import Control.Monad.Coroutine
 import Control.Monad.Coroutine.SuspensionFunctors
 import Control.Monad
+import Control.Monad.Trans
+import Control.Monad.State.Class
 
 import Logic.Class
 import Trace.Class
-
+import Infer.Class
 
 type TraceT i m  = Coroutine (Yield i) m
 
@@ -29,6 +31,16 @@ instance (Functor s, MonadLogic m) => MonadLogic (Coroutine s m) where
               apply (Just (Right a, s)) = return $ Right $ Just (a, Coroutine s)
               apply (Just (Left a, s))  = return $ Left  $ 
                 fmap (\x -> x >>= \y -> return (Just (y, Coroutine s))) a
+
+instance (Monad m, Functor s, MonadFreeVarProvider a m) => MonadFreeVarProvider a (Coroutine s m) where
+    freshVarOfType = lift . freshVarOfType
+
+instance (Monad m, Functor s, MonadClauseProvider a m) => MonadClauseProvider a (Coroutine s m) where
+    clausesOf = lift . clausesOf
+
+instance (Functor ss, MonadState s m) => MonadState s (Coroutine ss m) where
+    get = lift $ get
+    put = lift . put
 
 runTraceT m h = pogoStick (f h) m
     where f h (Yield i c) = h i c
