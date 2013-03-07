@@ -18,12 +18,14 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
+
 import Logic (runLogicT, observe)
 import Logic (LogicT)
 import Types (hasType, HasType)
 import Subst (restrict, combine, success)
 import Lang
 
+import ComputedAnswer
 
 import CoreLang (Expr(..), Program, fv)
 import qualified CoreLang
@@ -44,20 +46,38 @@ runInfer p m = runLogicT Nothing $ evalStateT (runReaderT (unInferT m) p) 0
 infer :: Monad m => Program a -> InferT a m b -> m (Maybe (b, InferT a m b))
 infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
 
+
+
+
+-- ifte m th el = call $ (m >> cut >> th) `mplus` el
+-- ifte' m th el = call (m >>= \s -> cut >> th s `mplus` el) --call $ (m >>= \s -> cut >> th s) `mplus` el
+
 -- try prove a formula by refutation
 -- prove  :: Goal a -> Infer a (Subst a)
 prove g =  do
     ans <- refute g
-    return (restrict (fv g) ans)
+    answer (fv g) ans
+
+
+answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
+    where splitAnd (And e1 e2) = splitAnd e1 ++ splitAnd e2
+          splitAnd CTrue = []
+          splitAnd e = [e]
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute g
-    | g == CTrue = return success
-    | otherwise  = traceResult (derive g)  >>- \(g',  s)  ->
-                   refute g' >>- \ans ->
-                   return (s `combine` ans)
+refute =  refute''' --' 50
 
+refute''' CTrue = return (CTrue, success)
+refute''' g = ifte (derive' g) cont failed
+    where derive' g  = traceResult (derive g)
+          cont (g,s) = do
+            (g', s') <- refute''' g
+            return (g', s `combine` s')
+          failed = if isSuccessful g 
+                   then return (g, success)
+                   else fail "not successful goal"
+          isSuccessful e = (e == CTrue)
 
 instance Monad m => Monad (InferT a m) where
     return a = InferT $ return a

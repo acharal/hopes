@@ -48,9 +48,9 @@ instance Eq a => (Substitutable (Expr a) a) where
         subst theta (Exists x e) = maybe (Exists x (subst theta e)) aux $ lookup x theta
             where aux (Var y) = Exists y (subst theta e)
                   aux _ = error "Cannot substitute lambda bounds vars with expr"
-        subst theta (Forall x e) = maybe (Forall x (subst theta e)) aux $ lookup x theta
-            where aux (Var y) = Forall y (subst theta e)
-                  aux _ = error "Cannot substitute lambda bounds vars with expr"
+--        subst theta (Forall x e) = maybe (Forall x (subst theta e)) aux $ lookup x theta
+--            where aux (Var y) = Forall y (subst theta e)
+--                  aux _ = error "Cannot substitute lambda bounds vars with expr"
         subst theta e@(Var x) = maybe e id $ lookup x theta
         subst theta e = e
 

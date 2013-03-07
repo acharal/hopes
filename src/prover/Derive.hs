@@ -79,10 +79,6 @@ alphaConvert (Exists x e) = do
     x' <- freshVarOfType (typeOf x)
     e' <- alphaConvert e
     return $ Exists x' (subst (bind x (Var x')) e')
-alphaConvert (Forall x e) = do
-    x' <- freshVarOfType (typeOf x)
-    e' <- alphaConvert e
-    return $ Forall x' (subst (bind x (Var x')) e')
 alphaConvert e = return e
 
 betaReduce (App e a) = do
