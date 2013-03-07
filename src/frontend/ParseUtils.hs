@@ -23,7 +23,6 @@ import Types
 import Loc
 import Error
 import Pretty
-import Buildins
 import Data.Char (isUpper)
 import Data.List (partition, nub)
 import Control.Monad.State
@@ -180,6 +179,13 @@ mkList elems tl =
           lastel  = case tl of
                         Nothing -> located bogusLoc $ HpSym (mkBuildin "[]")
                         Just e  -> e
+
+mkBuildin "_" = AnonSym
+mkBuildin s = liftSym s
+
+-- isBuildin s = maybe False (const True) $ lookup s buildins'
+isBuildin "_" = True
+isBuildin s = False
 
 -- put some hardcoded building numerics
 mkSym s

@@ -19,9 +19,8 @@
 module TypeCheck (tcProg, tcExpr, tiExpr, tcForm) where
 
 import Language.Hopl.Syntax
-import Buildins (buildinsigs)
-import Lang (Sym(AnonSym))
-import Types (tyBool, MonoType, MonoTypeV(..))
+import Lang (Sym(AnonSym), liftSym)
+import Types (tyBool, tyAll, MonoType, MonoTypeV(..))
 import Tc
 
 import Loc (Located(..))
@@ -57,6 +56,21 @@ import Data.Monoid (mappend)
     3. Bindings and annotation (annotation helps next stages but it's checking not annotating)
 
 -}
+
+buildinsigs = map (\(x,t) -> (liftSym x, t) ) buildins'
+
+buildins' =
+    [ (".",     TyFun tyAll (TyFun tyAll tyAll))
+    , ("[]",    tyAll)
+    , ("s",     TyFun tyAll tyAll)
+    , ("true",  tyBool)
+    , ("false", tyBool)
+    , ("0",     tyAll)
+    , ("=",     TyFun tyAll  (TyFun tyAll tyBool))
+    , (",",     TyFun tyBool (TyFun tyBool tyBool))
+    , (";",     TyFun tyBool (TyFun tyBool tyBool))
+    , ("_",     tyAll)
+    ]
 
 -- type checking and inference
 

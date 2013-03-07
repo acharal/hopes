@@ -55,7 +55,7 @@ Executable      hopes
                   src/prover
                   src/interpreter
   Other-Modules:  Lexer, Parser, ParseUtils, Language.Hopl.Syntax, Language.Hopl.Parser,
-                  Lang, Buildins, Types,
+                  Lang, Types,
                   Tc, WellForm, TypeCheck, Restrict,
                   Pretty, Error, Loc, Desugar,
                   Language.Hopl, Logic, Logic.Class, Infer, Subst, 
