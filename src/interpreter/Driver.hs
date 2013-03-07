@@ -29,7 +29,7 @@ import Desugar
 import Infer
 import CoreLang (Program, kbtoProgram, hopltoCoreGoal)
 import Pretty
-import Subst.Pretty
+-- import ComputedAnswer ()
 import Data.Monoid
 
 import Control.Monad.State (gets, modify)
@@ -142,14 +142,26 @@ consultFile f = do
 -- 'newline' continue to next step
 -- 'n' no debug - turn debug off
 -- 'r' retry (????)
+-- 'v' view answer so far
+-- 
 
-debug_handler (g, s) cont = do
-    flag <- gets debugFlag
+debug_handler (g, s) cont = 
+    let handleOptions cont = do
+            opt <- liftIO getChar
+            case opt of
+                'h' -> liftIO $ print "I need help too!"
+                'a' -> fail "failed by user"
+                'f' -> lift (fail "fail branch by user")
+                'n' -> modify (\s -> s{debugFlag = False})
+                _ -> return ()
+    in do
+        flag <- gets debugFlag
 
-    when (flag) $ do
-        liftIO $ putStrLn $ show $ ppr s
+        when (flag) $ do
+            liftIO $ putStrLn $ show $ ppr g
+            handleOptions cont
 
-    cont
+        cont
     
 
 nodebug (g,s) cont = do
@@ -201,7 +213,7 @@ consumeSolutions i = do
             liftIO $ sayNo
         Just (a, rest) -> do
             liftIO $ sayYes
-            liftIO $ print $ printanswer a
+            liftIO $ print $ ppr a
             c <- liftIO $ getChar
             when (c == ';') $ do { liftIO $ putChar '\n';    consumeSolutions rest }
 --            when (not $ c == 'q') $ consumeSolutions rest
