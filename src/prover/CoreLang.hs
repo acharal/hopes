@@ -17,7 +17,6 @@ data Expr a =
     | Eq  (Expr a) (Expr a)	-- Expr :=: Expr 
     | Not (Expr a)		    -- :~: Expr
     | Exists a (Expr a)
---    | Forall a (Expr a)
     | Var  a			-- variable
     | Rigid a			-- predicate and function symbol
     | Cut
@@ -76,6 +75,7 @@ splitExist (Exists v e1) = ((v:vs), e')
 splitExist e = ([], e)
 
 exists vs e = foldr Exists e vs
+
 
 isVar (Var _) = True
 isVar _ = False

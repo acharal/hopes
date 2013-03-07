@@ -1,6 +1,7 @@
 
 module ComputedAnswer (ComputedAnswer(..)) where
 
+
 import Pretty
 import Subst (Subst)
 import Lang
@@ -123,8 +124,7 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
     ppr (Eq e1 e2)   = sep $ [ppr e1, text "=" , ppr e2]
     ppr (Lambda x e) = parens (text "\\" <> ppr x <> text "^" <> ppr e)
     ppr (Not e1)     = text "not" <> parens (ppr e1)
-    ppr (Exists v e) = parens (text "E" <> ppr v <+> ppr e)
 --    ppr (Forall v e) = parens (text "F" <> ppr v <+> ppr e)
     ppr (Cut)        = text "!"
---    ppr e            = error (show e)
+    ppr (Exists v e) = parens (text "E" <> ppr v <+> ppr e)
 

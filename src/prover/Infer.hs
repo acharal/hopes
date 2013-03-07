@@ -18,38 +18,41 @@
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
-import Logic (runLogicT, observe, LogicT)
+
+import Logic (runLogicT, observe)
+import Logic (LogicT)
 import Types (hasType, HasType)
 import Subst (restrict, combine, success)
 import ComputedAnswer
 import Lang
 
 import CoreLang (Expr(..), Program, fv, splitExist)
+
 import qualified CoreLang
 
 
 -- import Control.Monad (msum, mplus, replicateM)
-import Control.Monad.Reader (ReaderT, asks, runReaderT)
-import Control.Monad.State (StateT, get, modify, evalStateT)
-import Control.Monad.Trans (lift)
+import Control.Monad.Reader
+import Control.Monad.State
 
 import Infer.Class
+import Trace.Class
 
 import Derive (derive)
 
-import Debug.Trace (trace)
-import Pretty
-
-
 (>>-) = (>>=)
 
+newtype InferT a m b = InferT { unInferT :: ReaderT (Program a) (StateT Int (LogicT m)) b }
 
-type Infer m a = ReaderT (Program a) (StateT Int (LogicT m))
+runInfer p m = runLogicT Nothing $ evalStateT (runReaderT (unInferT m) p) 0
 
-runInfer p m = runLogicT Nothing $ evalStateT (runReaderT m p) 0
+infer :: Monad m => Program a -> InferT a m b -> m (Maybe (b, InferT a m b))
+infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
 
-infer :: Monad m => Program a -> Infer m a b -> m (Maybe (b, Infer m a b))
-infer p m =  observe $ evalStateT (runReaderT (msplit m) p) 0
+
+
+-- ifte m th el = call $ (m >> cut >> th) `mplus` el
+-- ifte' m th el = call (m >>= \s -> cut >> th s `mplus` el) --call $ (m >>= \s -> cut >> th s) `mplus` el
 
 
 
@@ -63,7 +66,6 @@ prove g =  do
     ans <- refute g
     answer (fv g) ans
 
-
 answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
     where splitAnd (And e1 e2) = splitAnd e1 ++ splitAnd e2
           splitAnd CTrue = []
@@ -71,29 +73,13 @@ answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
 
 -- do a refutation
 -- refute :: Goal a -> Infer a (Subst a)
-refute =  refute''' (-1) --(50)
+refute =  refute''' --' 50
 
-refute'' n g
-    | g == CTrue || n == 0 = return success
-    | otherwise =  trace (show (ppr g) ++ "\n") $ 
-                   derive g   >>= \(g',  s)  ->
-                   refute'' (n-1) g' >>= \ans ->
-                   return (s `combine` ans)
-
-refute' g
-    | g == CTrue = return success
-    | otherwise  = trace (show (ppr g) ++ "\n") $ 
-                   derive g   >>= \(g',  s)  ->
-                   refute' g' >>= \ans ->
-                   return (s `combine` ans)
-
-
-refute''' n CTrue = return (CTrue, success)
-refute''' 0 g = fail ""
-refute''' n g = ifte (derive' g) cont failed
-    where derive' g  = trace (show (ppr g) ++ "\n") $ derive g
+refute''' CTrue = return (CTrue, success)
+refute''' g = ifte (derive' g) cont failed
+    where derive' g  = traceResult (derive g)
           cont (g,s) = do
-            (g', s') <- refute''' (n-1) g
+            (g', s') <- refute''' g
             return (g', s `combine` s')
           failed = if isSuccessful g 
                    then return (g, success)
@@ -107,64 +93,39 @@ refute''' n g = ifte (derive' g) cont failed
                   _ -> False
           isSuccessful _ = False
 
-{-
 
-refuteRec (CTrue)     = return success
-refuteRec (Not e)     = neg_refuteRec e
-refuteRec e@(And _ _) = do
-    (e1,e2) <- select e
-    s1 <- refuteRec e1
-    s2 <- refuteRec (subst s1 e2)
-    return (s1 `combine` s2)
-refuteRec (Or e1 e2)  = refuteRec e1 `mplus` refuteRec e2
-refuteRec e =
-    case functor e of 
-        Rigid _ -> call (refuteRec' e)
-        _ -> refuteRec' e
-    where refuteRec' e = do
-             (e', s') <- derive e
-             s'' <- refuteRec e'
-             return (s' `combine` s'')
+instance Monad m => Monad (InferT a m) where
+    return a = InferT $ return a
+    m >>= f = InferT $ (unInferT m >>= \a -> unInferT (f a))
+    fail a = InferT $ fail a
 
-neg_refuteRec (CFalse) = return success
-neg_refuteRec (Not e) = refuteRec e
-{-
-neg_refuteRec e@(Or _ _) =  do
-    (e1, e2) <- neg_select e
-    s1 <- neg_refuteRec e1
-    s2 <- neg_refuteRec (subst s1 e2)
-    return (s1 `combine` s2)
--}
-neg_refuteRec e@(Or e1 e2)  = ifte (neg_refuteRec e1) (return) (neg_refuteRec e2)
-neg_refuteRec e@(And e1 e2) = once (neg_refuteRec e1 `mplus` neg_refuteRec e2)
-    -- ifte' (neg_refuteRec e1) (return) (neg_refuteRec e2)
-    -- neg_refuteRec e1 `mplus` neg_refuteRec e2
-neg_refuteRec e = 
-    case functor e of
-        Rigid _ -> call (neg_refuteRec' e)
-        Var _ -> refuteRec (Not e)
-        _ -> neg_refuteRec' e
-    where neg_refuteRec' e = do
-              (e', s') <- neg_derive e
-              s'' <- neg_refuteRec e'
-              return (s' `combine` s'')
+instance MonadTrans (InferT a) where
+    lift = InferT . lift . lift . lift
 
--}
--- unification
+instance Monad m => MonadPlus (InferT a m) where
+    mzero = InferT mzero
+    mplus m1 m2 = InferT (mplus (unInferT m1) (unInferT m2))
 
+instance Monad m => MonadLogic (InferT a m) where
+    msplit m = InferT $ do
+        r <- msplit (unInferT m) 
+        case r of
+            Nothing -> return Nothing
+            Just (a, s) -> return (Just (a, InferT s))
 
-instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (StateT Int m) where
-    freshVarOfType ty = do
+instance MonadIO m => MonadIO (InferT a m) where
+    liftIO = InferT .  liftIO
+
+instance MonadState s m => MonadState s (InferT a m) where
+    get = lift $ get
+    put = lift . put
+
+instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (InferT a m) where
+    freshVarOfType ty = InferT $ do
         a' <- get
         modify (+1)
         return $ hasType ty $ liftSym ("V" ++ show a')
 
-instance (Symbol a, HasType a, Monad m, MonadFreeVarProvider a m) => MonadFreeVarProvider a (ReaderT s m) where
-    freshVarOfType = lift . freshVarOfType
-
-instance (Symbol a, Eq a, Monad m) => MonadClauseProvider a (ReaderT (Program a) m) where
-    clausesOf r = asks (CoreLang.clausesOf r)
-
-instance (Symbol a, Eq a, Monad m, MonadClauseProvider a m) => MonadClauseProvider a (StateT s m) where
-    clausesOf = lift . clausesOf
+instance (Symbol a, Eq a, Monad m) => MonadClauseProvider a (InferT a m) where
+    clausesOf r = InferT $ asks (CoreLang.clausesOf r)
 
