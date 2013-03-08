@@ -34,3 +34,4 @@ traceMM f m = do
     b <- f a 
     trace b
     return a
+    

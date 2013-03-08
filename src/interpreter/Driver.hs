@@ -18,40 +18,28 @@
 -- | drives the pipeline of compilation + execution
 module Driver where
 
-import Lang(liftSym)
+import Lang (liftSym)
 import Language.Hopl
-import Language.Hopl.Syntax(HpSymbol)
-import Parser(runParser, withInput, parseSrc, parseGoal, fromFile)
-import Types(TyEnv, Typed, findTySig)
-import Tc(runTc, withSig, withTypeEnv)
-import WellForm(wfp, wfg)
+
+import Parser (runParser, withInput, parseSrc, parseGoal, fromFile)
+import Types (findTySig)
+import Tc (runTc, withSig, withTypeEnv)
+import WellForm (wfp, wfg)
 import Desugar
 import Infer
-import CoreLang (Program, kbtoProgram, hopltoCoreGoal)
+import CoreLang (kbtoProgram, hopltoCoreGoal)
 import Pretty
--- import ComputedAnswer ()
-import Data.Monoid
 
 import Control.Monad.State (gets, modify)
-import Control.Monad.Trans.State.Strict (StateT, evalStateT)
+import Control.Monad.IO.Class
+import Control.Monad
 
-import Control.Monad.Cont
 import System.IO
 import System.Exit(exitWith, ExitCode(..))
 import System.Console.GetOpt
 
-import Trace
-
-data HopeEnv =
-    HEnv {  
-        currentEnv :: TyEnv HpSymbol,
-        kb         :: KnowledgeBase (Typed HpSymbol),
-        p          :: Program (Typed HpSymbol),
-        verbose    :: Int,
-        debugFlag  :: Bool
-    }
-
-type HopesIO = StateT HopeEnv IO
+import Debugger
+import HopesIO
 
 data Command =
       CRefute    String
@@ -133,43 +121,9 @@ consultFile :: FilePath -> HopesIO ()
 consultFile f = do
     (src, env) <- loadSource f
     liftIO $ putStrLn ("% consulted " ++ show f ++ "")
-    modify (\s -> s{ kb = KB src, p = (kbtoProgram (KB src)), currentEnv = env})
-
--- 'h' help for debugger
--- 'a' abort evaluation
--- 'f' fail current branch
--- 'e' exit - terminate interpreter
--- 'newline' continue to next step
--- 'n' no debug - turn debug off
--- 'r' retry (????)
--- 'v' view answer so far
--- 
-
-debug_handler (g, s) cont = 
-    let handleOptions cont = do
-            opt <- liftIO getChar
-            case opt of
-                'h' -> liftIO $ print "I need help too!"
-                'a' -> fail "failed by user"
-                'f' -> lift (fail "fail branch by user")
-                'n' -> modify (\s -> s{debugFlag = False})
-                _ -> return ()
-    in do
-        flag <- gets debugFlag
-
-        when (flag) $ do
-            liftIO $ putStrLn $ show $ ppr g
-            handleOptions cont
-
-        cont
-    
-
-nodebug (g,s) cont = do
-    v <- gets verbose
-    modify (\s -> s{verbose = v + 1})
-    liftIO $ print v
---    liftIO $ pprint g
-    cont
+    modify (\s -> s{ kb = KB src, 
+                     p = (kbtoProgram (KB src)), 
+                     currentEnv = env})
 
 
 dispatch com =
@@ -195,8 +149,7 @@ dispatch com =
         CHalt -> liftIO $ bye "Leaving..."
 
 
-runDriverM m = evalStateT m tabulaRasa
-    where tabulaRasa = HEnv mempty mempty mempty 0 True
+
 
 bye s     = putStrLn s >> exitWith ExitSuccess
 sayYes    = putStrLn "Yes"

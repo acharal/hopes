@@ -69,9 +69,9 @@ answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
 refute =  refute''' --' 50
 
 refute''' CTrue = return (CTrue, success)
-refute''' g = ifte (derive' g) cont failed
-    where derive' g  = traceResult (derive g)
-          cont (g,s) = do
+refute''' g = ifte (derive g) cont failed
+    where cont (g,s) = do
+            trace (g, s)
             (g', s') <- refute''' g
             return (g', s `combine` s')
           failed = if isSuccessful g 

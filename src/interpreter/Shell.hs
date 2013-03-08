@@ -17,7 +17,6 @@
 
 module Shell(runInteractive, Command(..)) where
 
-import Driver (mkCom, dispatch, runDriverM, Command(..), CommandDesc(..), HopeEnv(..), userCommands)
 import Language.Hopl (clauseHead, clauses)
 import Types (unTyp)
 import Pretty (ppr)
@@ -28,6 +27,8 @@ import Control.Monad.State (lift, liftIO, gets)
 
 import System.Console.Haskeline (getInputLine, setComplete, defaultSettings, completeWord, simpleCompletion, InputT, runInputT)
 
+import Driver
+import HopesIO
 
 trim :: String -> String
 trim xs = dropWhile (isSpace) $ reverse $ dropWhile (isSpace) $ reverse xs
