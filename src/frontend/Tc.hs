@@ -42,9 +42,9 @@ data TcState =
     }
 
 
-type Tc = ReaderT TcEnv (StateT TcState (ErrorT Messages IO))
+type Tc m = ReaderT TcEnv (StateT TcState (ErrorT Messages m))
 
-instance MonadLoc Tc where
+instance Monad m => MonadLoc (Tc m) where
     getLoc = asks ctxt >>= return . loc
 
 runTc m =  run >>= \res -> case res of
@@ -56,39 +56,39 @@ runTc m =  run >>= \res -> case res of
 
 runTcWithEnv env m = runTc (extendEnv env m)
 
-recoverTc :: Tc a -> Tc a -> Tc a
+recoverTc :: Monad m => Tc m a -> Tc m a -> Tc m a
 recoverTc main recov =
     catchError main (\msgs -> addMsgs msgs >> recov)
 
 addMsgs m = modify (\s -> s{ msgs = concatMsgs m (msgs s) })
 
-getTypeEnv  :: Tc (TyEnv HpSymbol)
+getTypeEnv  :: Monad m => Tc m (TyEnv HpSymbol)
 getTypeEnv = asks tcTyEnv
 
-extendEnv :: [TySig HpSymbol] -> Tc a -> Tc a
+extendEnv :: Monad m => [TySig HpSymbol] -> Tc m a -> Tc m a
 extendEnv binds m = local extend m
     where extend env = env{tcTyEnv = binds ++ (tcTyEnv env)}
 
 withTypeEnv = extendEnv
 
-lookupVar :: HpSymbol -> Tc Type
+lookupVar :: Monad m => HpSymbol -> Tc m Type
 lookupVar v = do
     ty_env <- asks tcTyEnv
     case lookupTyEnv v ty_env of
         Nothing -> typeError (sep [text "Variable", quotes (ppr v), text "out of scope"] )
         Just ty -> return ty
 
-freshTyVar :: Tc MonoType
+freshTyVar :: MonadIO m => Tc m MonoType
 freshTyVar = do
     n <- gets uniq
     modify (\s -> s{uniq = n+1})
     r <- liftIO $ newIORef Nothing
     return (TyVar (Tv (n+1) r))
 
-lookupTy :: TyVar -> Tc (Maybe MonoType)
+lookupTy :: MonadIO m => TyVar -> Tc m (Maybe MonoType)
 lookupTy (Tv i r) = liftIO $ readIORef r
 
-addConstraint :: TyVar -> MonoType -> Tc ()
+addConstraint :: MonadIO m => TyVar -> MonoType -> Tc m ()
 addConstraint (Tv i r) ty = do
     maybet <- liftIO $ readIORef r
     case maybet of
@@ -124,20 +124,20 @@ normType tvy@(TyVar tv) = do
 normType t = return t
 
 -- typeError :: Desc -> Tc ()
-typeError :: ErrDesc -> Tc a
+typeError :: Monad m => ErrDesc -> Tc m a
 typeError err = do
     l <- getLoc
     diagnosis <- asks ctxt
     throwError $ mkMsgs $ mkErrWithLoc l TypeError Failure (vcat [err, vcat (map ppr diagnosis)])
 
 
-instantiate :: Type -> Tc MonoType
+instantiate :: Monad m => Type -> Tc m MonoType
 instantiate t = return t
 
-generalize :: MonoType -> Tc Type
+generalize :: Monad m => MonoType -> Tc m Type
 generalize t = return t
 
-freshTyFor :: a -> Tc (a, Type)
+freshTyFor :: MonadIO m => a -> Tc m (a, Type)
 freshTyFor v = do
     ty <- freshTyVar >>= generalize
     return (v, ty)

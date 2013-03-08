@@ -20,7 +20,7 @@ module TypeCheck (tcProg, tcExpr, tiExpr, tcForm) where
 
 import Language.Hopl.Syntax
 import Lang (Sym(AnonSym), liftSym)
-import Types (tyBool, tyAll, MonoType, MonoTypeV(..))
+import Types (tyBool, tyAll, MonoTypeV(..))
 import Tc
 
 import Loc (Located(..))
@@ -158,7 +158,7 @@ tcExpr' exp_ty (L l (HpLam bs e)) = do
 
 -- unification
 
-unify :: MonoType -> MonoType -> Tc ()
+-- unify :: Monad m => MonoType -> MonoType -> Tc m ()
 unify (TyVar v1) t@(TyVar v2)
     | v1 == v2    = return ()
     | otherwise   = unifyVar v1 t
@@ -214,7 +214,7 @@ tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
                     return (v:vs)
 
 
-tySym :: HpSymbol -> Tc HpSymbol
+-- tySym :: HpSymbol -> Tc HpSymbol
 tySym = return . id   --no annotation
 
 -- error reporting
