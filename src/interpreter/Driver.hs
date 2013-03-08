@@ -95,9 +95,10 @@ processMsgs (errs, warns) = do
     fail "errors occured"
 
 --loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)
+
 loadSource file = do
     parsed       <- liftIO $ parseFromFile file parseSrc
-    (wellformed, msgs) <- liftIO $ runTc $ wfp parsed
+    (wellformed, msgs) <- runTc (wfp parsed)
     case wellformed of
         Just (wfprog, env) -> do
                 cp <- runDesugarT $ desugarSrc (wfprog, env)
@@ -109,7 +110,7 @@ loadGoal inp env = do
     parsed_goal <- case parsed_res of
                         Right (g,_) -> return g
                         Left msgs   -> processMsgs msgs
-    (tcres, msgs) <- liftIO $ runTc $ withSig parsed_goal $
+    (tcres, msgs) <- runTc $ withSig parsed_goal $
                               withTypeEnv env $ wfg parsed_goal
     case tcres of
         Just (tcgoal, env') -> do
@@ -117,7 +118,7 @@ loadGoal inp env = do
             return (hopltoCoreGoal cg)
         Nothing -> processMsgs msgs
 
-consultFile :: FilePath -> HopesIO ()
+
 consultFile f = do
     (src, env) <- loadSource f
     liftIO $ putStrLn ("% consulted " ++ show f ++ "")

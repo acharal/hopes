@@ -19,9 +19,8 @@
 module TypeCheck (tcProg, tcExpr, tiExpr, tcForm) where
 
 import Language.Hopl.Syntax
-import Buildins (buildinsigs)
-import Lang (Sym(AnonSym))
-import Types (tyBool, MonoType, MonoTypeV(..))
+import Lang (Sym(AnonSym), liftSym)
+import Types (tyBool, tyAll, MonoTypeV(..))
 import Tc
 
 import Loc (Located(..))
@@ -57,6 +56,21 @@ import Data.Monoid (mappend)
     3. Bindings and annotation (annotation helps next stages but it's checking not annotating)
 
 -}
+
+buildinsigs = map (\(x,t) -> (liftSym x, t) ) buildins'
+
+buildins' =
+    [ (".",     TyFun tyAll (TyFun tyAll tyAll))
+    , ("[]",    tyAll)
+    , ("s",     TyFun tyAll tyAll)
+    , ("true",  tyBool)
+    , ("false", tyBool)
+    , ("0",     tyAll)
+    , ("=",     TyFun tyAll  (TyFun tyAll tyBool))
+    , (",",     TyFun tyBool (TyFun tyBool tyBool))
+    , (";",     TyFun tyBool (TyFun tyBool tyBool))
+    , ("_",     tyAll)
+    ]
 
 -- type checking and inference
 
@@ -144,7 +158,7 @@ tcExpr' exp_ty (L l (HpLam bs e)) = do
 
 -- unification
 
-unify :: MonoType -> MonoType -> Tc ()
+-- unify :: Monad m => MonoType -> MonoType -> Tc m ()
 unify (TyVar v1) t@(TyVar v2)
     | v1 == v2    = return ()
     | otherwise   = unifyVar v1 t
@@ -200,7 +214,7 @@ tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
                     return (v:vs)
 
 
-tySym :: HpSymbol -> Tc HpSymbol
+-- tySym :: HpSymbol -> Tc HpSymbol
 tySym = return . id   --no annotation
 
 -- error reporting
