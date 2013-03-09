@@ -23,4 +23,8 @@ type HopesIO = StateT HopeEnv IO
 -- we like for HopesIO to be MonadIO and MonadState HopeEnv
 
 runDriverM m = evalStateT m tabulaRasa
-    where tabulaRasa = HEnv mempty mempty mempty True
+    where tabulaRasa = HEnv { currentEnv = mempty 
+                            , kb = mempty
+                            , p  = mempty 
+                            , debugFlag = True
+                            }
