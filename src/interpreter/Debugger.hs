@@ -1,7 +1,6 @@
 
 module Debugger (attachDebugger) where
 
-import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.IO.Class ()
 import Control.Monad.State.Class
@@ -41,8 +40,27 @@ data DebugState i m a =
           prev_cont :: DebugT (DebugState i m a) i m a
         }
 
+data DebugRequest a = Debug Char
+
+data DebugCommand = 
+      DebugAbort
+    | DebugFailBranch
+    | DebugRetry
+    | DebugNext
+    | DebugOff
+    | DebugHelp
+    
+data DebugOptions = DebugOptions 
+    { stopInEachStep :: Bool -- True will wait for "DebugNext" to continue
+    , printEachTrace :: Bool -- False is silent
+    , maxDepth :: Maybe Int  -- Just i is the maximum depth of steps (derivations)
+    }
+
 debug m h = runDebugT st m h
-    where st = DSt { count = 0, retry_cont = fail "", prev_cont = fail "" }
+    where st = DSt { count = 0
+                   , retry_cont = fail ""
+                   , prev_cont = fail "" 
+                   }
 
 
 debug_handler (g, s) cont = 

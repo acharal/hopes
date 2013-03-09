@@ -77,10 +77,10 @@ loadGoal inp env = do
 
 consultFile f = do
     (src, env) <- loadSource f
-    liftIO $ putStrLn ("% consulted " ++ show f ++ "")
     modify (\s -> s{ kb = KB src, 
                      p = (kbtoProgram (KB src)), 
                      currentEnv = env})
+    liftIO $ putStrLn ("% consulted " ++ show f ++ "")
 
 sayYes    = putStrLn "Yes"
 sayNo     = putStrLn "No"
