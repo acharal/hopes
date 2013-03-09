@@ -19,9 +19,9 @@
 module WellForm (wfp, wfg) where
 
 import Language.Hopl.Syntax
-import Types (MonoTypeV(..), TyEnv, tyAll, hasType, typeOf)
+import Types (MonoTypeV(..), tyAll, hasType, typeOf)
 import Loc (Located(..))
-import Tc (Tc, getTypeEnv, normType)
+import Tc (getTypeEnv, normType)
 import TypeCheck (tcProg, tcForm)
 import Restrict (restrictProg, restrictForm)
 
@@ -49,7 +49,7 @@ wfg g = do
     return (g', env)
 
 -- head must not contain "other than" higher order variables in higher-order arg positions
-zonkEnv :: (TyEnv a) -> Tc (TyEnv a)
+-- zonkEnv :: (TyEnv a) -> Tc (TyEnv a)
 zonkEnv env =
     let aux (v,t) = do
             t' <- zonkType t

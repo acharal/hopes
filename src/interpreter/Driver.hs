@@ -18,81 +18,25 @@
 -- | drives the pipeline of compilation + execution
 module Driver where
 
-import Lang(liftSym)
-import Language.Hopl
-import Language.Hopl.Syntax(HpSymbol)
-import Parser(runParser, withInput, parseSrc, parseGoal, fromFile)
-import Types(TyEnv, Typed, findTySig)
-import Tc(runTc, withSig, withTypeEnv)
-import WellForm(wfp, wfg)
-import Desugar
+
+import Language.Hopl (KnowledgeBase(..))
+
+import Parser (runParser, withInput, parseSrc, parseGoal, fromFile)
+import Tc (runTc, withSig, withTypeEnv)
+import WellForm (wfp, wfg)
+import Desugar (runDesugarT, desugarGoal, desugarSrc)
 import Infer
-import CoreLang (Program, kbtoProgram, hopltoCoreGoal)
+import CoreLang (kbtoProgram, hopltoCoreGoal)
 import Pretty
--- import ComputedAnswer ()
-import Data.Monoid
 
 import Control.Monad.State (gets, modify)
-import Control.Monad.Trans.State.Strict (StateT, evalStateT)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad (when)
 
-import Control.Monad.Cont
 import System.IO
-import System.Exit(exitWith, ExitCode(..))
-import System.Console.GetOpt
 
-import Trace
-
-data HopeEnv =
-    HEnv {  
-        currentEnv :: TyEnv HpSymbol,
-        kb         :: KnowledgeBase (Typed HpSymbol),
-        p          :: Program (Typed HpSymbol),
-        verbose    :: Int,
-        debugFlag  :: Bool
-    }
-
-type HopesIO = StateT HopeEnv IO
-
-data Command =
-      CRefute    String
-    | CConsult   FilePath
-    | CShowType  String
-    | CShowDef   (Maybe String)
-    | CHalt
-    | CBuildin   String [String]
-
-data CommandDesc a =
-    Command {
-        short :: String,
-        argDescr :: ArgDescr a
-    }
-
-mkCom :: CommandDesc a -> String -> a
-mkCom c s =
-    case argDescr c of
-        NoArg a -> a
-        ReqArg f _ ->  f s
-        OptArg f _ ->  f (Just s)
-
-userCommands =
- [ Command ['c','l'] (ReqArg CConsult "FILE")
- , Command ['t']     (ReqArg CShowType "SYMBOL") 
- , Command ['q']     (NoArg  CHalt)
- , Command ['p']     (OptArg CShowDef "PREDICATE")
- ]
-
-
-
-buildin_preds :: [(String, Int, [String]-> HopesIO (), String -> IO [String])]
-buildin_preds =
- [ ("listing", 1, undefined, undefined)
- , ("typeof",  1, undefined, undefined)
- , ("consult", 1, undefined, undefined)
- , ("halt",    0, undefined, undefined)
- -- , ("assert",    0, undefined, undefined)
- -- , ("retract",    0, undefined, undefined)
- ]
-
+import Debugger
+import HopesIO
 
 parseFromFile fname parser = do
     file     <- liftIO $ openFile fname ReadMode
@@ -107,9 +51,10 @@ processMsgs (errs, warns) = do
     fail "errors occured"
 
 --loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)
+
 loadSource file = do
     parsed       <- liftIO $ parseFromFile file parseSrc
-    (wellformed, msgs) <- liftIO $ runTc $ wfp parsed
+    (wellformed, msgs) <- runTc (wfp parsed)
     case wellformed of
         Just (wfprog, env) -> do
                 cp <- runDesugarT $ desugarSrc (wfprog, env)
@@ -121,7 +66,7 @@ loadGoal inp env = do
     parsed_goal <- case parsed_res of
                         Right (g,_) -> return g
                         Left msgs   -> processMsgs msgs
-    (tcres, msgs) <- liftIO $ runTc $ withSig parsed_goal $
+    (tcres, msgs) <- runTc $ withSig parsed_goal $
                               withTypeEnv env $ wfg parsed_goal
     case tcres of
         Just (tcgoal, env') -> do
@@ -129,79 +74,22 @@ loadGoal inp env = do
             return (hopltoCoreGoal cg)
         Nothing -> processMsgs msgs
 
-consultFile :: FilePath -> HopesIO ()
+
 consultFile f = do
     (src, env) <- loadSource f
+    modify (\s -> s{ kb = KB src, 
+                     p = (kbtoProgram (KB src)), 
+                     currentEnv = env})
     liftIO $ putStrLn ("% consulted " ++ show f ++ "")
-    modify (\s -> s{ kb = KB src, p = (kbtoProgram (KB src)), currentEnv = env})
 
--- 'h' help for debugger
--- 'a' abort evaluation
--- 'f' fail current branch
--- 'e' exit - terminate interpreter
--- 'newline' continue to next step
--- 'n' no debug - turn debug off
--- 'r' retry (????)
--- 'v' view answer so far
--- 
-
-debug_handler (g, s) cont = 
-    let handleOptions cont = do
-            opt <- liftIO getChar
-            case opt of
-                'h' -> liftIO $ print "I need help too!"
-                'a' -> fail "failed by user"
-                'f' -> lift (fail "fail branch by user")
-                'n' -> modify (\s -> s{debugFlag = False})
-                _ -> return ()
-    in do
-        flag <- gets debugFlag
-
-        when (flag) $ do
-            liftIO $ putStrLn $ show $ ppr g
-            handleOptions cont
-
-        cont
-    
-
-nodebug (g,s) cont = do
-    v <- gets verbose
-    modify (\s -> s{verbose = v + 1})
-    liftIO $ print v
---    liftIO $ pprint g
-    cont
-
-
-dispatch com =
-    case com of
-        CRefute s   ->  do
-            src  <- gets kb
-            env  <- gets currentEnv
-            goal <- loadGoal s env
-            consumeSolutions $ debug (prove goal) debug_handler
-        CConsult f  -> consultFile f
-        CShowType p -> do
-            env <- gets currentEnv
-            case findTySig (liftSym p) env of
-                Nothing    -> fail "undefined symbol"
-                Just tysig -> liftIO $ pprint tysig
-        CShowDef maybe_p -> do
-            src <- gets kb
-            case maybe_p of
-                Nothing -> liftIO $ pprint src
-                Just p  -> do
-                    let cl = filter (\c -> clauseHead c == liftSym p) (clauses src)
-                    liftIO $ pprint $ vcat (map ppr cl)
-        CHalt -> liftIO $ bye "Leaving..."
-
-
-runDriverM m = evalStateT m tabulaRasa
-    where tabulaRasa = HEnv mempty mempty mempty 0 True
-
-bye s     = putStrLn s >> exitWith ExitSuccess
 sayYes    = putStrLn "Yes"
 sayNo     = putStrLn "No"
 
+refute s = do
+    src  <- gets kb
+    env  <- gets currentEnv
+    goal <- loadGoal s env
+    consumeSolutions $ attachDebugger $ prove goal
 -- consumeSolutions :: Infer a b -> HopesIO ()
 consumeSolutions i = do
     src  <- gets p
@@ -215,5 +103,7 @@ consumeSolutions i = do
             liftIO $ sayYes
             liftIO $ print $ ppr a
             c <- liftIO $ getChar
-            when (c == ';') $ do { liftIO $ putChar '\n';    consumeSolutions rest }
---            when (not $ c == 'q') $ consumeSolutions rest
+            when (c == ';') $ do
+                liftIO $ putChar '\n';    
+                consumeSolutions rest
+
