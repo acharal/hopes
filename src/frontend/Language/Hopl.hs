@@ -42,6 +42,8 @@ clauseBody (C _ b) = b
 
 type Goal a = Expr a
 
+cons = Rigid $ liftSym "."
+nil  = Rigid $ liftSym "[]"
 
 instance (Symbol a, Eq a)  => HasLogicConstants (Expr a) where
     ctop    = Rigid $ liftSym "true"

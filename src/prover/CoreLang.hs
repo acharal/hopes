@@ -20,6 +20,8 @@ data Expr a =
 --    | Forall a (Expr a)
     | Var  a			-- variable
     | Rigid a			-- predicate and function symbol
+    | ListCons (Expr a) (Expr a)
+    | ListNil
    deriving (Eq, Show)
 
 
@@ -65,6 +67,8 @@ fv (Or  e1 e2)  = fv e1 `union` fv e2
 fv (Eq  e1 e2)  = fv e1 `union` fv e2
 fv (Lambda a e) = filter (/= a) $ fv e
 fv (Exists a e) = filter (/= a) $ fv e
+fv (ListCons e1 e2) = fv e1 `union` fv e2
+fv (ListNil) = []
 -- fv (Forall a e) = filter (/= a) $ fv e
 
 
@@ -72,12 +76,18 @@ splitExist (Exists v e1) = ((v:vs), e')
     where (vs, e') = splitExist e1
 splitExist e = ([], e)
 
+splitLambda (Lambda v e1) = ((v:vs), e')
+    where (vs, e') = splitLambda e1
+splitLambda e = ([], e)
+
 exists vs e = foldr Exists e vs
+lambda vs e = foldr Lambda e vs
 
 hoplToCoreExpr e@(H.App (H.App op e1) e2) 
     | op == ceq  = Eq  c1 c2
     | op == cand = And c1 c2
     | op == cor  = Or  c2 c2
+    | op == H.cons = ListCons c1 c2
     | otherwise  = hoplToCoreExpr' e
    where c1 = hoplToCoreExpr e1
          c2 = hoplToCoreExpr e2
@@ -88,6 +98,7 @@ hoplToCoreExpr' (H.Lambda a e) = Lambda a (hoplToCoreExpr e)
 hoplToCoreExpr' (H.Flex a)     = Var a
 hoplToCoreExpr' c@(H.Rigid a)  | c == ctop = CTrue
                                | c == cbot = CFalse
+                               | c == H.nil  = ListNil
                                | otherwise = Rigid a
 
 hoplToCoreClause c@(H.C a e) = (a, closed e)
