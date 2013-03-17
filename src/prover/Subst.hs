@@ -54,6 +54,7 @@ instance Eq a => (Substitutable (Expr a) a) where
 --                  aux _ = error "Cannot substitute lambda bounds vars with expr"
         subst theta e@(Var x) = maybe e id $ lookup x theta
         subst theta (Not e) = Not (subst theta e)
+        subst theta (ListCons e1 e2) = ListCons (subst theta e1) (subst theta e2)
         subst theta e = e
 
 instance Eq a => (Substitutable (Subst a) a) where

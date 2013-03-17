@@ -1,6 +1,7 @@
 
 module Debugger (attachDebugger) where
 
+import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.IO.Class ()
 import Control.Monad.State.Class
@@ -8,6 +9,7 @@ import Control.Monad.State.Class
 import Trace
 import Pretty
 import HopesIO
+import System.IO
 
 -- Debugger Options
 -- 
@@ -49,7 +51,19 @@ data DebugCommand =
     | DebugNext
     | DebugOff
     | DebugHelp
-    
+
+
+commands = [
+      ('a', DebugAbort)    
+    , ('f', DebugFailBranch)
+    , ('r', DebugRetry)
+    , ('\n', DebugNext)
+    , ('n', DebugOff)
+    , ('h', DebugHelp)
+    ]
+
+lookupCommand c = lookup c commands
+
 data DebugOptions = DebugOptions 
     { stopInEachStep :: Bool -- True will wait for "DebugNext" to continue
     , printEachTrace :: Bool -- False is silent
@@ -57,39 +71,59 @@ data DebugOptions = DebugOptions
     }
 
 debug m h = runDebugT st m h
-    where st = DSt { count = 0
+    where st = DSt { count = 1
                    , retry_cont = fail ""
-                   , prev_cont = fail "" 
+                   , prev_cont  = fail "" 
                    }
 
 
 debug_handler (g, s) cont = 
-    let handleOptions cont = do
-            opt <- liftIO getChar
+    let prompt = do
+            liftIO $ putStr " ? "
+            c <- liftIO $ getChar 
+            when (c /= '\n') $
+                liftIO (putChar '\n')
+            return $ lookupCommand c
 
-            case opt of
-                'h' -> (liftIO $ print "I need help too!") >> goto cont
-                'a' -> fail "failed by user"
-                'f' -> (lift (fail "fail branch by user")) >> goto cont
-                'n' -> modify (\s -> s{debugFlag = False}) >> goto cont
-                'r' -> getsState retry_cont >>= \c -> c
-                _ -> goto cont
-        goto cont = do
-            prev <- getsState prev_cont
-            modifyState (\s -> s{ prev_cont = (goto cont), retry_cont = prev })
-            cont
+        handleOptions cont = do
+            opt <- prompt
+            
+            case opt of 
+                Nothing -> handleOptions cont
+                Just command ->
+                    handle cont command
     in do
-
+        liftIO $ hSetBuffering stdout NoBuffering
         flag <- gets debugFlag
         c <- getsState count
         modifyState (\s -> s{count = c + 1})
 
         if (flag) 
          then do
-            liftIO $ putStrLn $ show $ int c <+> ppr g
+            liftIO $ putStr $ show $ nest 5 $ parens (int c) $$ nest 5 (ppr g)
             handleOptions cont
          else 
             cont   
+
+goto cont = do
+    prev <- getsState prev_cont
+    modifyState (\s -> s{ prev_cont = (goto cont), retry_cont = prev })
+    cont
+
+
+handle cont DebugAbort = fail "failed by user"
+handle cont DebugFailBranch = do
+    lift $ fail "fail branch by user"
+    goto cont
+
+handle cont DebugNext = goto cont
+handle cont DebugRetry = do
+    retry <- getsState retry_cont
+    retry
+
+handle cont DebugOff = do
+    modify (\s -> s{debugFlag = False})
+    goto cont
 
 nodebug _ cont = cont
 

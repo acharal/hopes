@@ -122,9 +122,20 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
     ppr (And e1 e2)  = sep $ punctuate comma [ppr e1, ppr e2]
     ppr (Or e1 e2)   = sep $ punctuate (text ";") [ppr e1, ppr e2]
     ppr (Eq e1 e2)   = sep $ [ppr e1, text "=" , ppr e2]
-    ppr (Lambda x e) = parens (text "\\" <> ppr x <> text "^" <> ppr e)
     ppr (Not e1)     = text "not" <> parens (ppr e1)
+    ppr e@(Lambda _ _) = parens (text "\\" <> sep (map ppr xs) <> text "^" <> ppr e')
+        where (xs, e') = splitLambda e
+--    ppr (Not e1)     = text "not" <> parens (ppr e1)
+    ppr e@(Exists _ _) = parens (text "E" <> sep (map ppr xs) <+> ppr e')
+        where (xs, e') = splitExist e
+    ppr ListNil        = text "[]"
+    ppr e@(ListCons _ _) = ppr_list (lst e)
+        where ppr_list (es, Nothing) = brackets $ sep $ punctuate comma $ map ppr es
+              ppr_list (es, Just e)  = brackets $ sep (punctuate comma $ map ppr es) <> text "|" <> ppr e
+              lst (ListCons e1 ListNil) = ([e1], Nothing)
+              lst (ListCons e1 e2) = ((e1:es), tail)
+                where (es, tail) = lst e2
+              lst e = ([], Just e)
 --    ppr (Forall v e) = parens (text "F" <> ppr v <+> ppr e)
     ppr (Cut)        = text "!"
-    ppr (Exists v e) = parens (text "E" <> ppr v <+> ppr e)
 

@@ -30,6 +30,13 @@ unify (Rigid p) (Rigid q)
     | p == q    = return success
     | otherwise = fail "Unification fail"
 
+unify (ListCons e1 e2) (ListCons e1' e2') = do
+    s1 <- unify e1 e1'
+    s2 <- unify (subst s1 e2) (subst s1 e2')
+    return (s1 `combine` s2)
+    
+unify ListNil ListNil = return success
+
 unify _ _ = fail "Should not happen"
 
 -- occurCheck :: (Symbol a, Eq a, Monad m) => a -> Expr a -> m ()
