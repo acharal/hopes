@@ -19,7 +19,7 @@
 module Derive (derive) where
 
 import Unify (unify)
-import Subst (subst, bind, success, dom, vars, isRenamingSubst)
+import Subst (subst, bind, combine, success, dom, vars, isRenamingSubst)
 
 import CoreLang (Expr(..), fv, functor, args, isVar, splitExist, exists)
 import Types (MonoTypeV(..), tyBool, tyAll, typeOf)
@@ -75,9 +75,18 @@ expandApp e                   = fail ("expandApp")
 
 returnSuccess e = return (e, success)
 
-unifyAndReturn e1 e2 = ifte (unify e1 e2) true false
-    where true mgu = return (CTrue, mgu)
-          false    = returnSuccess CFalse
+unifyD e = uncurry unify' $ splitExist e
+
+unify' vs (Eq e1 e2) = ifte (unify e1 e2) nonvalid valid
+    where isSatisfiable theta = any (\x -> x `notElem` vs) $ dom theta
+          valid = returnSuccess CFalse
+          nonvalid mgu | isSatisfiable mgu = satisfy mgu
+                       | otherwise = returnSuccess CTrue
+          satisfy mgu = return (CTrue, mgu')
+             where mgu' = filter (\(v,_) -> v `notElem` vs) mgu 
+unify' _ _ = fail "Not equality"
+
+reduceD e = reduce e >>= returnSuccess
 
 -- single step derivation
 -- derive :: Goal a -> Infer a (Goal a, Subst a)
@@ -87,17 +96,17 @@ derive (CTrue)  = returnSuccess CTrue
 -}
 derive (Cut)    = returnSuccess CTrue -- cut >> return (CTrue, success)
 
-derive (Eq  e1 e2)   = unifyAndReturn e1 e2
+derive e@(Eq _ _) = unifyD e
 
 {-
 derive (And CTrue e) = returnSuccess e
 derive (And e CTrue) = returnSuccess e
 -}
-derive e@(And CTrue _)  = reduce e >>= returnSuccess
-derive e@(And _ CTrue)  = reduce e >>= returnSuccess
-derive e@(And CFalse _) = reduce e >>= returnSuccess
-derive e@(And _ CFalse) = reduce e >>= returnSuccess
-derive e@(And _ _) = ifte (derive' e) return (reduce e >>= returnSuccess)
+derive e@(And CTrue _)  = reduceD e
+derive e@(And _ CTrue)  = reduceD e
+derive e@(And CFalse _) = reduceD e
+derive e@(And _ CFalse) = reduceD e
+derive e@(And _ _) = ifte (derive' e) return (reduceD e)
     where derive' e = ifte (derive1 e) return (derive2 e)
           derive1 e@(And e1 e2) = do
             (e1',theta) <- derive e1
@@ -114,8 +123,8 @@ derive (Not CFalse)  = returnSuccess CTrue
 
 derive e@(Not (Not _)) = reduce e >>= returnSuccess
 -}
-derive ne@(Not (Not _)) = reduce ne >>= returnSuccess
-derive ne@(Not e) = ifte neg return (reduce ne >>= returnSuccess)
+derive ne@(Not (Not _)) = reduceD ne
+derive ne@(Not e) = ifte neg return (reduceD ne)
     where neg = do
             (e', s) <- neg_derive e
             return (Not e', s)
@@ -127,25 +136,50 @@ derive (Exists v e)  = do
 derive e = 
     case functor e of 
         Var _ -> resolveFlex [] e
-        _     -> reduce e >>= returnSuccess
+        _     -> reduceD e
 
 
-neg_derive e = 
-    let (vs, e') = splitExist e
-    in  neg_derive' vs e'
+neg_derive e = uncurry neg_derive' $ splitExist e
 
-neg_derive' vs (Eq e1 e2) = ifte (unify e1 e2) nonvalid valid
-    where isSatisfiable theta = any (\x -> x `notElem` vs) $ dom theta
-          valid  = returnSuccess CFalse
-          nonvalid mgu = 
-              if isSatisfiable mgu
-              then satisfiable mgu
-              else returnSuccess CTrue
-          satisfiable mgu = 
-              if isVar e1
-              then fail "satisfiable"
-              else msum $ map (equality mgu) $ filter (\x -> x `notElem` vs) $ dom mgu
-          equality mgu x = returnSuccess $ exists vs $ Eq (Var x) (subst mgu (Var x))
+negneg_derive e = uncurry negneg_derive' $ splitExist e
+-- negneg_derive = derive 
+
+negneg_derive' vs e@(Eq _ _) = unify' vs e >>= pos
+    where pos (CTrue, mgu) = do
+                rtheta <- mapM fresh vs
+                return (CTrue, mgu `combine` rtheta)
+          pos (CFalse, s)  = return (CFalse, s)
+          fresh v = do
+              x <- freshVarOfType (typeOf v)
+              return (v, Var x)
+
+-- negneg_derive' vs (Not e) = do
+--      (e', s) <- neg_derive e
+
+negneg_derive' vs e@(And e1@(Eq _ _) e2) =
+    let fv1 = fv e1
+        (vs1, vs2) = partition (\v -> v `elem` fv1) vs
+        ne e1 = Not (exists vs1 (And e1 (Not (exists vs2 e2))))
+    in returnSuccess $ And (exists vs1 e1) (ne e1)
+
+negneg_derive' vs e = 
+    case functor e of
+        Var x -> 
+            if x `elem` vs 
+            then returnSuccess CFalse
+            else do
+                (e', s) <- resolveFlex vs e
+                return (CTrue, s)
+        _ -> fail ""
+
+
+neg_derive' vs e@(Eq e1 e2) = unify' vs e >>= neg
+    where equality mgu x = returnSuccess $ exists vs $ Eq (Var x) (subst mgu (Var x))
+          eqExp mgu = msum $ map (equality mgu) $ dom mgu
+          neg (CTrue, [])  = return (CTrue, [])
+          neg (CTrue, mgu) | isVar e1  = fail "satisfiable" 
+                           | otherwise = eqExp mgu
+          neg (CFalse, s)  = return (CFalse, s)
 
 neg_derive' vs (Not e) = 
     let isValid' vs s = isRenamingSubst $ filter (aux vs) s
@@ -160,7 +194,7 @@ neg_derive' vs (Not e) =
                 return (CFalse, s)
                 -- return (exists vs (Not e'), s)
         _ -> do
-            (e', s) <- derive e
+            (e', s) <- negneg_derive e
             if not (isValid vs s)
              then returnSuccess CTrue
              else returnSuccess (subst s (exists vs (Not e')))
@@ -209,6 +243,7 @@ neg_derive' vs e =
                 return (CFalse, s)
                 -- return (exists vs e', s)
         _ -> fail ""
+
 
 substFunc (App e a) b = (App (substFunc e b) a)
 substFunc _ b = b
