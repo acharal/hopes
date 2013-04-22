@@ -26,5 +26,5 @@ runDriverM m = evalStateT m tabulaRasa
     where tabulaRasa = HEnv { currentEnv = mempty 
                             , kb = mempty
                             , p  = mempty 
-                            , debugFlag = True
+                            , debugFlag = False
                             }
