@@ -24,7 +24,7 @@ import Lang (liftSym)
 import Data.List(find,nub,isPrefixOf)
 import Data.Char(isSpace)
 import Control.Monad.Error (catchError)
-import Control.Monad.State (lift, liftIO, gets)
+import Control.Monad.State (lift, liftIO, gets, modify)
 
 import System.Console.Haskeline (getInputLine, setComplete, defaultSettings, completeWord, simpleCompletion, InputT, runInputT)
 import System.Exit(exitWith, ExitCode(..))
@@ -91,6 +91,7 @@ data Command =
     | CConsult   FilePath
     | CShowType  String
     | CShowDef   (Maybe String)
+    | CDebugOnOff (Maybe String)
     | CHalt
 
 data CommandDesc a =
@@ -111,24 +112,53 @@ userCommands =
  , Command ['t']     (ReqArg CShowType "SYMBOL") 
  , Command ['q']     (NoArg  CHalt)
  , Command ['p']     (OptArg CShowDef "PREDICATE")
+ , Command ['d']     (OptArg CDebugOnOff "on/off")
  ]
 
-dispatch com =
-    case com of
-        CRefute s   -> refute s
-        CConsult f  -> consultFile f
-        CShowType p -> do
-            env <- gets currentEnv
-            case findTySig (liftSym p) env of
-                Nothing    -> fail "undefined symbol"
-                Just tysig -> liftIO $ pprint tysig
-        CShowDef maybe_p -> do
-            src <- gets kb
-            case maybe_p of
-                Nothing -> liftIO $ pprint src
-                Just p  -> do
-                    let cl = filter (\c -> clauseHead c == liftSym p) (clauses src)
-                    liftIO $ pprint $ vcat (map ppr cl)
-        CHalt -> liftIO $ bye "Leaving..."
 
-bye s     = putStrLn s >> exitWith ExitSuccess
+dispatch (CRefute s) = refute s
+dispatch command = dispatch' command
+    where dispatch' (CConsult f)  = consultFile f
+          dispatch' (CShowType p) = showType p
+          dispatch' (CShowDef  p) = showDef p
+          dispatch' (CDebugOnOff s) = debugOnOff s
+          dispatch' (CHalt) = halt
+
+
+toggleDebug Nothing  = modify (\s -> s{debugFlag = not (debugFlag s)})
+toggleDebug (Just "on")  = modify (\s -> s{debugFlag = True})
+toggleDebug (Just "off") = modify (\s -> s{debugFlag = False})
+toggleDebug (Just _) = toggleDebug Nothing
+
+printDebug = let 
+       onoff True  = "on"
+       onoff False = "off"   
+    in do
+        d <- gets debugFlag
+        writeInfo ("debug is " ++ onoff d)
+
+debugOnOff i = toggleDebug i >> printDebug
+
+showDef Nothing = do
+    src <- gets kb
+    liftIO $ pprint src
+showDef (Just p) = do
+    src <- gets kb
+    let cl = filter (\c -> clauseHead c == liftSym p) (clauses src)
+    liftIO $ pprint $ vcat (map ppr cl)
+
+showType p = do
+    env <- gets currentEnv 
+    case findTySig (liftSym p) env of
+        Nothing -> fail "undefined symbol"
+        Just tysig -> liftIO $ pprint tysig
+
+halt = bye "halting ..."
+
+bye s = do
+    writeInfo s 
+    liftIO $ exitWith ExitSuccess
+
+writeInfo s = liftIO $ comm s
+    where comm s = putStr "% "  >> putStrLn s
+
