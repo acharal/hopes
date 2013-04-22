@@ -24,7 +24,7 @@ type Name = String
 class Symbol a where
     liftSym :: String -> a
 
-data Sym = Sym String | AnonSym deriving Eq
+data Sym = Sym String | AnonSym
 
 data Var =
       V Name
@@ -34,7 +34,6 @@ instance Show Var where
     showsPrec p (V n) = showsPrec p n
     showsPrec p (NoNameVar) = showString "_"
 
-
 instance  Show Sym where
     showsPrec p (Sym a) = showsPrec p a
     showsPrec p AnonSym = showString "_"
@@ -42,6 +41,10 @@ instance  Show Sym where
 instance Symbol Sym where
     liftSym a = Sym a
 
+instance Eq Sym where
+    (Sym s1) == (Sym s2) = s1 == s2
+    AnonSym == s = False
+    s == AnonSym = False
 
 instance Symbol a => Symbol (Typed a) where
     liftSym a = T (liftSym a) (error "not valid type")
