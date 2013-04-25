@@ -36,7 +36,7 @@ Flag dc-impl
 
 Executable      hopes
   Main-Is:	  Main.hs
-  Build-Depends:  mtl, transformers, haskeline
+  Build-Depends:  mtl, transformers, haskeline, monad-coroutine
   if flag(split-base)
     Build-Depends: base >= 3.0 && < 5, array, pretty
   else
@@ -58,7 +58,7 @@ Executable      hopes
                   Lang, Types,
                   Tc, WellForm, TypeCheck, Restrict,
                   Pretty, Error, Loc, Desugar,
-                  Language.Hopl, Logic, Logic.Class, Infer, Subst, Subst.Pretty,
+                  Language.Hopl, Logic, Logic.Class, Infer, Subst,
                   CoreLang,
                   Shell, Driver
   Extensions:     RankNTypes
