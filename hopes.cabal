@@ -1,4 +1,4 @@
-Cabal-Version:  >= 1.6
+Cabal-Version:  >= 1.6 
 Build-Type:	Simple
 Name:           hopes
 Version:        0.0.5
