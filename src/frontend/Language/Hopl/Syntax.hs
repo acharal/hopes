@@ -70,12 +70,6 @@ lookupBind x = find ((x==).symbolBind)
 
 --type HpTySign = TySig HpSymbol
 
-data HpSrc a =
-    HpSrc { 
-        clauses :: [LHpClause a],
-        tyEnv   :: TyEnv HpSymbol
-    }
-
 instance (Eq a, HasSignature a a) => HasSignature (HpSrc a) a where
     sig p = (a, mempty)
         where (a, b) = mconcat (map sig (clauses p))
@@ -125,16 +119,23 @@ instance HasVariables (HpClause a) where
 -- goal has no A and no or more B
 -- contradiction (False) has no A and no B
 
+data HpSrc a =
+    HpSrc { 
+        clauses :: [LHpClause a],
+        tyEnv   :: TyEnv V HpSymbol
+    }
+
 data HpClause a = HpClause (HpBindings a) [LHpExpr a] [LHpExpr a]
 
+
+
 data HpExpr a = 
-      HpSym a                              -- symbol (constant, functional symbol, variable, predicate)
-    | HpVar a                              -- variable
-    | HpApp (LHpExpr a) [LHpExpr a]        -- general application (predicate or func sym)
-    | HpPar (LHpExpr a)                    -- parenthesized expression
-    | HpLam (HpBindings a) (LHpExpr a)     -- lambda abstraction
-    | HpAnn (LHpExpr a) Type               -- type annotated expression
-    | HpTup [LHpExpr a]                    -- tuple. can be defined as HpApp (HpSym "()") [LHpExpr]
+      HpConst a                       -- constant (functional symbol, variable, predicate)
+    | HpVar a                         -- variable
+    | HpApp (LHpExpr a) [LHpExpr a]   -- general application (predicate or func sym)
+    | HpPar (LHpExpr a)               -- parenthesized expression
+    | HpLam [HpVar a] (LHpExpr a)     -- lambda abstraction
+    | HpAnn (LHpExpr a) Type          -- type annotated expression
     deriving Eq
 
 

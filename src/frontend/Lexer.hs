@@ -79,9 +79,10 @@ scanTok ('.':cs) loc         = Tok TKdot    1 cs
 scanTok ('_':cs) loc         = Tok TKwild   1 cs
 scanTok ('!':cs) loc         = Tok TKcut    1 cs
 scanTok (';':cs) loc         = Tok TKsemi   1 cs
-scanTok ('\'':cs) loc        = Tok TKsq     1 cs
+scanTok ('\'':cs) loc        = scanAtom cs loc --Tok TKsq     1 cs
 scanTok ('=':cs) loc         = Tok TKeq     1 cs
 scanTok (':':'-':cs) loc     = Tok TKgets   2 cs
+scanTok ('<':'-':cs) loc     = Tok TKplgets 2 cs
 scanTok (':':':':cs) loc     = Tok TKcolcol 2 cs
 scanTok ('-':'>':cs) loc     = Tok TKarrow  2 cs
 scanTok inp@(c:cs) l
@@ -90,6 +91,14 @@ scanTok inp@(c:cs) l
     | isLower c || isDigit c = scanName TKid inp l
 scanTok inp loc              = TokError loc inp
 
+scanAtom :: String -> Loc -> ScanResult
+scanAtom str loc = 
+    let (name, rest) = span inQuoted str 
+        inQuoted c = (isPrint c && not (isSpace c) || c = ' ' ) && c \= '\''
+        --FIXME: have to parse backslashed symbols too
+    in case rest of
+        ('\'': rest') -> Tok (TKid name) (length name + 1) rest'
+        _ -> TOKerror loc rest
 
 scanName :: (String -> Token) -> ScanAction
 scanName cstr cs l   = Tok (cstr name) (length name) rest

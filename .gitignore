@@ -11,6 +11,7 @@ Thumbs.db
 *.orig
 *.prof
 *.rej
+*.swp
 
 *.hi
 *.hi-boot

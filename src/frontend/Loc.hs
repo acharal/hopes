@@ -15,6 +15,9 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+
+
+-- Model a location in a program
 module Loc where
 
 
@@ -58,33 +61,8 @@ mkSpan l1 l2 =
     else
         LocSpan l1 l2
 
-class HasLocation a where
-    loc :: a ->  Loc
-    locSpan :: a -> LocSpan
-    locSpan x = mkSpan s s where s = loc x
-    loc x = spanBegin (locSpan x)
 
-instance HasLocation Loc where
-    loc x = x
-
-instance HasLocation LocSpan where
-    locSpan x = x
-
-instance (HasLocation a, HasLocation b) => HasLocation (a, b) where
-    locSpan (a, b) = locSpan a `mappend` locSpan b
-
-instance HasLocation a => HasLocation [a] where
-    loc xs = mconcat (map loc xs)
-    locSpan xs = mconcat (map locSpan xs)
-
-data Located a = L LocSpan a deriving Eq
-
-instance HasLocation (Located a) where
-    locSpan (L l _) = l
-
-instance Functor Located where
-    fmap f (L l x) = L l (f x)
-
+-- Location is a Monoid with neutral element = bogusloc
 instance Monoid Loc where
     mempty = bogusLoc
     mappend a b
@@ -97,12 +75,48 @@ instance Monoid LocSpan where
         | a == bogusSpan = b
         | otherwise = mkSpan (spanBegin (locSpan a)) (spanEnd (locSpan b))
 
+
+-- | Class which will be later implemented by tokens, syntactic
+-- structures, errors and of course locations. Ensures a
+-- location and a location span.
+-- Minimum definition: loc OR locSpan
+class HasLocation a where
+    loc :: a ->  Loc
+    locSpan :: a -> LocSpan
+    locSpan x = mkSpan s s where s = loc x
+    loc x = spanBegin (locSpan x)
+
+instance HasLocation Loc where
+    loc x = x
+instance HasLocation LocSpan where
+    locSpan x = x
+
+
+instance (HasLocation a, HasLocation b) => HasLocation (a, b) where
+    locSpan (a, b) = locSpan a `mappend` locSpan b
+
+instance HasLocation a => HasLocation [a] where
+    loc xs = mconcat (map loc xs)
+    locSpan xs = mconcat (map locSpan xs)
+
+
+-- | Add location to a value
+data Located a = L LocSpan a deriving Eq
+
+instance HasLocation (Located a) where
+    locSpan (L l _) = l
+
+instance Functor Located where
+    fmap f (L l x) = L l (f x)
+
+
 unLoc :: Located a -> a
 unLoc (L _ e) = e
 
 located :: HasLocation l =>  l -> a -> Located a
 located ss x = L (locSpan ss) x
 
+-- Monadic declarations
 class Monad m => MonadLoc m where
     getLoc :: m Loc
     getLocSpan :: m LocSpan

@@ -33,6 +33,7 @@ data Token =
       TKoparen
     | TKcparen
     | TKgets
+    | TKplgets
     | TKdot
     | TKcomma
     | TKvert
@@ -58,6 +59,7 @@ instance Show Token where
     showsPrec n (TKoparen) = showString "("
     showsPrec n (TKcparen) = showString ")"
     showsPrec n (TKgets)   = showString ":-"
+    showsPrec n (TKplgets) = showString "<-"
     showsPrec n (TKdot)    = showString "."
     showsPrec n (TKcomma)  = showString ","
     showsPrec n (TKvert)   = showString "|"
