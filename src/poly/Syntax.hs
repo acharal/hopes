@@ -1,202 +1,135 @@
---  Copyright (C) 2006-2012 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
---
---  This program is free software; you can redistribute it and/or modify
---  it under the terms of the GNU General Public License as published by
---  the Free Software Foundation; either version 2, or (at your option)
---  any later version.
---
---  This program is distributed in the hope that it will be useful,
---  but WITHOUT ANY WARRANTY; without even the implied warranty of
---  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
---  GNU General Public License for more details.
---
---  You should have received a copy of the GNU General Public License
---  along with this program; see the file COPYING.  If not, write to
---  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
---  Boston, MA 02110-1301, USA.
+module Syntax where
 
-module Language.Hopl.Syntax where
-
-import Lang
-import Loc
 import Types
-import Data.Monoid(mappend, mconcat, mempty)
-import Data.List (find)
-{-
-    Preliminaries
-    1. Symbols
-        1.1. Constants
-        1.2. Function symbols
-        1.3. Predicate symbols
-        1.4  Variables
-    2. Logical connectives (usually builtin)
-        2.1 implication ":-"
-        2.2 conjuction  ","
-        2.3 disjuction  ";"
-    3. Quantifiers (forall, exists)
-
-    Basics
-
-    1. a term is an expression of type i
-    2. a literal is an expression of type o
-    3. an atom is a positive literal
-    4. a formula is literals connected by logical connectives. Is of type o.
-        4.1 a formula is called closed if has no free variables, namely all
-            variables occurs in the formula, are quantified (or bound by lambda abstraction).
-    5. a clause is either a fact or a rule
-    6. a rule is a *special* formula has only one positive literal, aka A <- B_1, ..., B_n.
-       where A is called the head of the rule and [B_1, ..., B_n] (connected by conjuction)
-       called the body of the rule.
-    7. a fact is a bodyless rule.
-    8. a goal is a *special* formula that has no positive literals, aka <- G_1, ..., G_n.
-       an empty goal is known as *contradiction*.
-
-    Convensions of Prolog
-
-    1. variables are denoted by *symbols* where their first letter is capital.
-    2. Every variables (as defined in 1.) that occurs in a clause is implied to be
-       universally quantified.
--}
-
-type HpSymbol = Sym
-
-
-data HpBinding  a = HpBind { symbolBind :: !a,  postType :: Type }  deriving Eq
-type HpBindings a = [HpBinding a]
--- type HpBindings a = Set.Set (HpBinding a)
-
-lookupBind :: Eq a => a -> HpBindings a -> Maybe (HpBinding a)
-lookupBind x = find ((x==).symbolBind)
-
---type HpTySign = TySig HpSymbol
-
-instance (Eq a, HasSignature a a) => HasSignature (HpSrc a) a where
-    sig p = (a, mempty)
-        where (a, b) = mconcat (map sig (clauses p))
-
-instance (Eq a, HasSignature a a) => HasSignature (HpClause a) a where
-    sig f@(HpClause b xs ys) = (filter (not.isBinding f) as,
-                              bs `mappend` (map symbolBind b))
-        where (as, bs) = mconcat $ map sig (xs ++ ys)
-
-instance (Eq a, HasSignature a a) => HasSignature (HpExpr a) a where
-    sig (HpSym s)    = sig s
-    sig (HpApp e es) = mconcat (map sig (e:es))
-    sig (HpPar e)    = sig e
-    sig (HpAnn e _)  = sig e
-    sig (HpTup es)   = mconcat (map sig es)
-    sig a@(HpLam b e)= (filter (not.isBinding a) as, bs `mappend`
-                       (map symbolBind b))
-        where (as, bs) = sig e
-
-
-instance HasSignature a s => HasSignature (Located a) s where
-    sig = sig . unLoc
+import Loc
 
 {-
+ - Concrete syntax tree for the surface language.
+ - Expressions are polymorphic to include extra information,
+ - which will varry depending on the context.
+ -}
 
-instance HasVariables a => HasVariables (Located a) where
-    vars = vars . unLoc
+-- Description of constants and variables.
+-- Extra type argument for information (type,location etc)
+data Const a = Const a String Int  -- name and arity
+    deriving Functor
 
-instance HasVariables (HpExpr a) where
-    vars (HpVar x) = [x]
-    vars (HpApp e es) = nub $ mconcat $ map vars (e:es)
-    vars (HpPar e) = vars e
-    vars (HpAnn e _) = vars e
-    vars (HpTup es) = nub $ mconcat $ map vars es
-    vars (HpLam b e) = vars e
+data Var   a = Var     a String -- named Variable
+             | AnonVar a        -- wildcard
+    deriving Functor
 
-instance HasVariables (HpClause a) where
-    vars (HpClause b xs ys) = nub $ mconcat $ map vars (xs ++ ys)
--}
+-- The whole program
+type SProgram a = [SGroup a]
 
--- returns the signature of a program
+-- A dependency group
+type SGroup a = [SClause a]
 
--- normalized formula :  
--- forall x1 ... xk. (A1, ..., An <- B1, ..., Bm)
--- rule or clause has exactly one A an more than one B
--- fact has exactly one A and no B
--- goal has no A and no or more B
--- contradiction (False) has no A and no B
+-- A clause. Nothing in the body is a fact. Just is a rule.
+data SClause a = SClause a (SHead a) (SGets) (Maybe (SBody a))
+    deriving Functor
 
-data HpSrc a =
-    HpSrc { 
-        clauses :: [LHpClause a],
-        tyEnv   :: TyEnv V HpSymbol
-    }
+-- Monomorphic or polymorphic gets
+data SGets = SGets_mono | SGets_poly
 
-data HpClause a = HpClause (HpBindings a) [LHpExpr a] [LHpExpr a]
+isFact :: SClause a -> Bool
+isFact (SClause _ _ _ Nothing) = True
+isFact _ = False
 
+data SHead a = SHead a           -- Info
+                     ( Const a ) -- clause name
+                     [[SExpr a]] -- Arguments
+    deriving Functor
 
+data SBody a = SBody_par a (SBody a)    -- in parens
+             | SBody_pop  a (SOp a) (SBody a) (SBody a) 
+                                        -- operator
+             | SBody_pe  a (SExpr a)    -- pred. expr
+    deriving Functor
 
-data HpExpr a = 
-      HpConst a                       -- constant (functional symbol, variable, predicate)
-    | HpVar a                         -- variable
-    | HpApp (LHpExpr a) [LHpExpr a]   -- general application (predicate or func sym)
-    | HpPar (LHpExpr a)               -- parenthesized expression
-    | HpLam [HpVar a] (LHpExpr a)     -- lambda abstraction
-    | HpAnn (LHpExpr a) Type          -- type annotated expression
-    deriving Eq
+data SOp a = SAnd a | SOr a | SFollows a
+    deriving Functor
 
+data SExpr a = SExpr a       -- Info
+                     Bool    -- Is it predicative expr?
+                     (SContents a) -- Contents
+    deriving Functor
 
-class Eq b => HasBindings a b where
-    bindings :: a -> HpBindings b
-    isBinding :: a -> b -> Bool
-    isBinding a s = any (s==) $ map symbolBind (bindings a)
+data SContents a = SCont_par     (SExpr a)  -- in Parens    
+                 | SCont_const   (Const a)  -- constant
+                 | SCont_var     (Var   a)  -- variable
+                 | SCont_int     Int        -- integer constant
+                 | SCont_predcon (Const a)  -- predicate constant
+                 | SCont_app  (SExpr a) [SExpr a] -- application
+                 | SCont_lam  [Var a]   (SBody a) -- lambda abstr.
+                 | SCont_list [SExpr a] (Maybe (SExpr a))
+                              -- list: initial elements, maybe tail
+                 | SCont_eq  (SExpr a) (SExpr a)  -- unification
+                 | SCont_ann (SExpr a) Type       -- type annotaded
+    deriving Functor
 
-instance Eq a => HasBindings (HpClause a) a where
-    bindings (HpClause b _ _) = b
+data SGoal a = SGoal (SBody a)
+    deriving Functor
 
-instance Eq a => HasBindings (HpExpr a) a where
-    bindings (HpLam b _) = b
-    bindings _ = []
+-- Syntax constructs have types if it exists in the 
+-- information they carry
+-- Maybe useful later
+instance HasType a => HasType (Const a) where
+    typeOf (Const a _ _) = typeOf a
+    
+instance HasType a => HasType (Var a) where
+    typeOf (Var a _)   = typeOf a
+    typeOf (AnonVar a) = typeOf a
 
-instance (Eq b, HasBindings a b) => HasBindings (Located a) b where
-    bindings = bindings . unLoc
+instance HasType a => HasType (SClause a) where
+    typeOf (SClause a _ _ _) = typeOf a
 
+instance HasType a => HasType (SHead a) where
+    typeOf (SHead a _ _) = typeOf a
 
-isFact e = 
-    case unLoc e of
-        (HpClause _ [h] []) -> True
-        _ -> False
+instance HasType a => HasType (SBody a) where
+    typeOf (SBody_par a _ )     = typeOf a
+    typeOf (SBody_op  a _ _ _ ) = typeOf a
+    typeOf (SBody_pe  a _ )     = typeOf a
 
-isApp e =
-    case unLoc e of
-        (HpApp _ _) -> True
-        _ -> False
+instance HasType a => HasType (SOp a) where
+    typeOf (SAnd a) = typeOf a
+    typeOf (SOr  a) = typeOf a
+    typeOf (SFollows a) = typeOf a
 
-argsOf :: LHpExpr a -> [LHpExpr a]
-argsOf e = 
-    case unLoc e of
-        (HpApp e1 e2) -> argsOf e1 ++ e2
-        _ -> []
+instance HasType a => HasType (SExpr a) where
+    typeOf (SExpr a _ _ ) = typeOf a
 
--- get a head of an application
+instance HasType a => HasType (SGoal a) where
+    typeOf (SGoal a) = typeOf a
 
-funcOf :: LHpExpr a -> LHpExpr a
-funcOf e = 
-    case unLoc e of
-        (HpApp e1 _) -> funcOf e1
-        _ -> e
+-- Syntax constructs have location if it exists in the 
+-- information they carry
+-- Maybe useful later
+instance HasLocation a => HasLocation (Const a) where
+    loc (Const a _ _) = loc a
+    
+instance HasLocation a => HasLocation (Var a) where
+    loc (Var a _)   = loc a
+    loc (AnonVar a) = loc a
 
+instance HasLocation a => HasLocation (SClause a) where
+    loc (SClause a _ _ _) = loc a
 
-isSymbol :: LHpExpr a -> Bool
-isSymbol e = 
-    case unLoc e of 
-        (HpSym _) -> True
-        _ -> False
+instance HasLocation a => HasLocation (SHead a) where
+    loc (SHead a _ _) = loc a
 
--- located syntax 
-type LHpExpr a    = Located (HpExpr a)
-type LHpClause a  = Located (HpClause a)
+instance HasLocation a => HasLocation (SBody a) where
+    loc (SBody_par a _ )     = loc a
+    loc (SBody_op  a _ _ _ ) = loc a
+    loc (SBody_pe  a _ )     = loc a
 
--- parsed located syntax 
+instance HasLocation a => HasLocation (SOp a) where
+    loc (SAnd a) = loc a
+    loc (SOr  a) = loc a
+    loc (SFollows a) = loc a
 
-type PLHpExpr    = LHpExpr    HpSymbol
-type PLHpClause  = LHpClause  HpSymbol
-type PHpSrc      = HpSrc      HpSymbol
+instance HasLocation a => HasLocation (SExpr a) where
+    loc (SExpr a _ _ ) = loc a
 
-type PLHpAtom   = PLHpExpr
-type PLHpTerm   = PLHpExpr
-type PLHpGoal   = PLHpClause
--- type PLHpClause = PLHpClause
+instance HasLocation a => HasLocation (SGoal a) where
+    loc (SGoal a) = loc a

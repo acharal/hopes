@@ -23,8 +23,8 @@ module Pretty (
 import Text.PrettyPrint
 
 import Loc (Loc(..), LocSpan(..))
-import Lang (Sym(..))
-import Types (Typed(..), TyVar(..), MonoTypeV(..), GrdType(..), TyEnv(..), TySig(..), tyvars)
+--import Lang (Sym(..))
+import Types 
 import Data.List (nub)
 
 class Pretty a where
@@ -61,32 +61,21 @@ instance Pretty LocSpan where
         where ppr_par l c = parens (int l <> comma <> int c)
     ppr (LocSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
 
-instance Pretty Sym where
-    ppr (Sym s) = ppr s
-    ppr AnonSym = text "_"
 
-instance Pretty a => Pretty (Typed a) where
-    ppr (T a ty) = ppr a -- <> dcolon <> ppr ty
+-- Types
+instance Pretty Type where
+    ppr rho = text $ show rho
 
-instance Pretty GrdType where
-    ppr TyBool = text "o"
-    ppr TyAll  = text "i"
+instance Pretty PiType where
+    ppr pi = text $ show pi
 
-instance Pretty TyVar where
-    ppr (Tv i _) = int i
+instance Pretty PolyType where
+    ppr poly = text $ show poly
 
-instance (Eq a, Pretty a) => Pretty (MonoTypeV a) where
-    ppr t = pprPrec 1 f t
-        where f = tvmap [t]
+instance Pretty FunType where
+    ppr f = text $ show f
 
--- pprPrec p f (TyTup tl)     = parens $ sep (punctuate comma (map (pprPrec 1 f) tl))
-pprPrec p f (TyGrd c)      = ppr c
-pprPrec p f (TyVar v)      = f v
-pprPrec p f ty@(TyFun t t') =  if (p == 0) then
-                                   parens (sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ])
-                               else
-                                   sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ]
-
+{-
 tynames = letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
     where letters = [ "a", "b", "c", "d", "e", "f" ]
 
@@ -96,11 +85,14 @@ tvmap tys v =
     in case lookup v fl of
             Nothing -> ppr v
             Just n  -> text n
-
+-}
 
 instance Pretty a => Pretty (TySig a) where
     ppr (a,t) = sep [ ppr a, dcolon <+> ppr t]
 
-instance Pretty a => Pretty (TyEnv a) where
-    ppr ts = vcat $ map ppr ts
+instance Pretty a => Pretty (PolySig a) where
+    ppr (a,t) = sep [ ppr a, dcolon <+> ppr t]
+
+instance (Pretty a, Pretty b) => Pretty (TyEnv a b) where
+    ppr ts = vcat $ map ppr (fst ts) ++ map ppr (snd ts)
 
