@@ -10,13 +10,13 @@ import Loc
  -}
 
 -- Description of constants and variables.
--- Extra type argument for information (type,location etc)
-data Const a = Const a String Int  -- name and arity
+data Const a = Const a String -- info and name 
     deriving Functor
 
-data Var   a = Var     a String -- named Variable
-             | AnonVar a        -- wildcard
+data Var a = Var a String -- named variable
+           | AnonVar a    -- wildcard
     deriving Functor
+
 
 -- The whole program
 type SProgram a = [SGroup a]
@@ -25,11 +25,12 @@ type SProgram a = [SGroup a]
 type SGroup a = [SClause a]
 
 -- A clause. Nothing in the body is a fact. Just is a rule.
-data SClause a = SClause a (SHead a) (SGets) (Maybe (SBody a))
+data SClause a = SClause a (SHead a) (SGets) (Maybe (SExpr a))
     deriving Functor
 
 -- Monomorphic or polymorphic gets
-data SGets = SGets_mono | SGets_poly
+-- TODO implement polymorphic
+data SGets = SGets_mono | SGets_poly 
 
 isFact :: SClause a -> Bool
 isFact (SClause _ _ _ Nothing) = True
@@ -39,68 +40,110 @@ data SHead a = SHead a           -- Info
                      ( Const a ) -- clause name
                      [[SExpr a]] -- Arguments
     deriving Functor
+{-
+-- Simple expressions describe the arguments of a head of a rule
+data SSimple a = SSimple_const a (Const a)
+               | SSimple_var   a (Var   a)
+               | SSimple_int   a (Integer)
+               | SSimple_float a (Double )
+               | SSimple_app   a (Const a) [SSimple a] 
+                    -- simple application
+               | SSimple_op 
+               | SSimple_paren a (SSimple a)
+-}
 
+{-
 data SBody a = SBody_par a (SBody a)    -- in parens
-             | SBody_pop  a (SOp a) (SBody a) (SBody a) 
+             | SBody_pop a (SPOp a) (SBody a) (SBody a) 
                                         -- operator
              | SBody_pe  a (SExpr a)    -- pred. expr
     deriving Functor
-
-data SOp a = SAnd a | SOr a | SFollows a
+-}
+data SPOp a = SAnd a | SOr a | SFollows a
     deriving Functor
 
-data SExpr a = SExpr a       -- Info
-                     Bool    -- Is it predicative expr?
-                     (SContents a) -- Contents
+data SExpr a = SExpr_paren   a (SExpr a)  -- in Parens    
+             | SExpr_const   a            -- constant 
+                             (Const a)    -- id
+                             Bool         -- interpreted as predicate?
+                             (Maybe Integer)  -- optional GIVEN arity 
+                             (Maybe Integer)  -- INFERRED arity
+             | SExpr_var     a (Var a)    -- variable
+             | SExpr_int     a Integer    -- integer constant
+             | SExpr_float   a Double     -- Floating point constant
+             | SExpr_predCon a            -- predicate constant
+                             (Const a)    -- id
+                             (Maybe Integer)  -- optional GIVEN arity
+                             (Maybe Integer)  -- INFERRED arity
+             | SExpr_app  a (SExpr a) [SExpr a]  -- application
+             | SExpr_op   a (Const a) [SExpr a]  -- operator
+             | SExpr_lam  a [Var a] (SExpr a)    -- lambda abstr.
+             | SExpr_list a [SExpr a] (Maybe (SExpr a))
+                          -- list: initial elements, maybe tail
+             | SExpr_eq   a (SExpr a) (SExpr a)  -- unification
+             | SExpr_ann  a (SExpr a) Type       -- type annotated
     deriving Functor
 
-data SContents a = SCont_par     (SExpr a)  -- in Parens    
-                 | SCont_const   (Const a)  -- constant
-                 | SCont_var     (Var   a)  -- variable
-                 | SCont_int     Int        -- integer constant
-                 | SCont_predcon (Const a)  -- predicate constant
-                 | SCont_app  (SExpr a) [SExpr a] -- application
-                 | SCont_lam  [Var a]   (SBody a) -- lambda abstr.
-                 | SCont_list [SExpr a] (Maybe (SExpr a))
-                              -- list: initial elements, maybe tail
-                 | SCont_eq  (SExpr a) (SExpr a)  -- unification
-                 | SCont_ann (SExpr a) Type       -- type annotaded
+data SGoal a = SGoal (SExpr a)
     deriving Functor
 
-data SGoal a = SGoal (SBody a)
-    deriving Functor
+-- Print expressions
+-- TODO make them better
+deriving instance Show a => Show (Const a)
+deriving instance Show a => Show (Var a)
+deriving instance Show a => Show (SClause a)
+deriving instance Show a => Show (SExpr a)
+deriving instance Show a => Show (SHead a)
+--deriving instance Show a => Show (SBody a)
+deriving instance Show a => Show (SPOp a)
+deriving instance Show a => Show (SGoal a)
+deriving instance Show SGets
 
+{-
 -- Syntax constructs have types if it exists in the 
 -- information they carry
 -- Maybe useful later
 instance HasType a => HasType (Const a) where
     typeOf (Const a _ _) = typeOf a
-    
+    hasType tp (Const a s i) = Const (hasType tp a) s i
+
 instance HasType a => HasType (Var a) where
     typeOf (Var a _)   = typeOf a
     typeOf (AnonVar a) = typeOf a
-
+    hasType tp (Var a s)   = Var (hasType tp a) s
+    hasType tp (AnonVar a) = AnonVar (hasType tp a)
+-- FIXME : complete these!
 instance HasType a => HasType (SClause a) where
-    typeOf (SClause a _ _ _) = typeOf a
+    typeOf (SClause a _ _ _) = typeOf a 
+    --hasType tp (SClause a _ _ _) = hasType tp a
 
 instance HasType a => HasType (SHead a) where
     typeOf (SHead a _ _) = typeOf a
+    --hasType tp (SHead a _ _) = hasType tp a
 
 instance HasType a => HasType (SBody a) where
     typeOf (SBody_par a _ )     = typeOf a
-    typeOf (SBody_op  a _ _ _ ) = typeOf a
+    typeOf (SBody_pop a _ _ _ ) = typeOf a
     typeOf (SBody_pe  a _ )     = typeOf a
+    --hasType tp (SBody_par a _ )     = hasType tp a
+    --hasType tp (SBody_pop a _ _ _ ) = hasType tp a
+   -- hasType tp (SBody_pe  a _ )     = hasType tp a
 
 instance HasType a => HasType (SOp a) where
     typeOf (SAnd a) = typeOf a
     typeOf (SOr  a) = typeOf a
     typeOf (SFollows a) = typeOf a
+  --  hasType tp (SAnd a) = hasType tp a
+   -- hasType tp (SOr  a) = hasType tp a
+  --  hasType tp (SFollows a) = hasType tp a
 
 instance HasType a => HasType (SExpr a) where
     typeOf (SExpr a _ _ ) = typeOf a
+  --  hasType tp (SExpr a _ _ ) = hasType tp a
 
 instance HasType a => HasType (SGoal a) where
-    typeOf (SGoal a) = typeOf a
+    typeOf (SGoal a ) = typeOf a
+  --  hasType tp (SGoal a) = hasType tp a
 
 -- Syntax constructs have location if it exists in the 
 -- information they carry
@@ -120,7 +163,7 @@ instance HasLocation a => HasLocation (SHead a) where
 
 instance HasLocation a => HasLocation (SBody a) where
     loc (SBody_par a _ )     = loc a
-    loc (SBody_op  a _ _ _ ) = loc a
+    loc (SBody_pop a _ _ _ ) = loc a
     loc (SBody_pe  a _ )     = loc a
 
 instance HasLocation a => HasLocation (SOp a) where
@@ -133,3 +176,34 @@ instance HasLocation a => HasLocation (SExpr a) where
 
 instance HasLocation a => HasLocation (SGoal a) where
     loc (SGoal a) = loc a
+-}
+
+-- true and fail constants
+
+sTrue :: SExpr ()
+sTrue =  SExpr_const () 
+                     (Const () "true")  
+                     True
+                     Nothing
+                     (Just 0)
+sFail :: SExpr ()
+sFail =  SExpr_const () 
+                     (Const () "fail")  
+                     True
+                     Nothing
+                     (Just 0)
+
+sCut :: SExpr ()
+sCut =  SExpr_const () 
+                    (Const () "!")  
+                    True
+                    Nothing
+                    (Just 0)
+
+sNil :: SExpr ()
+sNil = SExpr_const () 
+                   (Const () "[]")  
+                   False
+                   Nothing
+                   (Just 0)
+

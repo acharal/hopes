@@ -1,9 +1,11 @@
 
 module Language.Prolog.Parser where
 
-import qualified Language.Prolog.Lexer as L
-import Language.Prolog.Syntax
-import qualified Language.Prolog.Operator as Operators
+import Loc
+--import ParseUtils
+import qualified Lexer as L
+import Syntax
+import qualified Operator as Operators
 import Text.Parsec
 import Text.Parsec.Expr
 import Data.Char
@@ -17,7 +19,7 @@ import Text.Parsec.ByteString
 
 data ParseState s m = 
     ParseSt { operatorTable :: Operators.OperatorTable
-            , cachedTable   :: [(Int, [Operator s (ParseState s m) m Expr])]
+            , cachedTable   :: [(Int, [Operator s (ParseState s m) m ( SExpr () )])]
             } 
 
 type ParserT s m a = ParsecT s (ParseState s m) m a
@@ -31,6 +33,29 @@ followedBy p after = do { rv <- p; after; return rv }
 skip n [] = []
 skip 0 x = x
 skip n (x:xs) = skip (n-1) xs
+
+-- Make expressions
+mkConst :: String -> SExpr ()
+mkConst s   = SExpr_const () (Const () s) False Nothing Nothing
+
+mkPredCon :: String -> Maybe Integer -> SExpr ()
+mkPredCon s i = SExpr_predCon () (Const () s) i Nothing
+
+mkVar :: String -> Var ()
+mkVar s = if s=="_" then AnonVar () else Var () s
+
+mkVarEx :: String -> SExpr ()
+mkVarEx s = SExpr_var () $ mkVar s
+
+mkList :: [SExpr ()] -> Maybe (SExpr ())-> SExpr ()
+mkList hds tl = SExpr_list () hds tl
+
+mkLam :: [Var ()] -> SExpr () -> SExpr ()
+mkLam vars bd = SExpr_lam () vars bd
+
+mkOp :: String -> [SExpr ()] -> SExpr ()
+mkOp opName args = SExpr_op () (Const () opName) args
+
 
 -- lexer 
 
@@ -64,8 +89,15 @@ brackets = L.brackets L.prolog
 varIdent :: Stream s m Char => ParsecT s u m String
 varIdent = L.varIdent L.prolog
 
+-- Constant or graphic operator
 conIdent :: Stream s m Char => ParsecT s u m String
 conIdent = L.conIdent L.prolog
+
+natural :: Stream s m Char => ParsecT s u m Integer
+natural = L.natural L.prolog
+
+atom :: Stream s m Char => ParsecT s u m String
+atom = conIdent <|> stringLiteral
 
 naturalOrFloat :: Stream s m Char => ParsecT s u m (Either Integer Double)
 naturalOrFloat = L.naturalOrFloat L.prolog
@@ -73,35 +105,140 @@ naturalOrFloat = L.naturalOrFloat L.prolog
 integer :: Stream s m Char => ParsecT s u m Integer
 integer = L.integer L.prolog
 
--- parser
+float :: Stream s m Char => ParsecT s u m Double
+float = L.float L.prolog
 
-variable :: Stream s m Char => ParserT s m Expr
-variable =  do { s <- varIdent
-               ; return (Var s)
+symbol :: Stream s m Char => String -> ParsecT s u m String
+symbol = L.symbol L.prolog
+
+
+--reserved
+predTK :: Stream s m Char => ParsecT s u m ()
+predTK = L.reserved L.prolog "pred"
+
+trueTK :: Stream s m Char => ParsecT s u m ()
+trueTK = L.reserved L.prolog "true"
+
+failTK :: Stream s m Char => ParsecT s u m ()
+failTK = L.reserved L.prolog "fail"
+
+
+
+
+-- parser 
+-- TODO : Add location information
+-- TODO : implement optional arities in constants/ 
+--        polymorphic definitions
+-- TODO : implement type annotations
+
+-- Basic structures
+
+variable :: Stream s m Char => ParserT s m (SExpr ())
+variable =  do { s  <- varIdent
+               ; return $ mkVarEx s
                } <?> ("variable")
 
-struct :: Stream s m Char => ParserT s m Expr
-struct =  do { s  <- atom
-             ; as <- option [] args
-             ; return (Str s as)
-             } <?> ("structure")
-    where -- args = try (parens expr) <|> parens (do { e <- commaSep1 expr; return (concatMap id e)} )
-          args = parens $ commaSep1 (try argexpr <|> term)
-          atom = conIdent <|> stringLiteral
+constant :: Stream s m Char => ParserT s m (SExpr ())
+constant = try $ do  
+    c <- atom
+    return $ mkConst c
 
-constant :: Stream s m Char => ParserT s m Expr
-constant =
-       do { s <- lexeme (many1 alphaNum)
-          ; return (Str s [])
-          }
+predConst :: Stream s m Char => ParserT s m (SExpr ())
+predConst = try $ do  { predTK
+                      ; s <- atom
+                      ; n <- option Nothing $ do 
+                             char '/'
+                             n' <- natural
+                             return $ Just n'
+                      ; return $ mkPredCon s n
+                      }
 
+natExpr :: Stream s m Char => ParserT s m (SExpr ())
+natExpr = try $ do { n <- natural
+                   ; return $ SExpr_int () n
+                   }
+
+floatExpr :: Stream s m Char => ParserT s m (SExpr ())
+floatExpr = try $ do { f <- float
+                     ; return $ SExpr_float () f
+                     }
+
+trueExpr :: Stream s m Char => ParserT s m (SExpr ())
+trueExpr = try $ do { e <- trueTK
+                    ; return $ sTrue
+                    }
+
+failExpr :: Stream s m Char => ParserT s m (SExpr ())
+failExpr = try $ do { e <- failTK
+                    ; return $ sFail
+                    }
+
+{-
 number :: Stream s m Char => ParserT s m Expr
 number = try $  do { num <- try naturalOrFloat <|> eitherInteger
                    ; return (Num num)
                    }
     where eitherInteger = do { i <- integer; return (Left i); }        
+-}
 
-term :: Stream s m Char => ParserT s m Expr
+cut :: Stream s m Char => ParserT s m (SExpr ())
+cut = do { L.symbol L.prolog "!"; return sCut}
+
+
+list :: Stream s m Char => ParserT s m (SExpr ())
+list = try listEmpty <|> listNonEmpty <?> ("list")  
+    where 
+        listatom  = commaSep1 argExpr
+        tail      = do { symbol "|"
+                       ; variable <|> list
+                       }
+        listEmpty = do { symbol "[]"; return sNil }
+        listNonEmpty = brackets $ do 
+                         es <- listatom
+                         tl <- optionMaybe tail
+                         return $ mkList es tl 
+                         
+
+-- More complex structures
+
+lambda :: Stream s m Char => ParserT s m (SExpr ())
+lambda = try $ do 
+    { char '\\' 
+    ; vars <- (parens $ commaSep1 $ try varIdent) <?> "lambda variables"
+    ; string "=>"
+    ; ex <- fullExpr 
+    ; return $ mkLam (map mkVar vars) ex
+    }
+
+
+app :: Stream s m Char => ParserT s m (SExpr ())
+app = do { s  <- atomicExpr
+         ; (as {- :: [[SExpr ()]] -}) <- many1 args
+         ; return $ nested_app s as
+         } <?> ("application")
+    where -- args = try (parens expr) <|> parens (do { e <- commaSep1 expr; return (concatMap id e)} )
+        args = parens $ commaSep1 (try argExpr)
+        -- From a list of argument lists and a head, make a
+        -- nested application
+        nested_app s as = {- :: SExpr -> [[SExpr]] -> SExpr -} 
+            foldl (SExpr_app () ) s as
+
+atomicExpr :: Stream s m Char => ParserT s m (SExpr ())
+atomicExpr = choice [ variable
+                     , constant
+                     , predConst
+                     , natExpr
+                     , floatExpr
+                     , trueExpr
+                     , failExpr
+                     , lambda
+                     , list
+                     , cut
+                     , parens (try fullExpr <|> atomicExpr)
+                     ] <?> ("atomicExpr")
+
+{-
+term :: Stream s m Char => ParserT s m (SExpr ())
 term = choice [ variable
               , struct
               , number
@@ -110,63 +247,45 @@ term = choice [ variable
               , cut
               , parens (try fullexpr <|> term)
               ] <?> ("term")
+-}
 
-cut :: Stream s m Char => ParserT s m Expr
-cut = do { L.symbol L.prolog "!"; return (Str "!" []) }
+argExpr :: Stream s m Char => ParserT s m (SExpr ())
+argExpr = expr 999
 
-list :: Stream s m Char => ParserT s m Expr
-list = try listEmpty <|> listNonEmpty <?> ("list")  
-    where 
-        listatom  = commaSep1 argexpr
-        tail      = do { slash
-                       ; variable <|> listEmpty
-                       }
-        slash     = L.symbol L.prolog "|"
-        listEmpty = do { L.symbol L.prolog "[]"; return (Str "[]" []); }
-        listNonEmpty = brackets $ do { es <- listatom
-                                     ; tl <- option (Str "[]" []) tail
-                                     ; return $ foldr (\n -> \m -> Cons n m) tl es 
-                                     }
+fullExpr :: Stream s m Char => ParserT s m (SExpr ())
+fullExpr = expr 1200
 
-argexpr :: Stream s m Char => ParserT s m Expr
-argexpr = expr 999
-
-fullexpr :: Stream s m Char => ParserT s m Expr
-fullexpr = expr 1200
-
-expr :: Stream s m Char => Int -> ParserT s m Expr
-expr prec = getParser prec term
+expr :: Stream s m Char => Int -> ParserT s m (SExpr ())
+expr prec = getParser prec atomicExpr --TODO check this
     where getParser p t = do
                 st <- getState;
                 let opTbl = map snd $ takeWhile (\(p',_) -> p >= p') $ cachedTable st
                 buildExpressionParser opTbl t
 
-buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator s (ParseState s m) m Expr])]
+buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator s (ParseState s m) m (SExpr ())])]
 buildOpTable = do { st <- getState
                   ; return $ mkOpTable (operatorTable st)
                   }
     where mkOpTable ops = map (\(p, op) -> (p, map opMap op)) $ Operators.groupByPrec ops
-            where 
-              oper f name = try $ do { L.symbol L.prolog name
-                                     ; notFollowedBy (choice ops2)
-                                     ; return (f name) }
-                   where ops2    = map (\x -> try (string x)) $ map (skip (length name)) opNames
-                         opNames = filter (f2 name) $ map (Operators.opName.snd) ops
-                         f2 n m  = length n < length m && n `isPrefixOf` m
+              where 
+                  oper f name = try $ do { L.symbol L.prolog name
+                                         ; notFollowedBy (choice ops2)
+                                         ; return (f name) }
+                      where ops2    = map (\x -> try (string x)) $ map (skip (length name)) opNames
+                            opNames = filter (f2 name) $ map (Operators.opName.snd) ops
+                            f2 n m  = length n < length m && n `isPrefixOf` m
 
-              opMap op | Operators.isPrefixOp  op = prefixOp (Operators.opName op)
-                       | Operators.isPostfixOp op = postfixOp (Operators.opName op)
-                       | otherwise                = infixOp (Operators.opName op) (assocMap op)
-                       where 
-                             infixOp name assoc = Infix   (oper (\n -> \x -> \y -> Op n [x,y]) name) assoc
+                  opMap op | Operators.isPrefixOp  op = prefixOp (Operators.opName op)
+                           | Operators.isPostfixOp op = postfixOp (Operators.opName op)
+                           | otherwise                = infixOp (Operators.opName op) (assocMap op)
+                        where 
+                            infixOp name assoc = Infix (oper (\n -> \x -> \y -> mkOp n [x,y]) name) assoc
+                            prefixOp name      = Prefix  (oper (\n -> \x -> mkOp n [x]) name) 
+                            postfixOp name     = Postfix (oper (\n -> \x -> mkOp n [x]) name)
 
-                             prefixOp name      = Prefix  (oper (\n -> \x -> Op n [x]) name)
- 
-                             postfixOp name     = Postfix (oper (\n -> \x -> Op n [x]) name)
-
-                             assocMap op | Operators.isAssocLeft  op = AssocLeft
-                                         | Operators.isAssocRight op = AssocRight
-                                         | otherwise                = AssocNone
+                            assocMap op | Operators.isAssocLeft  op = AssocLeft
+                                        | Operators.isAssocRight op = AssocRight
+                                        | otherwise                 = AssocNone
 
 {-
 literal :: Stream s m Char => ParserT s m Expr
@@ -209,9 +328,9 @@ sentence = choice [ command'
                        ; return c }
 -}
 
-sentence :: Stream s m Char => ParserT s m Expr
-sentence = fullexpr `followedBy` dot <?> ("sentence") 
-
+sentence :: Stream s m Char => ParserT s m (SExpr ())
+sentence = fullExpr `followedBy` dot <?> ("sentence") 
+{- TODO 
 isCommand (Op ":-" [exp]) = True
 isCommand _ = False
 
@@ -220,17 +339,18 @@ isCommand _ = False
 opDirective1 (Op ":-" [e]) = opDirective e
 opDirective1 _ = return ()
 
-opDirective (Str "op" [Num (Left p), (Str a []), (Str n [])]) = do
+opDirective ( SExpr_app (SExpr_const _ (Const _ "op") _ None (Just 3)) 
+            [Num (Left p), (Str a []), (Str n [])]) = do
           st <- getState
           updateState (\st -> st{ operatorTable = (t st)})
           cached <- buildOpTable
           updateState (\st -> st{ cachedTable = cached })
-    where t st = Operators.updateOpTable (operatorTable st) op
-          op  = mkOp ((fromInteger p)::Int, a, n)
-          mkOp (p, a, n) = (p, Operators.Operator n a)
+      where t st = Operators.updateOpTable (operatorTable st) op
+            op   = mkOp ((fromInteger p)::Int, a, n)
+            mkOp (p, a, n) = (p, Operators.Operator n a)
 
 opDirective _ = return ()
-
+-}
 -- top-level parsing
 -- TODO: Parse operators in head
 -- TODO: Parse predicates of form module:predicate.
@@ -258,7 +378,7 @@ parseProlog2 input = do
                                    Right res -> return res
           sentence' = do 
             s <- sentence
-            when (isCommand s) (opDirective1 s)
+            --when (isCommand s) (opDirective1 s)
             return s
           buildTable = do 
               cached <- buildOpTable

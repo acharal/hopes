@@ -17,8 +17,8 @@
 
 module ParseUtils where
 
-import Language.Hopl.Syntax
-import Lang
+import Syntax
+--import Lang
 import Types
 import Loc
 import Error
@@ -33,7 +33,7 @@ data Token =
       TKoparen
     | TKcparen
     | TKgets
-    | TKplgets
+    | TKplgets -- Polymorphic gets
     | TKdot
     | TKcomma
     | TKvert
@@ -131,14 +131,17 @@ fromFile name m = do
     m
 
 withInput inp m = setInput inp >> m
-
+{-
 tokSym :: Located Token -> HpSymbol
 tokSym t = Sym (tokId t)
-
+-}
 tokId :: Located Token -> String
 tokId (L _ (TKid x)) = x
 tokId _ = error "not a valid token"
 
+
+
+{-
 type HpStmt a = Either (LHpClause a) (TySig a)
 
 --mkSrc :: [HpStmt a] -> Parser (HpProg a)
@@ -228,4 +231,4 @@ mkTyp (L _ (HpTyTup tl))   = do
 -}
 
 mkTyp (L l t) = parseErrorWithLoc (spanBegin l) (text "Not a valid type")
-
+-}

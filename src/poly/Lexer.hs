@@ -1,4 +1,4 @@
-module Language.Prolog.Lexer (
+module Lexer (
         module Text.Parsec.Token,
         prologStyle, prologDef, prolog, stringLiteral2, varIdent, conIdent
     ) where
@@ -20,7 +20,7 @@ prologStyle = emptyDef
                , identLetter     = alphaNum <|> oneOf "_"
                , opStart         = identStart prologStyle
                , opLetter        = identLetter prologStyle
-               , reservedNames   = []
+               , reservedNames   = ["pred", "true", "false"]
                , reservedOpNames = []
                , caseSensitive   = True
                }

@@ -1,4 +1,4 @@
-module Language.Prolog.Operator where
+module Operator where
 
 import Data.List
 
