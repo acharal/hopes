@@ -21,7 +21,7 @@ prologStyle = emptyDef
                , opStart         = identStart prologStyle
                , opLetter        = identLetter prologStyle
                , reservedNames   = ["pred", "true", "false"]
-               , reservedOpNames = []
+               , reservedOpNames = ["=>", "\\"]
                , caseSensitive   = True
                }
 

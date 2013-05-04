@@ -20,7 +20,7 @@ where
 
 import Loc (Loc(..), Located, located, getLocSpan, spanEnd)
 import ParseUtils (ParserT, ParserInput, Token(..), getInput, setInput, setTok, parseErrorWithLoc)
-import Data.Char (isSpace, isUpper, isLower, isDigit, isAlpha)
+import Data.Char (isSpace, isUpper, isLower, isDigit, isAlpha, isPrint)
 import Pretty (sep,text,quotes,char)
 
 
@@ -94,11 +94,11 @@ scanTok inp loc              = TokError loc inp
 scanAtom :: String -> Loc -> ScanResult
 scanAtom str loc = 
     let (name, rest) = span inQuoted str 
-        inQuoted c = (isPrint c && not (isSpace c) || c = ' ' ) && c \= '\''
+        inQuoted c = (isPrint c && not (isSpace c) || c == ' ' ) && c /= '\''
         --FIXME: have to parse backslashed symbols too
     in case rest of
         ('\'': rest') -> Tok (TKid name) (length name + 1) rest'
-        _ -> TOKerror loc rest
+        _ -> TokError loc rest
 
 scanName :: (String -> Token) -> ScanAction
 scanName cstr cs l   = Tok (cstr name) (length name) rest

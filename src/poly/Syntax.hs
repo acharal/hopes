@@ -25,7 +25,7 @@ type SProgram a = [SGroup a]
 type SGroup a = [SClause a]
 
 -- A clause. Nothing in the body is a fact. Just is a rule.
-data SClause a = SClause a (SHead a) (SGets) (Maybe (SExpr a))
+data SClause a = SClause a (SHead a) ( Maybe (SGets, SExpr a) )
     deriving Functor
 
 -- Monomorphic or polymorphic gets
@@ -33,7 +33,7 @@ data SClause a = SClause a (SHead a) (SGets) (Maybe (SExpr a))
 data SGets = SGets_mono | SGets_poly 
 
 isFact :: SClause a -> Bool
-isFact (SClause _ _ _ Nothing) = True
+isFact (SClause _ _ Nothing) = True
 isFact _ = False
 
 data SHead a = SHead a           -- Info
@@ -59,9 +59,10 @@ data SBody a = SBody_par a (SBody a)    -- in parens
              | SBody_pe  a (SExpr a)    -- pred. expr
     deriving Functor
 -}
+{-
 data SPOp a = SAnd a | SOr a | SFollows a
     deriving Functor
-
+-}
 data SExpr a = SExpr_paren   a (SExpr a)  -- in Parens    
              | SExpr_const   a            -- constant 
                              (Const a)    -- id
@@ -84,7 +85,15 @@ data SExpr a = SExpr_paren   a (SExpr a)  -- in Parens
              | SExpr_ann  a (SExpr a) Type       -- type annotated
     deriving Functor
 
-data SGoal a = SGoal (SExpr a)
+data SGoal a = SGoal a (SExpr a)
+    deriving Functor
+
+data SCommand a = SCommand a (SExpr a)
+    deriving Functor
+
+data SSent a = SSent_clause a (SClause  a)
+             | SSent_goal   a (SGoal    a)
+             | SSent_comm   a (SCommand a)
     deriving Functor
 
 -- Print expressions
@@ -92,12 +101,15 @@ data SGoal a = SGoal (SExpr a)
 deriving instance Show a => Show (Const a)
 deriving instance Show a => Show (Var a)
 deriving instance Show a => Show (SClause a)
-deriving instance Show a => Show (SExpr a)
-deriving instance Show a => Show (SHead a)
---deriving instance Show a => Show (SBody a)
-deriving instance Show a => Show (SPOp a)
-deriving instance Show a => Show (SGoal a)
 deriving instance Show SGets
+deriving instance Show a => Show (SHead a)
+deriving instance Show a => Show (SExpr a)
+--deriving instance Show a => Show (SBody a)
+--deriving instance Show a => Show (SPOp a)
+deriving instance Show a => Show (SGoal a)
+deriving instance Show a => Show (SCommand a)
+deriving instance Show a => Show (SSent a)
+
 
 {-
 -- Syntax constructs have types if it exists in the 
