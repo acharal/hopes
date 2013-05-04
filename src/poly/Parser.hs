@@ -108,7 +108,7 @@ natural :: Stream s m Char => ParsecT s u m Integer
 natural = L.natural L.prolog
 
 atom :: Stream s m Char => ParsecT s u m String
-atom = conIdent <|> stringLiteral
+atom = try conIdent <|> stringLiteral <?> "atom"
 
 naturalOrFloat :: Stream s m Char => ParsecT s u m (Either Integer Double)
 naturalOrFloat = L.naturalOrFloat L.prolog
@@ -221,13 +221,13 @@ list = try listEmpty <|> listNonEmpty <?> ("list")
 -- More complex structures
 
 lambda :: Stream s m Char => ParserT s m (SExpr ())
-lambda = try $ do 
-    { char '\\' 
+lambda = try ( do 
+    { symbol "\\~" 
     ; vars <- (parens $ commaSep1 $ varIdent) <?> "lambda variables"
     ; symbol "=>"
     ; ex <- fullExpr 
     ; return $ mkLam (map mkVar vars) ex
-    }
+    } ) <?> "lambda"
 
 
 application :: Stream s m Char => ParserT s m (SExpr ())
@@ -299,7 +299,7 @@ fullExpr = expr 1200
 
 -- Head of a clause
 head_c :: Stream s m Char => ParserT s m (SHead ())
-head_c = try $ do c    <- conIdent  
+head_c = try $ do c    <- atom  
                   args <- many $ parens $ commaSep1 argExpr
                   return $ mkHead c args
 
@@ -408,24 +408,35 @@ buildOpTable = do { st <- getState
                   }
     where mkOpTable ops = map (\(p, op) -> (p, map opMap op)) $ Operators.groupByPrec ops
               where 
-                  oper f name = try $ do { L.symbol L.prolog name
-                                         ; notFollowedBy (choice ops2)
-                                         ; return (f name) }
-                      where ops2    = map (\x -> try (string x)) $ map (skip (length name)) opNames
-                            opNames = filter (f2 name) $ map (Operators.opName.snd) ops
-                            f2 n m  = length n < length m && n `isPrefixOf` m
-
                   opMap op | Operators.isPrefixOp  op = prefixOp (Operators.opName op)
                            | Operators.isPostfixOp op = postfixOp (Operators.opName op)
                            | otherwise                = infixOp (Operators.opName op) (assocMap op)
-                        where 
+                      where 
                             infixOp name assoc = Infix (oper (\n -> \x -> \y -> mkOp n [x,y]) name) assoc
                             prefixOp name      = Prefix  (oper (\n -> \x -> mkOp n [x]) name) 
                             postfixOp name     = Postfix (oper (\n -> \x -> mkOp n [x]) name)
-
                             assocMap op | Operators.isAssocLeft  op = AssocLeft
                                         | Operators.isAssocRight op = AssocRight
                                         | otherwise                 = AssocNone
+
+                  oper f name = try $ do -- Buggy!
+                                         --{ L.symbol L.prolog name
+                                         --; notFollowedBy (choice ops2)
+                                         --; return (f name) }
+
+                                         -- Instead match the exact string and see if 
+                                         -- there is an operator symbol following
+                                         { string name
+                                         ; notFollowedBy L.graphicToken
+                                         ; L.whiteSpace L.prolog
+                                         ; return $ f name
+                                         } 
+                    -- Not needed anymore
+                    -- where ops2    = map (\x -> try (string x)) $ map (skip (length name)) opNames
+                    --        opNames = filter (f2 name) $ map (Operators.opName.snd) ops
+                    --        f2 n m  = length n < length m && n `isPrefixOf` m
+
+
 
 
 -- top-level parsing
@@ -444,7 +455,7 @@ runPrologParser p st sourcename input = runP p' st sourcename input
 
 parseProlog2 input = do
     ops <- readFile "../../pl/op.pl"
-    (p, optable) <- parse st' "" ops
+    (p, optable) <- parse st' "pl/op.pl" ops
     f <- readFile input
     result <- parse optable input f
     return result
@@ -473,4 +484,4 @@ parseProlog p input =
         Right (x,_) -> print x
     where st = ParseSt []
 
-
+test () = do { (a,b) <- parseProlog2 "../../pl/examples/test.pl" ; print a }

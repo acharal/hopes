@@ -6,7 +6,7 @@ import Loc
 {-
  - Concrete syntax tree for the surface language.
  - Expressions are polymorphic to include extra information,
- - which will varry depending on the context.
+ - which will vary depending on the context.
  -}
 
 -- Description of constants and variables.

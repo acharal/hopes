@@ -1,6 +1,6 @@
 module Lexer (
         module Text.Parsec.Token,
-        prologStyle, prologDef, prolog, stringLiteral2, varIdent, conIdent
+        prologStyle, prologDef, prolog, stringLiteral2, varIdent, conIdent,graphicToken
     ) where
 
 import Text.Parsec
@@ -16,15 +16,17 @@ prologStyle = emptyDef
                , commentEnd      = "*/"
                , commentLine     = "%"
                , nestedComments  = False
-               , identStart      = letter <|> digit <|> oneOf "#$&*+-./:<=>?@^~\\_"
+               , identStart      = letter <|> digit <|> graphicToken
                , identLetter     = alphaNum <|> oneOf "_"
                , opStart         = identStart prologStyle
                , opLetter        = identLetter prologStyle
                , reservedNames   = ["pred", "true", "false"]
-               , reservedOpNames = ["=>", "\\"]
+               , reservedOpNames = ["=>", "\\~"]
                , caseSensitive   = True
                }
 
+graphicToken :: Stream s m Char => ParsecT s u m Char
+graphicToken = oneOf "#$&*+-./:<=>?@^~\\|"
 
 prologDef :: Stream s m Char => GenLanguageDef s u m
 prologDef = prologStyle
@@ -45,17 +47,19 @@ conIdent lexer = lexeme lexer $ try $
           choice [ graphicTokenString
                  , letterIdent 
                  ]
-    where graphicTokenString = do { c <- graphicToken
+    where graphicTokenString = many1 graphicToken
+          {- old version 
+          graphicTokenString = do { c <- graphicToken
                                   ; cs <- many (graphicToken <|> identLetter)
                                   ; return (c:cs)
-                                  }
+                                  } -}
+          
           letterIdent  = do { c  <- identStart
                             ; cs <- many identLetter
                             ; return (c:cs)
                             }
           identStart   = lower
           identLetter  = alphaNum <|> underscore
-          graphicToken = oneOf "#$&*+-./:<=>?@^~\\"
           underscore   = char '_'
 
 stringLiteral2 :: Stream s m Char => GenTokenParser s u m -> ParsecT s u m String
