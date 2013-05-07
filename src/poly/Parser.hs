@@ -35,11 +35,11 @@ skip 0 x = x
 skip n (x:xs) = skip (n-1) xs
 
 -- Make expressions
-mkConst :: String -> SExpr ()
-mkConst s   = SExpr_const () (Const () s) False Nothing Nothing
+mkConst :: String -> Maybe Int -> SExpr ()
+mkConst s i = SExpr_const () (Const () s) False i (-1) 
 
-mkPredCon :: String -> Maybe Integer -> SExpr ()
-mkPredCon s i = SExpr_predCon () (Const () s) i Nothing
+mkPredCon :: String -> Maybe Int -> SExpr ()
+mkPredCon s i = SExpr_predCon () (Const () s) i (-1)
 
 mkVar :: String -> Var ()
 mkVar s = if s=="_" then AnonVar () else Var () s
@@ -54,15 +54,15 @@ mkLam :: [Var ()] -> SExpr () -> SExpr ()
 mkLam vars bd = SExpr_lam () vars bd
 
 mkOp :: String -> [SExpr ()] -> SExpr ()
-mkOp opName args = SExpr_op () (Const () opName) args
+mkOp opName args = SExpr_op () (Const () opName) False args
 
 mkGets :: String -> SGets
 mkGets "<-" = SGets_poly
 mkGets ":-" = SGets_mono
 mkGets _    = error "gets" -- TODO some better error discipline
 
-mkHead :: String -> [[ SExpr () ]] -> SHead ()
-mkHead c args = SHead () (Const () c) args
+mkHead :: String -> Maybe Int -> [[ SExpr () ]] -> SHead ()
+mkHead c i args = SHead () (Const () c) i (-1) args
 
 mkClause :: SHead () -> Maybe (SGets, SExpr ()) -> SClause ()
 mkClause h b = SClause () h b
@@ -139,7 +139,7 @@ failTK = L.reserved L.prolog "fail"
 -- parser 
 -- TODO : Add location information
 -- TODO : implement optional arities in constants/ 
---        polymorphic definitions
+--        poymorphic clause heads
 -- TODO : implement type annotations
 
 -- Basic structures
@@ -150,9 +150,10 @@ variable = try ( do { s  <- varIdent
                     } <?> ("variable")
                )
 
+
 constant :: Stream s m Char => ParserT s m (SExpr ())
 constant = try ( do { c <- atom
-                    ; return $ mkConst c
+                    ; return $ mkConst c Nothing
                     } <?> ("constant")
                )
 
@@ -162,8 +163,8 @@ predConst = try ( do  { predTK
                       ; n <- optionMaybe $ do 
                              char '/'
                              n' <- natural
-                             return n'
-                      ; return $ mkPredCon s n
+                             return $ fromIntegral n'
+                      ; return $ mkPredCon s n 
                       } <?> ("predicate constant")
                 )
 
@@ -230,6 +231,12 @@ lambda = try ( do
     } ) <?> "lambda"
 
 
+-- Application tries to parse an atomic expression applied on
+-- any number of sets of arguments.
+-- If there are no arguments, just the atomic expression is
+-- parsed.
+-- This along with "lambda" and expressions with operators
+-- describe all expressions.
 application :: Stream s m Char => ParserT s m (SExpr ())
 application  = try ( do 
     { s  <- atomicExpr
@@ -240,7 +247,7 @@ application  = try ( do
     } <?> ("application")
     )
     where -- args = try (parens expr) <|> parens (do { e <- commaSep1 expr; return (concatMap id e)} )
-        args = parens $ commaSep1 (try argExpr)
+        args = parens $ commaSep1 (try argExpr) -- TODO : fullExpr here should be fine
         -- From a list of argument lists and a head, make a
         -- nested application
         nested_app s as = {- :: SExpr -> [[SExpr]] -> SExpr -} 
@@ -263,7 +270,7 @@ atomicExpr = choice [ variable
                             -- needed here?
                     ] <?> ("atomicExpr")
 
--- Everything
+-- Used as an argument to expr to create expr. parser
 allExpr :: Stream s m Char => ParserT s m (SExpr ())
 allExpr = try lambda <|> application
 
@@ -282,18 +289,21 @@ term = choice [ variable
 
 -- Expressions with operators, built from the operator table
 -- with buildExpressionParser
+-- TODO: better error messages when failing to parse operator
 expr :: Stream s m Char => Int -> ParserT s m (SExpr ())
-expr prec = getParser prec allExpr --TODO check this
+expr prec = getParser prec allExpr 
     where getParser p t = do
-                st <- getState;
-                let opTbl = map snd $ takeWhile (\(p',_) -> p >= p') $ cachedTable st
-                buildExpressionParser opTbl t
+              { st <- getState;
+              ; let opTbl = map snd $ takeWhile (\(p',_) -> p >= p') $ cachedTable st
+              ; buildExpressionParser opTbl t
+              } <?> "operator"
 
 -- Expression for args (precedence > ',')
 argExpr :: Stream s m Char => ParserT s m (SExpr ())
 argExpr = expr 999
 
--- General expressions (any precedense)
+-- General expressions (any precedence)
+-- TODO fix ';' issue
 fullExpr :: Stream s m Char => ParserT s m (SExpr ())
 fullExpr = expr 1200
 
@@ -301,7 +311,7 @@ fullExpr = expr 1200
 head_c :: Stream s m Char => ParserT s m (SHead ())
 head_c = try $ do c    <- atom  
                   args <- many $ parens $ commaSep1 argExpr
-                  return $ mkHead c args
+                  return $ mkHead c Nothing args
 
 -- Clause
 clause :: Stream s m Char => ParserT s m (SSent ())
@@ -376,8 +386,6 @@ sentence = choice [ command'
 sentence :: Stream s m Char => ParserT s m (SSent ())
 sentence = try (clause `followedBy` dot) <|> command <?> ("sentence") 
 
-isCommand (SSent_comm _ _ ) = True
-isCommand _ = False
 
 -- | Directives must be only in goal clause (without head literal)
 -- Only recognizing op directives thus far TODO add more

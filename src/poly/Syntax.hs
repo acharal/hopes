@@ -18,8 +18,8 @@ data Var a = Var a String -- named variable
     deriving Functor
 
 
--- The whole program
-type SProgram a = [SGroup a]
+-- All clauses
+type SGroups a = [SGroup a]
 
 -- A dependency group
 type SGroup a = [SClause a]
@@ -36,9 +36,11 @@ isFact :: SClause a -> Bool
 isFact (SClause _ _ Nothing) = True
 isFact _ = False
 
-data SHead a = SHead a           -- Info
-                     ( Const a ) -- clause name
-                     [[SExpr a]] -- Arguments
+data SHead a = SHead a            -- Info
+                     ( Const a )  -- clause name 
+                     (Maybe Int)  -- optional GIVEN arity 
+                     Int          -- INFERRED arity
+                     [[SExpr a]]  -- Arguments
     deriving Functor
 {-
 -- Simple expressions describe the arguments of a head of a rule
@@ -67,17 +69,20 @@ data SExpr a = SExpr_paren   a (SExpr a)  -- in Parens
              | SExpr_const   a            -- constant 
                              (Const a)    -- id
                              Bool         -- interpreted as predicate?
-                             (Maybe Integer)  -- optional GIVEN arity 
-                             (Maybe Integer)  -- INFERRED arity
+                             (Maybe Int)  -- optional GIVEN arity 
+                             Int          -- INFERRED arity
              | SExpr_var     a (Var a)    -- variable
              | SExpr_int     a Integer    -- integer constant
              | SExpr_float   a Double     -- Floating point constant
              | SExpr_predCon a            -- predicate constant
                              (Const a)    -- id
-                             (Maybe Integer)  -- optional GIVEN arity
-                             (Maybe Integer)  -- INFERRED arity
+                             (Maybe Int)  -- optional GIVEN arity
+                             Int          -- INFERRED arity
              | SExpr_app  a (SExpr a) [SExpr a]  -- application
-             | SExpr_op   a (Const a) [SExpr a]  -- operator
+             | SExpr_op   a          -- operator
+                          (Const a)  -- id
+                          Bool       -- interpreted as pred?         
+                          [SExpr a]  -- arguments
              | SExpr_lam  a [Var a] (SExpr a)    -- lambda abstr.
              | SExpr_list a [SExpr a] (Maybe (SExpr a))
                           -- list: initial elements, maybe tail
@@ -95,6 +100,15 @@ data SSent a = SSent_clause a (SClause  a)
              | SSent_goal   a (SGoal    a)
              | SSent_comm   a (SCommand a)
     deriving Functor
+
+isGoal (SSent_goal _ _) = True
+isGoal _ = False 
+
+isClause (SSent_clause _ _) = True 
+isClause _ = False
+
+isCommand (SSent_comm _ _) = True
+isCommand _ = False
 
 -- Print expressions
 -- TODO make them better
@@ -197,25 +211,25 @@ sTrue =  SExpr_const ()
                      (Const () "true")  
                      True
                      Nothing
-                     (Just 0)
+                     (-1)
 sFail :: SExpr ()
 sFail =  SExpr_const () 
                      (Const () "fail")  
                      True
                      Nothing
-                     (Just 0)
+                     (-1)
 
 sCut :: SExpr ()
 sCut =  SExpr_const () 
                     (Const () "!")  
                     True
                     Nothing
-                    (Just 0)
+                    (-1)
 
 sNil :: SExpr ()
 sNil = SExpr_const () 
                    (Const () "[]")  
                    False
                    Nothing
-                   (Just 0)
+                   (-1)
 
