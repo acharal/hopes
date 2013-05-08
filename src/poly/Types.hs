@@ -18,6 +18,7 @@
 module Types where
 
 import Prelude hiding (concatMap, foldl, foldr)
+import Basic
 import Data.List (nub)
 import Data.Foldable hiding (maximum)
 import Data.Monoid
@@ -177,13 +178,11 @@ order a =
         (Rho_i) -> 0
         _  -> error ("no fixed order when type is variable")
 
-arity :: HasType a => a -> Int
-arity a =
-    case typeOf a of
-        (Rho_pi (Pi_fun rhos pi)) -> length rhos
-        (Rho_pi Pi_o) -> 0
-        (Rho_i) -> 0
-        _  -> error ("no fixed arity when type is variable")
+instance HasArity Type where 
+    arity (Rho_pi (Pi_fun rhos pi)) = Just $ length rhos
+    arity (Rho_pi Pi_o)             = Just 0
+    arity (Rho_i)                   = Just 0
+    arity r = Nothing
 
 -- | Monomorphic type signature (variables)
 type TySig a = (a, Type)

@@ -1,9 +1,16 @@
+{-
+ - Utility and preprocessing functions for Type checking
+ -}
+
 module TcUtils where
 
+import Basic
 import Types 
 import Loc
 import Syntax
 import Data.List
+import Data.Maybe (fromJust)
+import Data.Graph
 
 {-
  - In polyHOPES, some constants are interpreted as arguments
@@ -12,14 +19,14 @@ import Data.List
 
 -- Operators/ predicates which pass their predicative
 -- status down to their operands
-predefPredFunc = [ ("->"  , 2)
-                 , (","   , 2)
-                 , (";"   , 2)
-                 , ("\\+" , 1)
-                 , ("call", 1)
-                 , ("once", 1)
-                 , ("findall", 1)
-                 ]
+predefSpecialPreds = [ ("->"  , 2)
+                     , (","   , 2)
+                     , (";"   , 2)
+                     , ("\\+" , 1)
+                     , ("call", 1)
+                     , ("once", 1)
+                     , ("findall", 1)
+                     ]
           
 
 -- Infer arities and predicative status
@@ -68,16 +75,16 @@ fixExpr predSt ar ex = case ex of
                     (map (fixExpr argPredSt 0) args)
         where argPredSt = predSt && isPredFunctor func
               isPredFunctor (SExpr_const _ (Const _ c) _ givArr _) =
-                  elem (c,arr) predefPredFunc
+                  elem (c,arr) predefSpecialPreds
                       where arr = case givArr of 
                                       Just n  -> n
-                                      Nothing ->  length args
+                                      Nothing -> length args
 
     SExpr_op a op _ args ->
         SExpr_op a op predSt (map (fixExpr argPredSt 0) args)
         where argPredSt = predSt && isPredOp op ( length args)
               isPredOp (Const _ c) opArr = 
-                  elem (c,opArr) predefPredFunc
+                  elem (c,opArr) predefSpecialPreds
                  
     SExpr_lam a vars bd ->
         SExpr_lam a vars (fixExpr True 0 bd)
@@ -93,17 +100,56 @@ fixExpr predSt ar ex = case ex of
     SExpr_ann a ex tp -> SExpr_ann a ex tp --TODO implement this!
 
 
+-- Find all predicates with their arities defined in a cluase
+findReferredPreds :: SClause a -> [PredConst]
+findReferredPreds clau = case clBody clau of 
+    Nothing -> []
+    Just (_,ex) -> map createPC $ filter isPredConst $ flatten ex
+    where
+        createPC ex = (nameOf ex, fromJust $ arity ex)
 
+-- Find the predicate defined in a clause
+findDefinedPred :: SClause a -> PredConst
+findDefinedPred h = (nameOf $ clHead h, fromJust $ arity $ clHead h)
+          
 
+{-
+ - Analyse dependencies between clauses and build dependency
+ - groups
+ - TODO : add predicates that are no nodes of the graph?
+ -}
 
+depAnalysis :: [SPredDef a] -> SDepGroupDag a
+depAnalysis definitions = 
+    let -- Find all referred predicates in a predicate definition
+        allDeps def = nub $ concat $ map findReferredPreds (predDefClauses def) 
+        -- create nodes in the form (node, key, [key])
+        -- (see Data.Graph)
+        nodes = map (\def -> ( def
+                             , (nameOf def, fromJust $ arity def)
+                             , allDeps def
+                             )
+                    ) definitions
+        -- Find strongly connected components
+        depGroups = stronglyConnComp nodes
+    in reverse (map flattenSCC depGroups) -- reverse because we have in-edges
 
 
 {-
+ - Putting it all together:
+ - From a list of sentences to the DAG of all predicate
+ - definitions which will be fed to the type checker
+ -}
 
+makeDefDag :: [SSent a] -> SDepGroupDag a
+makeDefDag sents = 
+    let sents'   = filter isClause sents
+        clauses  = map (\(SSent_clause _ cl) -> cl) sents'
+        clGroups = groupBy (\cl1 cl2 -> nameOf cl1 == nameOf cl2 && arity cl1 == arity cl2) clauses
+        defs = map (\grp -> SPredDef { predDefName = nameOf $ head grp 
+                                     , predDefArity = fromJust $ arity $ head grp
+                                     , predDefClauses = grp
+                                     }
+                   ) clGroups 
+    in depAnalysis defs
 
-
-depAnalysis :: [SSentence (Typed a)] -> SGroups a
-depAnalysis sentList = 
-    let clauses = 
-
--}
