@@ -472,7 +472,7 @@ parseProlog2 input = do
                     ,(1200, Operators.Operator ":-" "fx")
                     ,(1000, Operators.Operator "," "xfx")
                     ]
-          parse st src input = case runPrologParser (buildTable >> many1 sentence') st src input of
+          parse st src input = case runPrologParser (buildTable >> do { sents <- many1 sentence' ;eof; return sents}) st src input of
                                    Left err ->  do putStr "parse error at"
                                                    print err
                                                    fail ""
@@ -492,4 +492,6 @@ parseProlog p input =
         Right (x,_) -> print x
     where st = ParseSt []
 
-test () = do { (a,b) <- parseProlog2 "../../pl/examples/test.pl" ; print a }
+test () = do { (a,b) <- parseProlog2 "../../pl/examples/aleph.pl" 
+             ; sequence (map (\x-> do {putStrLn $ show x}) a) 
+             }

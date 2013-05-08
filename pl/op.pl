@@ -39,6 +39,7 @@
 :- op( 200, xfy, '^').
 :- op( 200,  fy, '\\').     % bitwise complement
 :- op( 200,  fy, '-').      % sign reversal
+:- op( 200,  fy, '+').      % ???
 :- op( 100, xfx, '@').
 :- op(  50, xfx, ':').      % module specification of a predicate Module:Pred
 

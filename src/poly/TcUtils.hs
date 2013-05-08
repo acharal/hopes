@@ -143,7 +143,7 @@ depAnalysis definitions =
 
 makeDefDag :: [SSent a] -> SDepGroupDag a
 makeDefDag sents = 
-    let sents'   = filter isClause sents
+    let sents'   = map fixSentence $ filter isClause sents
         clauses  = map (\(SSent_clause _ cl) -> cl) sents'
         clGroups = groupBy (\cl1 cl2 -> nameOf cl1 == nameOf cl2 && arity cl1 == arity cl2) clauses
         defs = map (\grp -> SPredDef { predDefName = nameOf $ head grp 
