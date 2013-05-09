@@ -18,9 +18,11 @@ keyGroup lst = map aux $ group lst
     where aux lst = (fst (head lst), map snd lst)
 
 groupByPrec :: OperatorTable -> [(Int, [Operator])]
-groupByPrec table = keyGroup $ sortBy precComp table
+groupByPrec table = map toCompact $
+                        groupBy (\x y-> precOp x == precOp y) $ 
+                        sortBy precComp table
    where precComp op1 op2  = compare (precOp op1) (precOp op2)
-
+         toCompact x = (fst $ head x, map snd x)
 
 -- | determines fixity by the place of "f"
 isPrefixOp   (Operator _ s) = length s == 2 && head s == 'f'

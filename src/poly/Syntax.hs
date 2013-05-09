@@ -66,8 +66,8 @@ data SExpr a = SExpr_paren   a (SExpr a)  -- in Parens
                              (Maybe Int)  -- optional GIVEN arity 
                              Int          -- INFERRED arity
              | SExpr_var     a (Var a)    -- variable
-             | SExpr_int     a Integer    -- integer constant
-             | SExpr_float   a Double     -- Floating point constant
+             | SExpr_number  a (Either Integer Double)
+                                          -- numeric constant
              | SExpr_predCon a            -- predicate constant
                              (Const a)    -- id
                              (Maybe Int)  -- optional GIVEN arity

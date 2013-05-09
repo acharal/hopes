@@ -141,6 +141,8 @@ failTK = L.reserved L.prolog "fail"
 -- TODO : implement optional arities in constants/ 
 --        poymorphic clause heads
 -- TODO : implement type annotations
+-- TODO : currently cannot parse a fullExpr (with operators) in the
+--        outer scope of a clause or directive
 
 -- Basic structures
 
@@ -167,7 +169,7 @@ predConst = try ( do  { predTK
                       ; return $ mkPredCon s n 
                       } <?> ("predicate constant")
                 )
-
+{-
 natExpr :: Stream s m Char => ParserT s m (SExpr ())
 natExpr = try ( do { n <- natural
                    ; return $ SExpr_int () n
@@ -179,6 +181,13 @@ floatExpr = try ( do { f <- float
                      ; return $ SExpr_float () f
                      } <?> ("float constant")
                 )
+-}
+numberExpr :: Stream s m Char => ParserT s m (SExpr ())
+numberExpr = try ( do { n <- naturalOrFloat
+                      ; return $ SExpr_number () n
+                      } <?> ("integer constant")
+                 )
+
 
 {- Why implement these separately? 
 trueExpr :: Stream s m Char => ParserT s m (SExpr ())
@@ -247,7 +256,7 @@ application  = try ( do
     } <?> ("application")
     )
     where -- args = try (parens expr) <|> parens (do { e <- commaSep1 expr; return (concatMap id e)} )
-        args = parens $ commaSep1 (try argExpr) -- TODO : fullExpr here should be fine
+        args = parens $ commaSep1 argExpr  --Used to say "try argExpr"
         -- From a list of argument lists and a head, make a
         -- nested application
         nested_app s as = {- :: SExpr -> [[SExpr]] -> SExpr -} 
@@ -259,13 +268,12 @@ atomicExpr :: Stream s m Char => ParserT s m (SExpr ())
 atomicExpr = choice [ variable
                     , constant
                     , predConst
-                    , natExpr
-                    , floatExpr
+                    , numberExpr
                     --, trueExpr
                     --, failExpr
                     , list
                     , cut
-                    , parens (try fullExpr <|> allExpr)
+                    , parens fullExpr--(try fullExpr <|> allExpr)
                             -- FIXME : is allExpr really
                             -- needed here?
                     ] <?> ("atomicExpr")
@@ -286,7 +294,7 @@ term = choice [ variable
               ] <?> ("term")
 -}
 
-
+{- BUGGY does not parse p(X;Y).
 -- Expressions with operators, built from the operator table
 -- with buildExpressionParser
 -- TODO: better error messages when failing to parse operator
@@ -306,6 +314,40 @@ argExpr = expr 999
 -- TODO fix ';' issue
 fullExpr :: Stream s m Char => ParserT s m (SExpr ())
 fullExpr = expr 1200
+-}
+
+-- Expressions with operators, built from the operator table
+-- with buildExpressionParser
+-- TODO: better error messages when failing to parse operator
+
+
+-- Expression for args (no ',')
+argExpr :: Stream s m Char => ParserT s m (SExpr ())
+argExpr = do { st <- getState
+             ; let opTbl = map snd $ cachedTable st
+             ; buildExpressionParser opTbl allExpr
+             } <?> "operator"
+
+-- General expressions
+fullExpr :: Stream s m Char => ParserT s m (SExpr ())
+fullExpr = do { st <- getState
+              ; let opTbl = map snd cachedTable''
+                        where cachedTable'  = cachedTable st
+                              (t1, t2) = span ((<1000).fst) cachedTable'
+                              cachedTable'' = case t2 of 
+                                  []        -> t1 ++ [ (1000, [commaOp])]
+                                  (hd2:tl2) -> if fst hd2 == 1000 
+                                                 then t1 ++ (1000, commaOp:snd hd2) : tl2
+                                                 else t1 ++ (1000, [commaOp]) : t2
+                              commaOp = Infix (try $ do { op <- atom
+                                                        ; if op == "," 
+                                                            then return (\x y-> mkOp "," [x,y])
+                                                            else fail ""
+                                                        }
+                                              ) AssocLeft
+              ; buildExpressionParser opTbl allExpr
+              } <?> "operator"
+
 
 -- Head of a clause
 head_c :: Stream s m Char => ParserT s m (SHead ())
@@ -355,7 +397,9 @@ clause = rule --try fact <|> rule
 
 -- Directives
 command :: Stream s m Char => ParserT s m (SSent ())
-command = do { ex <- between inf dot fullExpr
+command = do { symbol ":-"
+             ; ex <- fullExpr
+             ; symbol "."
              ; return $ SSent_comm () $ SCommand () ex
              }
 
@@ -384,7 +428,7 @@ sentence = choice [ command'
 
 -- TODO : Add more sentence types
 sentence :: Stream s m Char => ParserT s m (SSent ())
-sentence = try (clause `followedBy` dot) <|> command <?> ("sentence") 
+sentence = try command <|> (clause `followedBy` dot) <?> ("sentence") 
 
 
 -- | Directives must be only in goal clause (without head literal)
@@ -394,7 +438,7 @@ opDirective1 _ = return ()
 
 opDirective ( SExpr_app _ (SExpr_const _ (Const _ "op") _ _ _ ) 
                             -- TODO improve the last args to None (Just 3)) 
-            [ SExpr_int _ p
+            [ SExpr_number _ (Left p)
             , SExpr_const _ (Const _ a) _ _ _
             , SExpr_const _ (Const _ n) _ _ _
             ]) = do
@@ -434,11 +478,15 @@ buildOpTable = do { st <- getState
 
                                          -- Instead match the exact string and see if 
                                          -- there is an operator symbol following
+                                         {- also BUGGY!
                                          { string name
                                          ; notFollowedBy L.graphicToken
                                          ; L.whiteSpace L.prolog
                                          ; return $ f name
-                                         } 
+                                         } -}
+                                         { op <- atom;
+                                         ; if op == name then return $ f name else fail ""
+                                         }
                     -- Not needed anymore
                     -- where ops2    = map (\x -> try (string x)) $ map (skip (length name)) opNames
                     --        opNames = filter (f2 name) $ map (Operators.opName.snd) ops
@@ -468,12 +516,16 @@ parseProlog2 input = do
     result <- parse optable input f
     return result
     where st' = ParseSt initOps []
-          initOps = [(1200, Operators.Operator ":-" "xfx")
+          initOps = {-[(1200, Operators.Operator ":-" "xfx")
                     ,(1200, Operators.Operator ":-" "fx")
                     ,(1000, Operators.Operator "," "xfx")
-                    ]
-          parse st src input = case runPrologParser (buildTable >> do { sents <- many1 sentence' ;eof; return sents}) st src input of
-                                   Left err ->  do putStr "parse error at"
+                    ]-} []
+          parse st src input = case runPrologParser (buildTable >> do { sents <- many1 sentence' 
+                                                                      ; eof
+                                                                      ; return sents
+                                                                      }
+                                                    ) st src input of
+                                   Left err ->  do putStr "parse error at "
                                                    print err
                                                    fail ""
                                    Right res -> return res
@@ -487,11 +539,11 @@ parseProlog2 input = do
          
 parseProlog p input = 
     case runPrologParser p st "" input of 
-        Left err -> do putStr "parse error at" 
+        Left err -> do putStr "parse error at " 
                        print err
         Right (x,_) -> print x
-    where st = ParseSt []
+    where st = ParseSt [] []
 
-test () = do { (a,b) <- parseProlog2 "../../pl/examples/aleph.pl" 
-             ; sequence (map (\x-> do {putStrLn $ show x}) a) 
-             }
+test file = do { (a,b) <- parseProlog2 $ "../../pl/examples/" ++ file ++".pl" 
+               ; sequence (map (\x-> do {putStrLn $ show x}) a) 
+               }

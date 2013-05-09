@@ -26,7 +26,7 @@ prologStyle = emptyDef
                }
 
 graphicToken :: Stream s m Char => ParsecT s u m Char
-graphicToken = oneOf "#$&*+-./:<=>?@^~\\|"
+graphicToken = oneOf "#$&*+-,;/:<=>?@^~\\|"
 
 prologDef :: Stream s m Char => GenLanguageDef s u m
 prologDef = prologStyle
@@ -42,12 +42,17 @@ varIdent lexer = lexeme lexer $ try $
        }
     where underscore = char '_'
 
+
 conIdent :: Stream s m Char => GenTokenParser s u m -> ParsecT s u m String
 conIdent lexer = lexeme lexer $ try $ 
           choice [ graphicTokenString
                  , letterIdent 
                  ]
-    where graphicTokenString = many1 graphicToken
+    where graphicTokenString = do { tk  <- graphicToken
+                                  ; tks <- many (graphicToken <|> char '.')
+                                  --; notFollowedBy graphicToken
+                                  ; return (tk:tks)
+                                  }
           {- old version 
           graphicTokenString = do { c <- graphicToken
                                   ; cs <- many (graphicToken <|> identLetter)
@@ -56,8 +61,9 @@ conIdent lexer = lexeme lexer $ try $
           
           letterIdent  = do { c  <- identStart
                             ; cs <- many identLetter
+                            --; notFollowedBy identLetter
                             ; return (c:cs)
-                            }
+                            } 
           identStart   = lower
           identLetter  = alphaNum <|> underscore
           underscore   = char '_'

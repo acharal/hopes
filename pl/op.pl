@@ -2,15 +2,15 @@
 % precedence and assosiativity of default prolog operators
 
 :- op(1200, xfx, ':-').     % rule implication
-:- op(1200, xfx, '-->').    % if-then-else
-:- op(1200,  fx, ':-').     % goal implication
-:- op(1200,  fx, '?-').     % ?
+:- op(1200, xfx, '-->').    % DSPs
+:- op(1200,  fx, ':-').     % directive implication
+:- op(1200,  fx, '?-').     % goal
 :- op(1100, xfy, ';').      % disjunction
-:- op(1050, xfy, '->').
-:- op(1000, xfy, ',').      % conjunction
+:- op(1050, xfy, '->').     % if-then
+%:- op(1000, xfy, ',').      % conjunction
 :- op( 700, xfx, '=').      % unification
-:- op( 700, xfx, '\\=').
-:- op( 700, xfx, '==').
+:- op( 700, xfx, '\\=').    % not unifiable
+:- op( 700, xfx, '==').     
 :- op( 700, xfx, '\\==').
 :- op( 700, xfx, '@<').
 :- op( 700, xfx, '@=<').
