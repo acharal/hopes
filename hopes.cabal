@@ -70,5 +70,4 @@ Executable      hopes
                   CPP
                   UndecidableInstances
                   NoMonomorphismRestriction
-  Ghc-Options:    -fwarn-unused-imports
 

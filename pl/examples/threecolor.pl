@@ -2,7 +2,6 @@ eq(X, X).
 
 eq2(X, Y, X, Y).
 
-eqalt(X, Y) :- X = Z, Y = Z.
 
 neq(X, Y) :- not(eq(X,Y)).
 
@@ -30,9 +29,13 @@ has_color(X,Y,R,G,B) :- G(X),not(G(Y)),not(B(X)),not(R(X)).
 
 two_colorable(G, R) :- empty2(G).
 two_colorable(G, R) :- 
-       G(X, Y), !,
+       G(X, Y), 
        check(X, Y, R), 
        two_colorable(minus2(G, X, Y), R).
+
+two_colorable2(G, R) :- not(nottwo_colorable(G, R)).
+nottwo_colorable(G, R) :- G(X, Y), R(X), R(Y).
+nottwo_colorable2(G,R) :- R(X), R(Y), G(X, Y).
 
 check(X, Y, R) :- R(X), not(R(Y)).
 check(X, Y, R) :- R(Y), not(R(X)).

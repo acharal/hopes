@@ -29,79 +29,107 @@ import Data.List (partition)
 
 import Infer.Class
 
+-- utils
+
 splitAnd (And e1 e2) = splitAnd e1 ++ splitAnd e2
 splitAnd e = [e]
 
 foldAnd es = foldr1 And es
+foldOr  es = foldr1 Or es
 
 isUnsatisf vs theta = not satisf
     where satisf = norenames && not (null onlyfree)
           onlyfree = filter (\(v,_) -> v `notElem` vs) theta
           norenames = all (\(v,Var x) -> x `notElem` vs) $ filter (\(v,t) -> isVar t) onlyfree
 
+notExists vs [] = CFalse
+notExists vs es  = Not $ exists vs $ foldAnd es
+
+notEq vs e1 e2 = notExists vs [(Eq e1 e2)]
+
+isDisEq (Not e) = isEq e'
+    where (_, e') = splitExist e
+isDisEq _ = False
+
+isEq (Eq _ _) = True
+isEq _ = False
+
+
+rename = zipWith vv
+    where vv v1 v2 = (v1, Var v2)
+
 reduce (Not e) = 
     let (vs, e') = splitExist e
-        es = splitAnd e'
-        aux vs (Eq e1 e2) [] []       = ifte (unify e1 e2) nonvalid valid
+        (t:ts) = splitAnd e'
+
+
+        raux vs (Eq e1 e2) = ifte (unify e1 e2) nonvalid valid
             where valid = return CTrue
-                  nonvalid theta | isUnsatisf vs theta = return CFalse 
-                                 | otherwise           = fail "satisfiable"
+                  nonvalid theta 
+                        | isUnsatisf vs theta = return CFalse 
+                        | otherwise           = fail "satisfiable"
 
-        aux vs eq@(Eq _ _) rest diseq  = 
-            let (vs1, vs2) = partition (\v -> v `elem` (fv eq)) vs
-            in return $ Or (Not (exists vs1 eq)) 
-                           (exists vs1 (And eq (aux2 vs2 (rest ++ diseq))))
+        raux vs e@(Not e')
+            | all (`notElem` vs) (fv e) = return e'
+            | isDisEq e                 = return CFalse         --- implies that the disequality has 
+                                                                --- a variable in vs because of the first condition
+            | isVarApp e                = aux4 vs e []
+            | otherwise                 = rraux vs e []
 
-        aux vs (Or e1 e2) rs diseq = 
-            return $ And (aux2 vs ((e1:rs) ++ diseq))
-                         (aux2 vs ((e2:rs) ++ diseq))
+        raux vs e = rraux vs e []
 
-        aux vs (Exists x e) re diseq = do
-            x' <- freshVarOfType (typeOf x)
-            let e' = subst (bind x (Var x')) e
-            return $ aux2 (x':vs) ((e':re) ++ diseq)
+        rraux vs eq@(Eq _ _) es = 
+            return $ Or (Not (exists vs1 eq)) 
+                             (exists vs1 (And eq (notExists vs2 es)))
+            where (vs1, vs2) = partition (\v -> v `elem` (fv eq)) vs
 
-        aux vs (Not e) [] [] = 
-            if all (\v -> v `notElem` vs) (fv e)
-            then return e
-            else aux3 vs (Not e)
+        rraux vs (Or e1 e2) es = 
+            return $ And (notExists vs (e1:es))
+                         (notExists vs (e2:es))
 
-        aux vs e rest diseq 
-            | isVarApp e = aux4 vs e (rest ++ diseq)
-            | otherwise = ifte (reduce e) s f
-            where s CFalse = return CTrue
-                  s CTrue  = return $ aux2 vs $ rest ++ diseq
-                  s e'     = return $ aux2 vs $ (e':rest) ++ diseq
-                  f = if null rest 
-                      then dis vs (e:diseq)
-                      else aux vs (head rest) (tail rest) (e:diseq)
+        rraux vs (Exists _ e) es = 
+            let (xs, e') = splitExist e
+            in do
+                xs' <- mapM (freshVarOfType.typeOf) xs
+                let ss = rename xs xs'
+                let e' = subst ss e
+                return $ notExists (vs ++ xs') (e':es)
 
-        aux2 vs [] = CFalse
-        aux2 vs es = Not $ exists vs $ foldAnd es 
+        rraux vs e es | isVarApp e = aux4 vs e es
+                      | otherwise  = reduce e >>= s
+                            where s CFalse = return CTrue
+                                  s CTrue  = return $ notExists vs es
+                                  s e'     = return $ notExists vs (e':es)
 
-        dis vs es = return $ foldr1 Or $ map (\e -> Not (exists vs e)) es
+        auxx vs e [] []    = raux vs e
+        auxx vs e [] d     = ifte (rraux vs e d) return dis
+            where  dis = return $ foldOr $ map (\e -> notExists vs [e]) d
+        auxx vs e es@(r:rs) d = ifte (rraux vs e (es ++ d)) return f
+            where f = auxx vs r rs (e:d)
 
         isVarApp (Not e) = isVarApp e'
             where (_, e') = splitExist e
         isVarApp e = isVar $ functor e
-        isDisequal (Not e) = isEq e'
-            where (_, e') = splitExist e
-                  isEq (Eq _ _) = True
-                  isEq _ = False
-        isDisequal _ = False
 
-        aux3 vs e | isDisequal e = return CFalse
-                  | isVarApp e   = aux4 vs e []
+        args' (Not e) = args' e' where (_, e') = splitExist e
+        args' e = args e
 
         aux4 vs e [] = undefined
         aux4 vs e rs =
             let (vs1, vs2) = partition (\v -> v `elem` (fv e)) vs
-            in return $ Or (Not (exists vs1 e))
-                           (And (exists vs1 (And e (aux2 vs2 rs)))
-                                (aux2 vs (e:rs)) 
-                           )
+                ers vs' =  notExists vs' (eeq ++ rs')
+                    where rs' =  map (subst ss) (e:rs)
+                          eeq = zipWith (notEq []) as as'
+                          as  = args' e
+                          as' = map (subst ss) as
+                          ss  = rename vs vs'
 
-    in aux vs (head es) (tail es) []
+            in do 
+                  vs' <- mapM (freshVarOfType.typeOf) vs
+                  return $ Or (Not (exists vs1 e))
+                           (exists vs1 (And (And e (notExists vs2 rs)) (ers vs')))
+
+    in auxx vs t ts []
 
 reduce e = 
     case functor e of 
@@ -124,6 +152,33 @@ derive CFalse = fail "false"
 
 derive e =
     let es = splitAnd e
+        
+        deriveSingle (Eq e1 e2) = do
+            theta <- unify e1 e2
+            return (CTrue, theta)
+        deriveSingle (Or e1 e2) = mplus (returnSuccess e1) (returnSuccess e2)
+        deriveSingle (Exists _ e) = 
+            let (vs, e') = splitExist e
+            in do
+                vs' <- mapM (freshVarOfType.typeOf) vs
+                returnSuccess $ subst (rename vs' vs) e'
+        deriveSingle e | isVarApp' e = do 
+                            (e', s) <- resolveFlex' [] e
+                            return (CTrue, s)
+                       | otherwise   = reduce e >>= returnSuccess
+
+        deriveSeq e [] d = ifte (deriveSingle e) s' f
+            where s' (e',ss) = return (s ss d e', ss)
+                  f = fail "all disequalities!"
+        deriveSeq e (r:rs) d = ifte (deriveSingle e) s' f
+            where s' (e',ss) = return (s ss ((r:rs) ++ d) e', ss)
+                  f = deriveSeq r rs (e:d)
+
+        s ss _  CFalse = CFalse
+        s ss [] CTrue = CTrue
+        s ss es CTrue = subst ss $ foldAnd es
+        s ss es e = subst ss $ foldAnd (e:es)
+
         aux (Eq e1 e2) es disequal = do
             theta <- unify e1 e2
             return (subst theta $ aux3 (es ++ disequal), theta)
@@ -162,7 +217,7 @@ derive e =
         resolveFlexNot' vs (Not e) = resolveFlex vs e
         resolveFlexNot' vs e = resolveFlexNot vs e
 
-    in aux (head es) (tail es) []
+    in deriveSeq (head es) (tail es) []
 
 
 substFunc (App e a) b = (App (substFunc e b) a)
