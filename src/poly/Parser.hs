@@ -1,3 +1,7 @@
+{-
+ - KNOWN BUGS:
+ -  prefix operator used as atom fails
+ -}
 
 module Parser where
 
@@ -108,7 +112,7 @@ natural :: Stream s m Char => ParsecT s u m Integer
 natural = L.natural L.prolog
 
 atom :: Stream s m Char => ParsecT s u m String
-atom = try conIdent <|> stringLiteral <?> "atom"
+atom = try conIdent <|> stringLiteral -- <?> "atom"
 
 naturalOrFloat :: Stream s m Char => ParsecT s u m (Either Integer Double)
 naturalOrFloat = L.naturalOrFloat L.prolog
@@ -141,22 +145,20 @@ failTK = L.reserved L.prolog "fail"
 -- TODO : implement optional arities in constants/ 
 --        poymorphic clause heads
 -- TODO : implement type annotations
--- TODO : currently cannot parse a fullExpr (with operators) in the
---        outer scope of a clause or directive
 
 -- Basic structures
 
 variable :: Stream s m Char => ParserT s m (SExpr ())
 variable = try ( do { s  <- varIdent
                     ; return $ mkVarEx s
-                    } <?> ("variable")
+                    } -- <?> ("variable")
                )
 
 
 constant :: Stream s m Char => ParserT s m (SExpr ())
 constant = try ( do { c <- atom
                     ; return $ mkConst c Nothing
-                    } <?> ("constant")
+                    } -- <?> ("constant")
                )
 
 predConst :: Stream s m Char => ParserT s m (SExpr ())
@@ -167,7 +169,7 @@ predConst = try ( do  { predTK
                              n' <- natural
                              return $ fromIntegral n'
                       ; return $ mkPredCon s n 
-                      } <?> ("predicate constant")
+                      } -- <?> ("predicate constant")
                 )
 {-
 natExpr :: Stream s m Char => ParserT s m (SExpr ())
@@ -183,10 +185,13 @@ floatExpr = try ( do { f <- float
                 )
 -}
 numberExpr :: Stream s m Char => ParserT s m (SExpr ())
-numberExpr = try ( do { n <- naturalOrFloat
-                      ; return $ SExpr_number () n
-                      } <?> ("integer constant")
-                 )
+numberExpr = try $ choice [ try $ do { n <- float
+                                     ; return $ SExpr_number () $ Right n
+                                     } 
+                          , do { n <- natural
+                               ; return $ SExpr_number () $ Left n
+                               }
+                          ]                              
 
 
 {- Why implement these separately? 
@@ -213,7 +218,7 @@ cut = do { L.symbol L.prolog "!"; return sCut}
 
 
 list :: Stream s m Char => ParserT s m (SExpr ())
-list = try listEmpty <|> listNonEmpty <?> ("list")  
+list = try listEmpty <|> listNonEmpty -- <?> ("list")  
     where 
         listEmpty = do { symbol "[]"; return sNil }
         listNonEmpty = brackets $ do 
@@ -233,11 +238,11 @@ list = try listEmpty <|> listNonEmpty <?> ("list")
 lambda :: Stream s m Char => ParserT s m (SExpr ())
 lambda = try ( do 
     { symbol "\\~" 
-    ; vars <- (parens $ commaSep1 $ varIdent) <?> "lambda variables"
+    ; vars <- (parens $ commaSep1 $ varIdent) -- <?> "lambda variables"
     ; symbol "=>"
-    ; ex <- fullExpr 
+    ; ex <- try fullExpr <|> allExpr
     ; return $ mkLam (map mkVar vars) ex
-    } ) <?> "lambda"
+    } ) --  <?> "lambda"
 
 
 -- Application tries to parse an atomic expression applied on
@@ -253,10 +258,10 @@ application  = try ( do
     ; case as of 
         [] -> return s
         _  -> return $ nested_app s as
-    } <?> ("application")
+    } -- <?> ("application")
     )
     where -- args = try (parens expr) <|> parens (do { e <- commaSep1 expr; return (concatMap id e)} )
-        args = parens $ commaSep1 argExpr  --Used to say "try argExpr"
+        args = parens $ commaSep1 (try argExpr <|> allExpr)  --Used to say "try argExpr"
         -- From a list of argument lists and a head, make a
         -- nested application
         nested_app s as = {- :: SExpr -> [[SExpr]] -> SExpr -} 
@@ -273,10 +278,10 @@ atomicExpr = choice [ variable
                     --, failExpr
                     , list
                     , cut
-                    , parens fullExpr--(try fullExpr <|> allExpr)
+                    , parens (try fullExpr <|> allExpr)
                             -- FIXME : is allExpr really
                             -- needed here?
-                    ] <?> ("atomicExpr")
+                    ] -- <?> ("atomicExpr")
 
 -- Used as an argument to expr to create expr. parser
 allExpr :: Stream s m Char => ParserT s m (SExpr ())
@@ -326,7 +331,7 @@ argExpr :: Stream s m Char => ParserT s m (SExpr ())
 argExpr = do { st <- getState
              ; let opTbl = map snd $ cachedTable st
              ; buildExpressionParser opTbl allExpr
-             } <?> "operator"
+             } -- <?> "operator"
 
 -- General expressions
 fullExpr :: Stream s m Char => ParserT s m (SExpr ())
@@ -339,14 +344,13 @@ fullExpr = do { st <- getState
                                   (hd2:tl2) -> if fst hd2 == 1000 
                                                  then t1 ++ (1000, commaOp:snd hd2) : tl2
                                                  else t1 ++ (1000, [commaOp]) : t2
-                              commaOp = Infix (try $ do { op <- atom
-                                                        ; if op == "," 
-                                                            then return (\x y-> mkOp "," [x,y])
-                                                            else fail ""
+                              -- ',' must get special treatment because it is not a graphic token
+                              commaOp = Infix (try $ do { symbol ","
+                                                        ; return $ (\x y-> mkOp "," [x,y])
                                                         }
                                               ) AssocLeft
               ; buildExpressionParser opTbl allExpr
-              } <?> "operator"
+              } -- <?> "operator"
 
 
 -- Head of a clause
@@ -360,7 +364,7 @@ clause :: Stream s m Char => ParserT s m (SSent ())
 clause = try $ do h <- head_c
                   b <- optionMaybe $ do 
                       gets <- symbol ":-" <|> symbol "<-" -- mono or poly?
-                      body <- fullExpr
+                      body <- try fullExpr <|> allExpr
                       return (mkGets gets, body)
                   return $ SSent_clause () $ SClause () h b
 
@@ -398,7 +402,7 @@ clause = rule --try fact <|> rule
 -- Directives
 command :: Stream s m Char => ParserT s m (SSent ())
 command = do { symbol ":-"
-             ; ex <- fullExpr
+             ; ex <- try fullExpr <|> allExpr
              ; symbol "."
              ; return $ SSent_comm () $ SCommand () ex
              }
@@ -415,7 +419,7 @@ sentence :: Stream s m Char => ParserT s m (Maybe Expr, [Expr])
 sentence = choice [ command'
                   , goal
                   , clause
-                  ] <?> ("sentence")
+                  ] -- <?> ("sentence")
     where command' = do { c <- command
                         ; opDirective1 c
                         ; return c }
@@ -428,7 +432,7 @@ sentence = choice [ command'
 
 -- TODO : Add more sentence types
 sentence :: Stream s m Char => ParserT s m (SSent ())
-sentence = try command <|> (clause `followedBy` dot) <?> ("sentence") 
+sentence = try command <|> (clause `followedBy` dot)-- <?> ("sentence") 
 
 
 -- | Directives must be only in goal clause (without head literal)
@@ -547,3 +551,6 @@ parseProlog p input =
 test file = do { (a,b) <- parseProlog2 $ "../../pl/examples/" ++ file ++".pl" 
                ; sequence (map (\x-> do {putStrLn $ show x}) a) 
                }
+
+simple = "simple"
+aleph  = "aleph"

@@ -800,7 +800,7 @@ gen_layer(_,_).
 get_successes(Literal,1,M):-
 	depth_bound_call(Literal), 
 	update_atoms(Literal,M), !.
-get_successes(Literal,*,M):-
+get_successes(Literal,***,M):- %MANOS: changed * to ***
 	depth_bound_call(Literal), 
 	update_atoms(Literal,M).
 get_successes(Literal,N,M):-
@@ -5468,9 +5468,9 @@ find_mode(modeb,Name/Arity,Mode):-
 copy_modeterms(_,_,0):- !.
 copy_modeterms(Mode,Lit,Arg):-
         arg(Arg,Mode,Term),
-	nonvar(Term),
+	    nonvar(Term),
         functor(Term,Name,Arity),
-        \+((Name = '+'; Name = '-'; Name = '#')), !,
+        \+((Name = '+*'; Name = '-*'; Name = '#*')), !, % MANOS : put * after quoted terms
         functor(NewTerm,Name,Arity),
         arg(Arg,Lit,NewTerm),
         copy_modeterms(Term,NewTerm,Arity),
@@ -5562,7 +5562,7 @@ add_generator(Name/Arity):-
 add_generator(_).
 
 make_sname(Name,SName):-
-	concat(['*',Name],SName).
+    concat(['***',Name],SName). % MANOS : *-> ***
 
 range_restrict([],_,R,R).
 range_restrict([Pos/Type|T],Pred,R0,R):-
@@ -8100,7 +8100,7 @@ set_lazy_recalls:-
 	asserta('$aleph_global'(lazy_recall,lazy_recall(Name/Arity,0))),
 	'$aleph_global'(mode,mode(Recall,Pred)),
 	'$aleph_global'(lazy_recall,lazy_recall(Name/Arity,N)),
-	(Recall = '*' -> RecallNum = 100; RecallNum = Recall),
+    (Recall = '***' -> RecallNum = 100; RecallNum = Recall), % MANOS *->***
 	RecallNum > N,
 	retract('$aleph_global'(lazy_recall,lazy_recall(Name/Arity,N))),
 	asserta('$aleph_global'(lazy_recall,lazy_recall(Name/Arity,RecallNum))),

@@ -26,7 +26,7 @@ prologStyle = emptyDef
                }
 
 graphicToken :: Stream s m Char => ParsecT s u m Char
-graphicToken = oneOf "#$&*+-,;/:<=>?@^~\\|"
+graphicToken = oneOf "#$&*+-;/:<=>?@^~\\|"
 
 prologDef :: Stream s m Char => GenLanguageDef s u m
 prologDef = prologStyle
