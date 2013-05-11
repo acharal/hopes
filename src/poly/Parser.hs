@@ -6,7 +6,6 @@
 module Parser where
 
 import Loc
---import ParseUtils
 import qualified Lexer as L
 import Syntax
 import qualified Operator as Operators

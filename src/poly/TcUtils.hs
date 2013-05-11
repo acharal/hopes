@@ -23,9 +23,9 @@ predefSpecialPreds = [ ("->"  , 2)
                      , (","   , 2)
                      , (";"   , 2)
                      , ("\\+" , 1)
-                     , ("call", 1)
-                     , ("once", 1)
-                     , ("findall", 1)
+                     --, ("call", 1)
+                     --, ("once", 1)
+                     --, ("findall", 1)
                      ]
           
 
