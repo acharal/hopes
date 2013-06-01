@@ -547,9 +547,4 @@ parseProlog p input =
         Right (x,_) -> print x
     where st = ParseSt [] []
 
-test file = do { (a,b) <- parseProlog2 $ "../../pl/examples/" ++ file ++".pl" 
-               ; sequence (map (\x-> do {putStrLn $ show x}) a) 
-               }
 
-simple = "simple"
-aleph  = "aleph"

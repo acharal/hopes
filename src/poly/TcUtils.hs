@@ -1,5 +1,5 @@
 {-
- - Utility and preprocessing functions for Type checking
+ - Utility functions for Type checking
  -}
 
 module TcUtils where
@@ -8,148 +8,139 @@ import Basic
 import Types 
 import Loc
 import Syntax
+import Error
 import Data.List
 import Data.Maybe (fromJust)
 import Data.Graph
+import Text.PrettyPrint
+
+import Control.Monad.Reader
+import Control.Monad.State
+
+
+-- | Monomorphic type signature (variables)
+type RhoSig a  = (a, RhoType)
+-- | Polymorphic type signature (predicates)
+type PolySig a = (a, PolyType)
+
+instance HasType (RhoSig a) where
+    typeOf (_, t) = t
+    hasType ty (a, _) = (a, ty)
+
+-- | type environment is a set of type signatures for
+-- variables and polymorphic predicates
+data TyEnv a b = 
+    TyEnv { rhoSigs  :: [ RhoSig  a ]
+          , polySigs :: [ PolySig b ]
+          }
+
+lookupRho :: Eq a => a -> TyEnv a b -> Maybe RhoType
+lookupRho a = (lookup a).rhoSigs
+
+lookupPoly :: Eq b => b -> TyEnv a b -> Maybe PolyType
+lookupPoly a = (lookup a).polySigs
+
+
+
+-- Concrete type environment
+type PredSig = (Symbol, Int)
+type TcEnv = TyEnv Symbol PredSig
+
+type Constraint a = ((RhoType,SExpr a), (RhoType, SExpr a))
+
+-- Type Checker state
+data TcState  = 
+    TcState { uniq   :: Int             -- next fresh variable 
+            , cnts   :: [Constraint ()]  -- generated constraints
+            , exists :: [RhoSig Symbol] -- existentially quantified vars 
+            , msgs   :: Messages        -- error messages
+            }
+
+-- TypeCheck monad. 
+-- Supports state, errors
+type Tc m = ReaderT TcEnv (StateT TcState (ErrorT Messages m)) 
+
 
 {-
- - In polyHOPES, some constants are interpreted as arguments
- - and some as individual/functional symbols
+ - Auxiliary functions for the Tc monad
  -}
 
--- Operators/ predicates which pass their predicative
--- status down to their operands
-predefSpecialPreds = [ ("->"  , 2)
-                     , (","   , 2)
-                     , (";"   , 2)
-                     , ("\\+" , 1)
-                     --, ("call", 1)
-                     --, ("once", 1)
-                     --, ("findall", 1)
-                     ]
-          
+-- Restrict an expression in the Head: no lambdas or predicate
+-- constants allowed
+-- TODO: error discipline
 
--- Infer arities and predicative status
-fixSentence c@(SSent_comm _ _) = c
-fixSentence (SSent_clause a' (SClause a hd bd) ) =
-    SSent_clause a' $ SClause a (fixHead hd) $ 
-        case bd of 
-            Nothing          -> Nothing
-            Just (gets, exp) -> Just ( gets, fixExpr True 0 exp )
 
-fixHead (SHead a c givArr _ argList) = 
-    -- if there are no arguments, infer arity 0
-    let infArr = case argList of
-                     [] -> 0
-                     (hd:_) ->  length hd
-    in SHead a c givArr infArr $ 
-        map (map $ fixExpr False 0) argList
+restrictHead :: Monad m => SHead a -> Tc m ()
+restrictHead h =  h |> allHeadExprs  
+                    |> mapM_ restrict
+    where restrict (SExpr_predCon _ _ _ _) = throwError restrictError
+          restrict (SExpr_lam _ _ _)       = throwError restrictError
+          restrict _                       = return ()
+          restrictError =
+              mkMsgs $ mkErr TypeError Fatal $ text "predicate or lambda in head"
 
-fixExpr :: Bool    -- interpred as predicate?
-        -> Int     -- arity
-        -> SExpr a -- examined expression
-        -> SExpr a
+-- Add a constraint to the state
+addConstraint rho1 ex1 rho2 ex2 = 
+    modify (\st -> st { cnts = ( (rho1,ex1),(rho2,ex2) ) : cnts st})
 
-fixExpr predSt ar ex = case ex of
-    SExpr_paren a ex1 -> 
-        SExpr_paren a (fixExpr predSt ar ex1) 
+-- Add an existentially quantified var. to the state 
+addExist var tp = 
+    modify (\st -> st { exists = (var, tp) : exists st})
 
-    SExpr_const a con _ givArr _ ->
-        SExpr_const a con predSt givArr ar 
+-- Fresh variable generation 
+newAlpha :: Monad m => Tc m Alpha
+newAlpha = do
+    st <- get
+    let n = uniq st
+    put st{uniq = n+1}
+    return $ Alpha ('a' : show n)
 
-    SExpr_var a v ->
-        SExpr_var a v
+newPhi   :: Monad m => Tc m Phi
+newPhi = do
+    st <- get
+    let n = uniq st
+    put st{uniq = n+1}
+    return $ Phi ('t' : show n)
 
-    SExpr_int a i ->
-        SExpr_int a i 
+newAlphas n = sequence $ replicate n $ newAlpha
+newPhis   n = sequence $ take n $ repeat $ newPhi
 
-    SExpr_float a f ->
-        SExpr_float a f 
+-- Most general type of arity n as a pi-type
+typeWithArity 0 = return Pi_o
+typeWithArity n = do
+    paramTypes <- newAlphas n
+    resType    <- newPhi
+    return $ Pi_fun (map (\al -> Rho_var al) paramTypes) (Pi_var resType)
 
-    SExpr_predCon a c givArr _ ->
-        SExpr_predCon a c givArr ar
+-- Freshen a polymoprhic type TODO: MOCKUP!
+freshen :: Monad m => PolyType -> Tc m PiType
+freshen _ = return $ error "not implemented yet!"
 
-    SExpr_app a func args ->
-        SExpr_app a (fixExpr predSt ( length args) func) 
-            -- pred. status goes to application functor
-                    (map (fixExpr argPredSt 0) args)
-        where argPredSt = predSt && isPredFunctor func
-              isPredFunctor (SExpr_const _ (Const _ c) _ givArr _) =
-                  elem (c,arr) predefSpecialPreds
-                      where arr = case givArr of 
-                                      Just n  -> n
-                                      Nothing -> length args
+-- Work with new variables in the environment
+withEnvVars :: Monad m => [Symbol] -> [RhoType]-> Tc m a -> Tc m a
+withEnvVars newVs rhos = 
+    local (\env -> env{ rhoSigs = (zip newVs rhos) ++ rhoSigs env})
 
-    SExpr_op a op _ args ->
-        SExpr_op a op predSt (map (fixExpr argPredSt 0) args)
-        where argPredSt = predSt && isPredOp op ( length args)
-              isPredOp (Const _ c) opArr = 
-                  elem (c,opArr) predefSpecialPreds
+-- Work with new predicate constants to the environment
+withEnvPreds newCons polys =
+    local (\env -> env{ polySigs = zip newCons polys ++ polySigs env})
+
+
+{-
+ - Other auxilliary TypeCheck functions
+ -}
+
+
+-- Find all subexpressions in a clause head
+
+allHeadExprs :: SHead a -> [SExpr a]
+allHeadExprs h = h |> headArgs 
+                   |> concat 
+                   |> concatMap flatten 
                  
-    SExpr_lam a vars bd ->
-        SExpr_lam a vars (fixExpr True 0 bd)
+-- Find all variables in a clause head 
+allHeadVars h = h |> allHeadExprs
+                  |> filter isVar
+                  |> map ( \(SExpr_var _ v) -> nameOf v)
 
-    SExpr_list a initElems tl ->
-        SExpr_list a (map (fixExpr False 0) initElems) 
-            (fmap (fixExpr False 0) tl)
-            -- fmap maps into Maybe 
-
-    SExpr_eq a ex1 ex2 ->
-        SExpr_eq a (fixExpr False 0 ex1) (fixExpr False 0 ex2)
-   
-    SExpr_ann a ex tp -> SExpr_ann a ex tp --TODO implement this!
-
-
--- Find all predicates with their arities defined in a cluase
-findReferredPreds :: SClause a -> [PredConst]
-findReferredPreds clau = case clBody clau of 
-    Nothing -> []
-    Just (_,ex) -> map createPC $ filter isPredConst $ flatten ex
-    where
-        createPC ex = (nameOf ex, fromJust $ arity ex)
-
--- Find the predicate defined in a clause
-findDefinedPred :: SClause a -> PredConst
-findDefinedPred h = (nameOf $ clHead h, fromJust $ arity $ clHead h)
-          
-
-{-
- - Analyse dependencies between clauses and build dependency
- - groups
- - TODO : add predicates that are no nodes of the graph?
- -}
-
-depAnalysis :: [SPredDef a] -> SDepGroupDag a
-depAnalysis definitions = 
-    let -- Find all referred predicates in a predicate definition
-        allDeps def = nub $ concat $ map findReferredPreds (predDefClauses def) 
-        -- create nodes in the form (node, key, [key])
-        -- (see Data.Graph)
-        nodes = map (\def -> ( def
-                             , (nameOf def, fromJust $ arity def)
-                             , allDeps def
-                             )
-                    ) definitions
-        -- Find strongly connected components
-        depGroups = stronglyConnComp nodes
-    in reverse (map flattenSCC depGroups) -- reverse because we have in-edges
-
-
-{-
- - Putting it all together:
- - From a list of sentences to the DAG of all predicate
- - definitions which will be fed to the type checker
- -}
-
-makeDefDag :: [SSent a] -> SDepGroupDag a
-makeDefDag sents = 
-    let sents'   = map fixSentence $ filter isClause sents
-        clauses  = map (\(SSent_clause _ cl) -> cl) sents'
-        clGroups = groupBy (\cl1 cl2 -> nameOf cl1 == nameOf cl2 && arity cl1 == arity cl2) clauses
-        defs = map (\grp -> SPredDef { predDefName = nameOf $ head grp 
-                                     , predDefArity = fromJust $ arity $ head grp
-                                     , predDefClauses = grp
-                                     }
-                   ) clGroups 
-    in depAnalysis defs
 

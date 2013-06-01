@@ -63,7 +63,7 @@ instance Pretty LocSpan where
 
 
 -- Types
-instance Pretty Type where
+instance Pretty RhoType where
     ppr rho = text $ show rho
 
 instance Pretty PiType where
@@ -86,7 +86,7 @@ tvmap tys v =
             Nothing -> ppr v
             Just n  -> text n
 -}
-
+{-
 instance Pretty a => Pretty (TySig a) where
     ppr (a,t) = sep [ ppr a, dcolon <+> ppr t]
 
@@ -95,4 +95,4 @@ instance Pretty a => Pretty (PolySig a) where
 
 instance (Pretty a, Pretty b) => Pretty (TyEnv a b) where
     ppr ts = vcat $ map ppr (fst ts) ++ map ppr (snd ts)
-
+-}

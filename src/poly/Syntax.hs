@@ -11,10 +11,10 @@ import qualified Data.Foldable
  -}
 
 -- Description of constants and variables.
-data Const a = Const a String -- info and name 
+data Const a = Const a Symbol -- info and name 
     deriving Functor
 
-data Var a = Var a String -- named variable
+data Var a = Var a Symbol -- named variable
            | AnonVar a    -- wildcard
     deriving Functor
 
@@ -59,8 +59,8 @@ data SHead a = SHead { headInfo :: a        -- Info
     deriving Functor
 
 -- Expressions 
-data SExpr a = SExpr_paren   a (SExpr a)  -- in Parens    
-             | SExpr_const   a            -- constant 
+data SExpr a = --SExpr_paren   a (SExpr a)  -- in Parens  
+               SExpr_const   a            -- constant 
                              (Const a)    -- id
                              Bool         -- interpreted as predicate?
                              (Maybe Int)  -- optional GIVEN arity 
@@ -75,13 +75,13 @@ data SExpr a = SExpr_paren   a (SExpr a)  -- in Parens
              | SExpr_app  a (SExpr a) [SExpr a]  -- application
              | SExpr_op   a          -- operator
                           (Const a)  -- id
-                          Bool       -- interpreted as pred?         
+                          Bool       -- interpreted as pred?
                           [SExpr a]  -- arguments
              | SExpr_lam  a [Var a] (SExpr a)    -- lambda abstr.
              | SExpr_list a [SExpr a] (Maybe (SExpr a))
                           -- list: initial elements, maybe tail
              | SExpr_eq   a (SExpr a) (SExpr a)  -- unification
-             | SExpr_ann  a (SExpr a) Type       -- type annotated
+             | SExpr_ann  a (SExpr a) RhoType    -- type annotated
     deriving Functor
 
 
@@ -99,9 +99,6 @@ type SDepGroup a = [SPredDef a]
 
 -- All predicate definitions, organized into dependency groups in DAG order
 type SDepGroupDag a = [SDepGroup a]
-
--- A constant as it is saved in a type environment
-type PredConst = (String, Int)
 
 
 
@@ -121,6 +118,16 @@ deriving instance Show a => Show (SGoal a)
 deriving instance Show a => Show (SCommand a)
 deriving instance Show a => Show (SSent a)
 
+instance Show a => Show (SPredDef a) where
+    show (SPredDef nm ar cls) = 
+        nm ++ "/" ++ show ar ++ "\n" ++ foldr (\cl rest -> show cl ++ "\n" ++ rest) "" cls
+
+-- constants, variables
+instance HasName (Const a) where 
+    nameOf (Const _ nm) = nm
+instance HasName (Var a ) where 
+    nameOf (Var _ nm)  = nm
+    nameOf (AnonVar _) = "_" -- TODO
 
 -- Head
 
@@ -160,16 +167,19 @@ isFact (SClause _ _ Nothing) = True
 isFact _ = False
 
 
-
+-- Predicates on expressions 
 -- Filter everything that can be a predicate constant
 isPredConst (SExpr_predCon _ _ _ _) = True
 isPredConst (SExpr_const _ _ predStatus _ _) = predStatus
 isPredConst (SExpr_op  _ _ predStatus _) = predStatus 
 isPredConst _ = False
 
+isVar (SExpr_var _ _) = True
+isVar _              = False
+
 -- Finds arity of a constant expression
 instance HasArity (SExpr a) where 
-    arity (SExpr_paren _ ex) = arity ex
+    --arity (SExpr_paren _ ex) = arity ex
     arity (SExpr_const _ _ _ given inferred) =
         case given of 
             Just n  -> Just n 
@@ -182,19 +192,16 @@ instance HasArity (SExpr a) where
     arity (SExpr_ann _ ex _) = arity ex
     arity _ = Nothing
 
-instance HasName (Const a) where
-    nameOf (Const _ nm) = nm 
-
 instance HasName (SExpr a) where 
-    nameOf (SExpr_paren _ ex) = nameOf ex
+    --nameOf (SExpr_paren _ ex) = nameOf ex
     nameOf (SExpr_const _ c _ _ _) = nameOf c
     nameOf (SExpr_predCon _ c _ _) = nameOf c
     nameOf (SExpr_op _ op _ _)  = nameOf op
     nameOf _ = ""
 
 -- Get a list of all subexpressions contained in an expression
-instance Flatable (SExpr a) where
-    flatten ex@(SExpr_paren a ex') = ex : flatten ex'
+instance Flatable SExpr where
+    --flatten ex@(SExpr_paren a ex') = ex : flatten ex'
     flatten ex@(SExpr_app _ func args) =
         ex : func : ( concat $ map flatten args)
     flatten ex@(SExpr_op _ _ _ args) =
@@ -216,12 +223,35 @@ instance Flatable (SExpr a) where
     flatten ex = [ex]  -- nothing else has subexpressions
 
 
+-- Syntax constructs have types if it exists in the 
+-- information they carry
+
+instance HasType a => HasType (SExpr a) where
+    typeOf (SExpr_const   a _ _ _ _  ) = typeOf a
+    typeOf (SExpr_var     a _        ) = typeOf a
+    typeOf (SExpr_number  a _        ) = typeOf a
+    typeOf (SExpr_predCon a _ _ _    ) = typeOf a
+    typeOf (SExpr_app     a _ _      ) = typeOf a
+    typeOf (SExpr_op      a _ _ _    ) = typeOf a
+    typeOf (SExpr_lam     a _ _      ) = typeOf a
+    typeOf (SExpr_list    a _ _      ) = typeOf a
+    typeOf (SExpr_eq      a _ _      ) = typeOf a
+    typeOf (SExpr_ann     a _ _      ) = typeOf a
+
+    hasType tp (SExpr_const   a b c d e) = SExpr_const   (hasType tp a) b c d e
+    hasType tp (SExpr_var     a b      ) = SExpr_var     (hasType tp a) b        
+    hasType tp (SExpr_number  a b      ) = SExpr_number  (hasType tp a) b        
+    hasType tp (SExpr_predCon a b c d  ) = SExpr_predCon (hasType tp a) b c d    
+    hasType tp (SExpr_app     a b c    ) = SExpr_app     (hasType tp a) b c      
+    hasType tp (SExpr_op      a b c d  ) = SExpr_op      (hasType tp a) b c d    
+    hasType tp (SExpr_lam     a b c    ) = SExpr_lam     (hasType tp a) b c      
+    hasType tp (SExpr_list    a b c    ) = SExpr_list    (hasType tp a) b c      
+    hasType tp (SExpr_eq      a b c    ) = SExpr_eq      (hasType tp a) b c      
+    hasType tp (SExpr_ann     a b c    ) = SExpr_ann     (hasType tp a) b c      
 
 
 {-
--- Syntax constructs have types if it exists in the 
--- information they carry
--- Maybe useful later
+
 instance HasType a => HasType (Const a) where
     typeOf (Const a _ _) = typeOf a
     hasType tp (Const a s i) = Const (hasType tp a) s i

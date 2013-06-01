@@ -33,13 +33,13 @@ newtype Phi = Phi String
 
 -- Non generalized predicate
 data PiType = Pi_o 
-            | Pi_fun [Type] PiType
+            | Pi_fun [RhoType] PiType
             | Pi_var Phi
     deriving Eq
 -- Argument
-data Type = Rho_i
-          | Rho_pi PiType
-          | Rho_var Alpha
+data RhoType = Rho_i
+             | Rho_pi PiType
+             | Rho_var Alpha
     deriving Eq
 -- Functional with a no. of arguments
 data FunType = Fun Int
@@ -49,7 +49,7 @@ data PolyType = Poly_gen [Alpha] [Phi] PiType
 
 -- All types. FIXME: needed???
 data AllTypes = All_fun  FunType 
-              | All_rho  Type 
+              | All_rho  RhoType 
               | All_poly PolyType
    
 instance Eq AllTypes where 
@@ -75,17 +75,17 @@ instance Type PolyType
 -- Pretty printing for types
 
 instance Show Alpha where
-  showsPrec p (Alpha alpha) = (alpha ++)
+  showsPrec p (Alpha alpha) = ( alpha ++ )
 
 instance Show Phi where
-  showsPrec p (Phi phi) = (phi ++)
+  showsPrec p (Phi phi) = ( phi ++ )
 
 instance Show FunType where
   showsPrec p (Fun n) = ("(" ++). walk n . (") -> i" ++)
     where walk 1 = ("i" ++)
           walk n = ("i, " ++) . walk (n-1)
 
-instance Show Type where
+instance Show RhoType where
   showsPrec p Rho_i = ("i" ++)
   showsPrec p (Rho_pi pi) = showsPrec p pi
   showsPrec p (Rho_var alpha) = showsPrec p alpha
@@ -134,7 +134,7 @@ instance Show PolyType where
 
 -- | Wrapper type for rho-typed objects
 
-data Typed a = T a Type deriving Show
+data Typed a = T a RhoType deriving Show
 
 instance Eq a => Eq (Typed a) where
     (T a tya) == (T b tyb) = a == b
@@ -143,11 +143,11 @@ typed ty a = T a ty
 unTyp (T a _) = a
 
 class HasType a where
-    typeOf :: a -> Type
-    hasType :: Type -> a -> a
+    typeOf :: a -> RhoType
+    hasType :: RhoType -> a -> a
     
     
-instance HasType Type where
+instance HasType RhoType where
     typeOf = id
     hasType t _ = t
 
@@ -158,10 +158,6 @@ instance HasType (Typed a) where
 instance Functor Typed where
     fmap f (T a ty) = T (f a) ty
 
-
-instance HasType (TySig a) where
-    typeOf (_, t) = t
-    hasType ty (a, _) = (a, ty)
 
 -- Combine type with location
 instance HasType a => HasType (Located a) where
@@ -178,32 +174,10 @@ order a =
         (Rho_i) -> 0
         _  -> error ("no fixed order when type is variable")
 
-instance HasArity Type where 
+instance HasArity RhoType where 
     arity (Rho_pi (Pi_fun rhos pi)) = Just $ length rhos
     arity (Rho_pi Pi_o)             = Just 0
     arity (Rho_i)                   = Just 0
     arity r = Nothing
-
--- | Monomorphic type signature (variables)
-type TySig a = (a, Type)
--- | Polymorphic type signature (predicates)
-type PolySig a = (a, PolyType)
-
--- | type environment is a set of type signatures for
--- variables and polymorphic predicates
-type TyEnv a b = ( [ TySig a ], [ PolySig b])
-
--- emptyTyEnv :: TyEnv a
--- emptyTyEnv = []
-
-lookupType :: Eq a => a -> TyEnv a b-> Maybe Type
-lookupType a = (lookup a).fst
-
-lookupPoly :: Eq b => b -> TyEnv a b-> Maybe PolyType
-lookupPoly a = (lookup a).snd
-
-
---findTySig :: Eq a => a -> TyEnv a b -> Maybe (TySig a)
---findTySig a = find (\(b, _) -> b == a)
 
 
