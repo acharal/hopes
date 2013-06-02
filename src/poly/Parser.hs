@@ -5,12 +5,12 @@
 
 module Parser where
 
-import Loc
 import qualified Lexer as L
 import Syntax
 import qualified Operator as Operators
 import Text.Parsec
 import Text.Parsec.Expr
+import Text.Parsec.Pos
 import Data.Char
 import Data.List 
 import Control.Monad (when)
@@ -22,10 +22,20 @@ import Text.Parsec.ByteString
 
 data ParseState s m = 
     ParseSt { operatorTable :: Operators.OperatorTable
-            , cachedTable   :: [(Int, [Operator s (ParseState s m) m ( SExpr () )])]
+            , cachedTable   :: [(Int, [Operator s (ParseState s m) m ( SExpr PosSpan )])]
             } 
 
 type ParserT s m a = ParsecT s (ParseState s m) m a
+
+-- Position
+
+bogusPos = newPos "bogusFile" (-1) (-1) 
+data PosSpan = PosSpan SourcePos SourcePos 
+    deriving (Eq)
+instance Show PosSpan where
+    show p = "bgspn" -- TODO: show better
+
+bogusSpan = PosSpan bogusPos bogusPos
 
 
 -- helpers
@@ -38,37 +48,37 @@ skip 0 x = x
 skip n (x:xs) = skip (n-1) xs
 
 -- Make expressions
-mkConst :: String -> Maybe Int -> SExpr ()
-mkConst s i = SExpr_const () (Const () s) False i (-1) 
+mkConst :: String -> Maybe Int -> SExpr PosSpan
+mkConst s i  = SExpr_const bogusSpan (Const bogusSpan s) False i (-1) 
 
-mkPredCon :: String -> Maybe Int -> SExpr ()
-mkPredCon s i = SExpr_predCon () (Const () s) i (-1)
+mkPredCon :: String -> Maybe Int -> SExpr PosSpan
+mkPredCon s i  = SExpr_predCon bogusSpan (Const bogusSpan s) i (-1)
 
-mkVar :: String -> Var ()
-mkVar s = if s=="_" then AnonVar () else Var () s
+mkVar :: String -> Var PosSpan
+mkVar s = if s=="_" then AnonVar bogusSpan else Var bogusSpan s
 
-mkVarEx :: String -> SExpr ()
-mkVarEx s = SExpr_var () $ mkVar s
+mkVarEx :: String -> SExpr PosSpan
+mkVarEx s = SExpr_var bogusSpan $ mkVar s
 
-mkList :: [SExpr ()] -> Maybe (SExpr ())-> SExpr ()
-mkList hds tl = SExpr_list () hds tl
+mkList :: [SExpr PosSpan] -> Maybe (SExpr PosSpan)-> SExpr PosSpan
+mkList hds tl = SExpr_list bogusSpan hds tl
 
-mkLam :: [Var ()] -> SExpr () -> SExpr ()
-mkLam vars bd = SExpr_lam () vars bd
+mkLam :: [Var PosSpan] -> SExpr PosSpan -> SExpr PosSpan
+mkLam vars bd = SExpr_lam bogusSpan vars bd
 
-mkOp :: String -> [SExpr ()] -> SExpr ()
-mkOp opName args = SExpr_op () (Const () opName) False args
+mkOp :: String -> [SExpr PosSpan] -> SExpr PosSpan
+mkOp opName args = SExpr_op bogusSpan (Const bogusSpan opName) False args
 
 mkGets :: String -> SGets
 mkGets "<-" = SGets_poly
 mkGets ":-" = SGets_mono
 mkGets _    = error "gets" -- TODO some better error discipline
 
-mkHead :: String -> Maybe Int -> [[ SExpr () ]] -> SHead ()
-mkHead c i args = SHead () (Const () c) i (-1) args
+mkHead :: String -> Maybe Int -> [[ SExpr PosSpan ]] -> SHead PosSpan
+mkHead c i args = SHead bogusSpan (Const bogusSpan c) i (-1) args
 
-mkClause :: SHead () -> Maybe (SGets, SExpr ()) -> SClause ()
-mkClause h b = SClause () h b
+mkClause :: SHead PosSpan -> Maybe (SGets, SExpr PosSpan) -> SClause PosSpan
+mkClause h b = SClause bogusSpan h b
 
 
 -- lexer 
@@ -147,20 +157,20 @@ failTK = L.reserved L.prolog "fail"
 
 -- Basic structures
 
-variable :: Stream s m Char => ParserT s m (SExpr ())
+variable :: Stream s m Char => ParserT s m (SExpr PosSpan)
 variable = try ( do { s  <- varIdent
                     ; return $ mkVarEx s
                     } -- <?> ("variable")
                )
 
 
-constant :: Stream s m Char => ParserT s m (SExpr ())
+constant :: Stream s m Char => ParserT s m (SExpr PosSpan)
 constant = try ( do { c <- atom
                     ; return $ mkConst c Nothing
                     } -- <?> ("constant")
                )
 
-predConst :: Stream s m Char => ParserT s m (SExpr ())
+predConst :: Stream s m Char => ParserT s m (SExpr PosSpan)
 predConst = try ( do  { predTK
                       ; s <- atom
                       ; n <- optionMaybe $ do 
@@ -171,35 +181,35 @@ predConst = try ( do  { predTK
                       } -- <?> ("predicate constant")
                 )
 {-
-natExpr :: Stream s m Char => ParserT s m (SExpr ())
+natExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 natExpr = try ( do { n <- natural
                    ; return $ SExpr_int () n
                    } <?> ("integer constant")
               )
 
-floatExpr :: Stream s m Char => ParserT s m (SExpr ())
+floatExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 floatExpr = try ( do { f <- float
                      ; return $ SExpr_float () f
                      } <?> ("float constant")
                 )
 -}
-numberExpr :: Stream s m Char => ParserT s m (SExpr ())
+numberExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 numberExpr = try $ choice [ try $ do { n <- float
-                                     ; return $ SExpr_number () $ Right n
+                                     ; return $ SExpr_number bogusSpan $ Right n
                                      } 
                           , do { n <- natural
-                               ; return $ SExpr_number () $ Left n
+                               ; return $ SExpr_number bogusSpan $ Left n
                                }
                           ]                              
 
 
 {- Why implement these separately? 
-trueExpr :: Stream s m Char => ParserT s m (SExpr ())
+trueExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 trueExpr = try $ do { e <- trueTK
                     ; return sTrue
                     }
 
-failExpr :: Stream s m Char => ParserT s m (SExpr ())
+failExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 failExpr = try $ do { e <- failTK
                     ; return sFail
                     }
@@ -212,14 +222,14 @@ number = try $  do { num <- try naturalOrFloat <|> eitherInteger
     where eitherInteger = do { i <- integer; return (Left i); }        
 -}
 
-cut :: Stream s m Char => ParserT s m (SExpr ())
-cut = do { L.symbol L.prolog "!"; return sCut}
+cut :: Stream s m Char => ParserT s m (SExpr PosSpan)
+cut = do { L.symbol L.prolog "!"; return $ sCut bogusSpan}
 
 
-list :: Stream s m Char => ParserT s m (SExpr ())
+list :: Stream s m Char => ParserT s m (SExpr PosSpan)
 list = try listEmpty <|> listNonEmpty -- <?> ("list")  
     where 
-        listEmpty = do { symbol "[]"; return sNil }
+        listEmpty = do { symbol "[]"; return $ sNil bogusSpan }
         listNonEmpty = brackets $ do 
                          es <- listatom
                          tl <- optionMaybe tail
@@ -234,7 +244,7 @@ list = try listEmpty <|> listNonEmpty -- <?> ("list")
 
 -- More complex structures
 
-lambda :: Stream s m Char => ParserT s m (SExpr ())
+lambda :: Stream s m Char => ParserT s m (SExpr PosSpan)
 lambda = try ( do 
     { symbol "\\~" 
     ; vars <- (parens $ commaSep1 $ varIdent) -- <?> "lambda variables"
@@ -250,10 +260,10 @@ lambda = try ( do
 -- parsed.
 -- This along with "lambda" and expressions with operators
 -- describe all expressions.
-application :: Stream s m Char => ParserT s m (SExpr ())
+application :: Stream s m Char => ParserT s m (SExpr PosSpan)
 application  = try ( do 
     { s  <- atomicExpr
-    ; as <- many args -- as :: [[SExpr ()]]  
+    ; as <- many args -- as :: [[SExpr PosSpan]]  
     ; case as of 
         [] -> return s
         _  -> return $ nested_app s as
@@ -264,11 +274,11 @@ application  = try ( do
         -- From a list of argument lists and a head, make a
         -- nested application
         nested_app s as = {- :: SExpr -> [[SExpr]] -> SExpr -} 
-            foldl (SExpr_app () ) s as
+            foldl (SExpr_app bogusSpan ) s as
 
 -- Everything except application or lambda. Functions as head
 -- of application
-atomicExpr :: Stream s m Char => ParserT s m (SExpr ())
+atomicExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 atomicExpr = choice [ variable
                     , constant
                     , predConst
@@ -283,11 +293,11 @@ atomicExpr = choice [ variable
                     ] -- <?> ("atomicExpr")
 
 -- Used as an argument to expr to create expr. parser
-allExpr :: Stream s m Char => ParserT s m (SExpr ())
+allExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 allExpr = try lambda <|> application
 
 {-
-term :: Stream s m Char => ParserT s m (SExpr ())
+term :: Stream s m Char => ParserT s m (SExpr PosSpan)
 term = choice [ variable
               , struct
               , number
@@ -302,7 +312,7 @@ term = choice [ variable
 -- Expressions with operators, built from the operator table
 -- with buildExpressionParser
 -- TODO: better error messages when failing to parse operator
-expr :: Stream s m Char => Int -> ParserT s m (SExpr ())
+expr :: Stream s m Char => Int -> ParserT s m (SExpr PosSpan)
 expr prec = getParser prec allExpr 
     where getParser p t = do
               { st <- getState;
@@ -311,12 +321,12 @@ expr prec = getParser prec allExpr
               } <?> "operator"
 
 -- Expression for args (precedence > ',')
-argExpr :: Stream s m Char => ParserT s m (SExpr ())
+argExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 argExpr = expr 999
 
 -- General expressions (any precedence)
 -- TODO fix ';' issue
-fullExpr :: Stream s m Char => ParserT s m (SExpr ())
+fullExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 fullExpr = expr 1200
 -}
 
@@ -326,14 +336,14 @@ fullExpr = expr 1200
 
 
 -- Expression for args (no ',')
-argExpr :: Stream s m Char => ParserT s m (SExpr ())
+argExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 argExpr = do { st <- getState
              ; let opTbl = map snd $ cachedTable st
              ; buildExpressionParser opTbl allExpr
              } -- <?> "operator"
 
 -- General expressions
-fullExpr :: Stream s m Char => ParserT s m (SExpr ())
+fullExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 fullExpr = do { st <- getState
               ; let opTbl = map snd cachedTable''
                         where cachedTable'  = cachedTable st
@@ -353,19 +363,19 @@ fullExpr = do { st <- getState
 
 
 -- Head of a clause
-head_c :: Stream s m Char => ParserT s m (SHead ())
+head_c :: Stream s m Char => ParserT s m (SHead PosSpan)
 head_c = try $ do c    <- atom  
                   args <- many $ parens $ commaSep1 argExpr
                   return $ mkHead c Nothing args
 
 -- Clause
-clause :: Stream s m Char => ParserT s m (SSent ())
+clause :: Stream s m Char => ParserT s m (SSent PosSpan)
 clause = try $ do h <- head_c
                   b <- optionMaybe $ do 
                       gets <- symbol ":-" <|> symbol "<-" -- mono or poly?
                       body <- try fullExpr <|> allExpr
                       return (mkGets gets, body)
-                  return $ SSent_clause () $ SClause () h b
+                  return $ SSent_clause bogusSpan $ SClause bogusSpan h b
 
 
 {-
@@ -399,11 +409,11 @@ clause = rule --try fact <|> rule
 -}
 
 -- Directives
-command :: Stream s m Char => ParserT s m (SSent ())
+command :: Stream s m Char => ParserT s m (SSent PosSpan)
 command = do { symbol ":-"
              ; ex <- try fullExpr <|> allExpr
              ; symbol "."
-             ; return $ SSent_comm () $ SCommand () ex
+             ; return $ SSent_comm bogusSpan $ SCommand bogusSpan ex
              }
 
 
@@ -426,11 +436,11 @@ sentence = choice [ command'
 
 
 
---sentence :: Stream s m Char => ParserT s m (SExpr ())
+--sentence :: Stream s m Char => ParserT s m (SExpr PosSpan)
 --sentence = fullExpr `followedBy` dot <?> ("sentence") 
 
 -- TODO : Add more sentence types
-sentence :: Stream s m Char => ParserT s m (SSent ())
+sentence :: Stream s m Char => ParserT s m (SSent PosSpan)
 sentence = try command <|> (clause `followedBy` dot)-- <?> ("sentence") 
 
 
@@ -457,7 +467,7 @@ opDirective _ = return ()
 
 
 -- Build operator table, save it in monadic state
-buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator s (ParseState s m) m (SExpr ())])]
+buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator s (ParseState s m) m (SExpr PosSpan)])]
 buildOpTable = do { st <- getState
                   ; return $ mkOpTable (operatorTable st)
                   }

@@ -6,7 +6,7 @@ module TcUtils where
 
 import Basic
 import Types 
-import Loc
+import Parser
 import Syntax
 import Error
 import Data.List
@@ -46,13 +46,15 @@ lookupPoly a = (lookup a).polySigs
 type PredSig = (Symbol, Int)
 type TcEnv = TyEnv Symbol PredSig
 
-type Constraint a = ((RhoType,SExpr a), (RhoType, SExpr a))
+-- A constraint is a pair of types with an associated expression. 
+-- Convention: first type is the type syntactically assossiated with the expression
+type Constraint a = (RhoType, RhoType, SExpr a)
 
 -- Type Checker state
 data TcState  = 
     TcState { uniq   :: Int             -- next fresh variable 
-            , cnts   :: [Constraint ()]  -- generated constraints
-            , exists :: [RhoSig Symbol] -- existentially quantified vars 
+            , cnts   :: [Constraint (Typed PosSpan)]  -- generated constraints TODO enrich this with locs.
+            , exists :: [RhoSig Symbol] -- existentially quantified vars
             , msgs   :: Messages        -- error messages
             }
 
@@ -80,8 +82,8 @@ restrictHead h =  h |> allHeadExprs
               mkMsgs $ mkErr TypeError Fatal $ text "predicate or lambda in head"
 
 -- Add a constraint to the state
-addConstraint rho1 ex1 rho2 ex2 = 
-    modify (\st -> st { cnts = ( (rho1,ex1),(rho2,ex2) ) : cnts st})
+addConstraint rho1 rho2 expr = 
+    modify (\st -> st { cnts = ( rho1, rho2, expr ) : cnts st})
 
 -- Add an existentially quantified var. to the state 
 addExist var tp = 
@@ -95,7 +97,7 @@ newAlpha = do
     put st{uniq = n+1}
     return $ Alpha ('a' : show n)
 
-newPhi   :: Monad m => Tc m Phi
+newPhi :: Monad m => Tc m Phi
 newPhi = do
     st <- get
     let n = uniq st
@@ -117,9 +119,9 @@ freshen :: Monad m => PolyType -> Tc m PiType
 freshen _ = return $ error "not implemented yet!"
 
 -- Work with new variables in the environment
-withEnvVars :: Monad m => [Symbol] -> [RhoType]-> Tc m a -> Tc m a
-withEnvVars newVs rhos = 
-    local (\env -> env{ rhoSigs = (zip newVs rhos) ++ rhoSigs env})
+withEnvVars :: Monad m => [(Symbol,RhoType)] -> Tc m a -> Tc m a
+withEnvVars bindings = 
+    local (\env -> env{ rhoSigs = bindings ++ rhoSigs env})
 
 -- Work with new predicate constants to the environment
 withEnvPreds newCons polys =

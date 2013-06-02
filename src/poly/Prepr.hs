@@ -98,8 +98,8 @@ fixExpr predSt ar ex = case ex of
             (fmap (fixExpr False 0) tl)
             -- fmap maps into Maybe 
 
-    SExpr_eq a ex1 ex2 ->
-        SExpr_eq a (fixExpr False 0 ex1) (fixExpr False 0 ex2)
+    --SExpr_eq a ex1 ex2 ->
+    --    SExpr_eq a (fixExpr False 0 ex1) (fixExpr False 0 ex2)
    
     SExpr_ann a ex tp -> SExpr_ann a ex tp --TODO implement this!
 

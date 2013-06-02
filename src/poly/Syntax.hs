@@ -80,7 +80,7 @@ data SExpr a = --SExpr_paren   a (SExpr a)  -- in Parens
              | SExpr_lam  a [Var a] (SExpr a)    -- lambda abstr.
              | SExpr_list a [SExpr a] (Maybe (SExpr a))
                           -- list: initial elements, maybe tail
-             | SExpr_eq   a (SExpr a) (SExpr a)  -- unification
+             -- | SExpr_eq   a (SExpr a) (SExpr a)  -- unification
              | SExpr_ann  a (SExpr a) RhoType    -- type annotated
     deriving Functor
 
@@ -128,6 +128,9 @@ instance HasName (Const a) where
 instance HasName (Var a ) where 
     nameOf (Var _ nm)  = nm
     nameOf (AnonVar _) = "_" -- TODO
+
+isAnon (AnonVar _ ) = True
+isAnon _ = False 
 
 -- Head
 
@@ -216,8 +219,8 @@ instance Flatable SExpr where
                  Nothing -> [] 
                  Just ex -> flatten ex
             )
-    flatten ex@(SExpr_eq _ ex1 ex2) =
-        ex : (flatten ex1) ++ (flatten ex2)
+    --flatten ex@(SExpr_eq _ ex1 ex2) =
+    --    ex : (flatten ex1) ++ (flatten ex2)
     flatten ex@(SExpr_ann _ ex' _) =
         ex : (flatten ex')
     flatten ex = [ex]  -- nothing else has subexpressions
@@ -235,7 +238,7 @@ instance HasType a => HasType (SExpr a) where
     typeOf (SExpr_op      a _ _ _    ) = typeOf a
     typeOf (SExpr_lam     a _ _      ) = typeOf a
     typeOf (SExpr_list    a _ _      ) = typeOf a
-    typeOf (SExpr_eq      a _ _      ) = typeOf a
+    --typeOf (SExpr_eq      a _ _      ) = typeOf a
     typeOf (SExpr_ann     a _ _      ) = typeOf a
 
     hasType tp (SExpr_const   a b c d e) = SExpr_const   (hasType tp a) b c d e
@@ -246,7 +249,7 @@ instance HasType a => HasType (SExpr a) where
     hasType tp (SExpr_op      a b c d  ) = SExpr_op      (hasType tp a) b c d    
     hasType tp (SExpr_lam     a b c    ) = SExpr_lam     (hasType tp a) b c      
     hasType tp (SExpr_list    a b c    ) = SExpr_list    (hasType tp a) b c      
-    hasType tp (SExpr_eq      a b c    ) = SExpr_eq      (hasType tp a) b c      
+    --hasType tp (SExpr_eq      a b c    ) = SExpr_eq      (hasType tp a) b c      
     hasType tp (SExpr_ann     a b c    ) = SExpr_ann     (hasType tp a) b c      
 
 
@@ -329,30 +332,30 @@ instance HasLocation a => HasLocation (SGoal a) where
 
 -- true and fail constants
 
-sTrue :: SExpr ()
-sTrue =  SExpr_const () 
-                     (Const () "true")  
-                     True
-                     Nothing
-                     (-1)
-sFail :: SExpr ()
-sFail =  SExpr_const () 
-                     (Const () "fail")  
+sTrue :: a -> SExpr a
+sTrue a = SExpr_const a 
+                      (Const a "true")  
+                      True
+                      Nothing
+                      (-1)
+sFail :: a -> SExpr a
+sFail a = SExpr_const a 
+                      (Const a "fail")  
+                      True
+                      Nothing
+                      (-1)
+
+sCut :: a -> SExpr a
+sCut a = SExpr_const a 
+                     (Const a "!")  
                      True
                      Nothing
                      (-1)
 
-sCut :: SExpr ()
-sCut =  SExpr_const () 
-                    (Const () "!")  
-                    True
-                    Nothing
-                    (-1)
-
-sNil :: SExpr ()
-sNil = SExpr_const () 
-                   (Const () "[]")  
-                   False
-                   Nothing
-                   (-1)
+sNil :: a -> SExpr a
+sNil a = SExpr_const a 
+                     (Const a "[]")  
+                     False
+                     Nothing
+                     (-1)
 
