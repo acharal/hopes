@@ -37,9 +37,22 @@ tcGroup group = sequence $ map tcPredDef group
 
 
 -- TypeCheck a clause
---tcClause (SClause a hd bd) = do 
-    
-
+tcClause (SClause a hd bd) = do 
+    -- Find all variables in the head and put them in the
+    -- environment
+    let vars = allHeadVars hd
+    alphas <- newAlphas (length vars)
+    let varTypes = map Rho_var alphas 
+    hd' <- withEnvVars (zip vars varTypes) (tcHead hd)
+    case bd of 
+        Just (gets, expr) -> do
+            expr' <- tcExpr expr
+            case gets of 
+                SGetsMono -> 
+                    addConstraint 
+        Nothing -> do
+            addConstraint (typeOfHead 
+            
 
 
 -- TypeCheck an expression

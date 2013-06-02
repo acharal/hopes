@@ -22,7 +22,7 @@ class HasName a where
     
 
 
--- The reverse application operator. Thanks F#!
+-- The reverse application/forward pipe operator. Thanks F#!
 
 infixl 0 |>
 

@@ -141,8 +141,8 @@ allHeadExprs h = h |> headArgs
                    |> concatMap flatten 
                  
 -- Find all variables in a clause head 
-allHeadVars h = h |> allHeadExprs
-                  |> filter isVar
-                  |> map ( \(SExpr_var _ v) -> nameOf v)
-
+allHeadNamedVars h = h |> allHeadExprs
+                       |> filter isVar
+                       |> map ( \(SExpr_var _ v) -> nameOf v)
+                       |> filter (\= ' ')
 
