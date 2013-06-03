@@ -1,5 +1,7 @@
 module Basic where
 
+import Text.Parsec.Pos
+
 -- Symbol is an alias for the string type 
 type Symbol = String
 
@@ -27,3 +29,14 @@ class HasName a where
 infixl 0 |>
 
 x |> f = f x
+
+-- Position spans
+bogusPos = newPos "bogusFile" (-1) (-1) 
+data PosSpan = PosSpan SourcePos SourcePos 
+    deriving (Eq)
+instance Show PosSpan where
+    show p = "" -- TODO: show better
+
+bogusSpan = PosSpan bogusPos bogusPos
+
+

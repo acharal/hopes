@@ -6,7 +6,7 @@ module TcUtils where
 
 import Basic
 import Types 
-import Parser
+--import Parser
 import Syntax
 import Error
 import Data.List
@@ -72,9 +72,8 @@ type Tc m = ReaderT TcEnv (StateT TcState (ErrorT Messages m))
 -- TODO: error discipline
 
 
-restrictHead :: Monad m => SHead a -> Tc m ()
-restrictHead h =  h |> allHeadExprs  
-                    |> mapM_ restrict
+restrictHead :: Monad m => SExpr a -> Tc m ()
+restrictHead h =  h |> flatten |> mapM_ restrict
     where restrict (SExpr_predCon _ _ _ _) = throwError restrictError
           restrict (SExpr_lam _ _ _)       = throwError restrictError
           restrict _                       = return ()
@@ -114,35 +113,62 @@ typeWithArity n = do
     resType    <- newPhi
     return $ Pi_fun (map (\al -> Rho_var al) paramTypes) (Pi_var resType)
 
+-- Turn pi type to poly without generalized variables
+piToPoly = Poly_gen [] []
+-- Reverse
+polyToPi (Poly_gen [] [] pi) = pi
+polyToPi poly = error $ "Monomorphism violation: " ++ show poly
+
 -- Freshen a polymoprhic type TODO: MOCKUP!
 freshen :: Monad m => PolyType -> Tc m PiType
 freshen _ = return $ error "not implemented yet!"
 
+-- Empty the state (except messages) to work in a new group
+withEmptyState m = do
+    modify (\st -> st{ uniq   = 1
+                     , exists = []
+                     , cnts   = []
+                     }
+           )
+    local (\env -> env{rhoSigs = []}) m
+ 
 -- Work with new variables in the environment
 withEnvVars :: Monad m => [(Symbol,RhoType)] -> Tc m a -> Tc m a
 withEnvVars bindings = 
     local (\env -> env{ rhoSigs = bindings ++ rhoSigs env})
 
--- Work with new predicate constants to the environment
-withEnvPreds newCons polys =
-    local (\env -> env{ polySigs = zip newCons polys ++ polySigs env})
+-- Work with NO variable bindings in the environment
+withNoEnvVars :: Monad m => Tc m a -> Tc m a
+withNoEnvVars m = do
+    modify ( \st  -> st {exists  = []} )
+    local  ( \env -> env{rhoSigs = []} ) m
 
+-- Work with new predicate constants to the environment
+withEnvPreds bindings =
+    local (\env -> env{ polySigs = bindings ++ polySigs env})
+
+    
 
 {-
  - Other auxilliary TypeCheck functions
  -}
 
+-- Find all named variables in an expression
+allNamedVars expr = expr |> flatten 
+                         |> filter isVar 
+                         |> map ( \(SExpr_var _ v) -> nameOf v)
+                         |> filter (/= "_")
 
--- Find all subexpressions in a clause head
 
-allHeadExprs :: SHead a -> [SExpr a]
-allHeadExprs h = h |> headArgs 
-                   |> concat 
-                   |> concatMap flatten 
-                 
--- Find all variables in a clause head 
-allHeadNamedVars h = h |> allHeadExprs
-                       |> filter isVar
-                       |> map ( \(SExpr_var _ v) -> nameOf v)
-                       |> filter (\= ' ')
+{- 
+ - Substitutions
+ -}
+--TODO : MOCKUP!
+data Substitution
 
+-- substitute a type with another
+substitute :: Substitution -> RhoType -> RhoType
+substitute _ _ = error "subtitute : not implemented yet!"
+
+genEnvAndReturn :: Monad m => Substitution -> SDepGroup (Typed a) -> Tc m (Typed a)
+genEnvAndReturn _ = return $ error "subtitute : not implemented yet!"

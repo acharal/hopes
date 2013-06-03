@@ -5,12 +5,13 @@
 
 module Parser where
 
+import Basic
 import qualified Lexer as L
 import Syntax
 import qualified Operator as Operators
 import Text.Parsec
 import Text.Parsec.Expr
-import Text.Parsec.Pos
+--import Text.Parsec.Pos
 import Data.Char
 import Data.List 
 import Control.Monad (when)
@@ -26,16 +27,6 @@ data ParseState s m =
             } 
 
 type ParserT s m a = ParsecT s (ParseState s m) m a
-
--- Position
-
-bogusPos = newPos "bogusFile" (-1) (-1) 
-data PosSpan = PosSpan SourcePos SourcePos 
-    deriving (Eq)
-instance Show PosSpan where
-    show p = "bgspn" -- TODO: show better
-
-bogusSpan = PosSpan bogusPos bogusPos
 
 
 -- helpers
@@ -74,11 +65,16 @@ mkGets "<-" = SGets_poly
 mkGets ":-" = SGets_mono
 mkGets _    = error "gets" -- TODO some better error discipline
 
-mkHead :: String -> Maybe Int -> [[ SExpr PosSpan ]] -> SHead PosSpan
-mkHead c i args = SHead bogusSpan (Const bogusSpan c) i (-1) args
+-- changed
+mkHead :: String -> Maybe Int -> [[ SExpr PosSpan ]] -> SExpr PosSpan
+mkHead c i args = 
+    let headConst = mkConst c i in
+    case args of 
+        [] -> headConst
+        _  -> foldl (SExpr_app bogusSpan ) headConst args
 
-mkClause :: SHead PosSpan -> Maybe (SGets, SExpr PosSpan) -> SClause PosSpan
-mkClause h b = SClause bogusSpan h b
+mkClause :: SExpr PosSpan -> Maybe (SGets, SExpr PosSpan) -> SClause PosSpan
+mkClause hd bd = SClause bogusSpan hd bd
 
 
 -- lexer 
@@ -362,8 +358,8 @@ fullExpr = do { st <- getState
               } -- <?> "operator"
 
 
--- Head of a clause
-head_c :: Stream s m Char => ParserT s m (SHead PosSpan)
+-- Head of a clause -- changed here
+head_c :: Stream s m Char => ParserT s m (SExpr PosSpan)
 head_c = try $ do c    <- atom  
                   args <- many $ parens $ commaSep1 argExpr
                   return $ mkHead c Nothing args

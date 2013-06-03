@@ -39,7 +39,7 @@ data SCommand a = SCommand a (SExpr a)
 
 -- A clause. Nothing in the body represents a fact, Just a rule.
 data SClause a = SClause { clInfo :: a 
-                         , clHead :: SHead a
+                         , clHead :: SExpr a --SHead a
                          , clBody :: Maybe (SGets, SExpr a)
                          }
     deriving Functor
@@ -48,6 +48,7 @@ data SClause a = SClause { clInfo :: a
 -- TODO implement polymorphic
 data SGets = SGets_mono | SGets_poly 
 
+{- Trying to simplify and remove this
 -- Clause head
 data SHead a = SHead { headInfo :: a        -- Info
                      , headName :: Const a  -- clause name 
@@ -57,7 +58,7 @@ data SHead a = SHead { headInfo :: a        -- Info
                      , headArgs  :: [[SExpr a]] -- Arguments
                      }
     deriving Functor
-
+-}
 -- Expressions 
 data SExpr a = --SExpr_paren   a (SExpr a)  -- in Parens  
                SExpr_const   a            -- constant 
@@ -89,10 +90,11 @@ data SExpr a = --SExpr_paren   a (SExpr a)  -- in Parens
 -- by the type checker
 
 -- All clauses defining a predicate
-data SPredDef a = SPredDef { predDefName    :: String 
+data SPredDef a = SPredDef { predDefName    :: Symbol
                            , predDefArity   :: Int
                            , predDefClauses :: [SClause a]
                            } 
+    deriving Functor
 
 -- A dependency group
 type SDepGroup a = [SPredDef a]
@@ -112,7 +114,7 @@ deriving instance Show a => Show (Const a)
 deriving instance Show a => Show (Var a)
 deriving instance Show a => Show (SClause a)
 deriving instance           Show SGets
-deriving instance Show a => Show (SHead a)
+--deriving instance Show a => Show (SHead a)
 deriving instance Show a => Show (SExpr a)
 deriving instance Show a => Show (SGoal a)
 deriving instance Show a => Show (SCommand a)
@@ -134,12 +136,12 @@ isAnon _ = False
 
 -- Head
 
-instance HasName (SHead a) where 
-    nameOf = nameOf.headName
-instance HasArity (SHead a) where
-    arity h = case headGivenAr h of 
-        Just n  -> Just n
-        Nothing -> Just $ headInfAr h
+--instance HasName (SHead a) where 
+--    nameOf = nameOf.headName
+--instance HasArity (SHead a) where
+--    arity h = case headGivenAr h of 
+--        Just n  -> Just n
+--        Nothing -> Just $ headInfAr h
 
 -- PredDef
 
@@ -174,8 +176,14 @@ isFact _ = False
 -- Filter everything that can be a predicate constant
 isPredConst (SExpr_predCon _ _ _ _) = True
 isPredConst (SExpr_const _ _ predStatus _ _) = predStatus
-isPredConst (SExpr_op  _ _ predStatus _) = predStatus 
 isPredConst _ = False
+
+-- Everything that can contain a predicate constant
+hasPredConst (SExpr_predCon _ _ _ _) = True
+hasPredConst (SExpr_const _ _ predStatus _ _) = predStatus
+hasPredConst (SExpr_op  _ _ predStatus _) = predStatus 
+hasPredConst _ = False
+
 
 isVar (SExpr_var _ _) = True
 isVar _              = False
@@ -196,11 +204,15 @@ instance HasArity (SExpr a) where
     arity _ = Nothing
 
 instance HasName (SExpr a) where 
-    --nameOf (SExpr_paren _ ex) = nameOf ex
-    nameOf (SExpr_const _ c _ _ _) = nameOf c
-    nameOf (SExpr_predCon _ c _ _) = nameOf c
-    nameOf (SExpr_op _ op _ _)  = nameOf op
-    nameOf _ = ""
+    nameOf (SExpr_const   _ c _ _ _) = nameOf c
+    nameOf (SExpr_var     _ v      ) = nameOf v
+    nameOf (SExpr_predCon _ c _ _  ) = nameOf c
+    nameOf (SExpr_app     _ ex' _  ) = nameOf ex'
+    nameOf (SExpr_op      _ op _ _ ) = nameOf op
+    nameOf (SExpr_number  _ n      ) = show n
+    nameOf (SExpr_lam     _ _ _    ) = "#LAMBDA#"
+    nameOf (SExpr_list    _ _ _    ) = "#LIST#"
+    nameOf (SExpr_ann     _ ex' _  ) = nameOf ex' 
 
 -- Get a list of all subexpressions contained in an expression
 instance Flatable SExpr where

@@ -5,57 +5,87 @@ import Prepr
 import TcUtils
 import Syntax
 import Types
-import Parser
+--import Parser
+import Error
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.Error
 import Data.Maybe(fromJust)
-
+import Text.PrettyPrint(text)
 
 {-
  - Type check a program
    - Create constraints
    - Add type annotations to syntax tree
+ - Structures broader than expressions have type o by
+ -   convention
  -}
 
+
 {-
-tcProgram :: SDepGroupDag a    -- program
-          -> TcEnv             -- initial env.
-          -> (SDepGroupDag (Typed a), TcEnv) 
-             -- type annotated program along with final env.
-
-tcProgram groups env = 
-    sequence $ TcEnv
-
-{-tcGroup :: SDepGroup a -- group
-        -> TcEnv       -- initial env.
-        -> (SDepGroup (Typed a), TcEnv) 
-           -- type annotated program along with final env.
+tcProgram 
 -}
-tcGroup :: Monad m => SDepGroup a -> Tc m (SDepGroup (Typed a))
-tcGroup group = sequence $ map tcPredDef group
-    -}
 
 
--- TypeCheck a clause
+-- typeCheck a dependency group
+tcGroup group = do
+    -- Find preds to be defined in this group
+    let preds = map (\pr -> ( predDefName pr , predDefArity pr)) group
+    -- Make the most general types
+    types <- mapM (typeWithArity.snd) preds
+    let polys = map piToPoly types
+    -- typeCheck group with the new predicates in the env.
+    -- and no other state
+    group' <- withEnvPreds (zip preds polys) $ withEmptyState (mapM tcPredDef group)
+    -- Get the created constraints from the state and unify
+    stCons <- gets cnts
+    subst  <- unify stCons
+    -- Substitute in type annotations in group
+    let groupSub = map (fmap $ substInTyped subst) group'
+        -- ... and in new predicate types
+        typesSub = map (substInTyped subst) types
+    -- Add the generalized types to the environment
+    withGenPreds (zip preds typesSub) (return groupSub)
+    where substInTyped subst typed = 
+            let newType = typed |> typeOf |> substitute subst in
+            hasType newType typed
+
+-- typeCheck a predicate definition
+tcPredDef predDef = do
+    -- Begin with new variable bindings for each clause
+    clauses' <- mapM (withNoEnvVars.tcClause) (predDefClauses predDef)
+    return $ predDef{predDefClauses = clauses'}
+
+-- typeCheck a clause
 tcClause (SClause a hd bd) = do 
-    -- Find all variables in the head and put them in the
-    -- environment
-    let vars = allHeadVars hd
+    -- Find all variables in the head and put them in the environment
+    let vars = allNamedVars hd
     alphas <- newAlphas (length vars)
     let varTypes = map Rho_var alphas 
-    hd' <- withEnvVars (zip vars varTypes) (tcHead hd)
+    hd' <- withEnvVars (zip vars varTypes) (tcExpr hd)
+    let rho_o = Rho_pi Pi_o
     case bd of 
         Just (gets, expr) -> do
-            expr' <- tcExpr expr
+            expr' <- withEnvVars (zip vars varTypes) (tcExpr expr)
             case gets of 
-                SGetsMono -> 
-                    addConstraint 
+                SGets_mono -> do
+                    -- Both head and body are booleans
+                    addConstraint (typeOf hd') rho_o hd'
+                    addConstraint (typeOf expr') rho_o expr'
+                    return $ SClause (typed rho_o a) hd' $ Just (gets, expr')
+                SGets_poly -> do
+                    -- head and body must have the same type
+                    addConstraint (typeOf expr') (typeOf hd') expr'
+                    return $ SClause (typed rho_o a) hd' $ Just (gets, expr')
         Nothing -> do
-            addConstraint (typeOfHead 
-            
+            -- No body implies a true constant as expression,
+            -- so type is o
+            addConstraint (typeOf hd') rho_o hd'
+            return $ SClause (typed rho_o a) hd' Nothing
+ 
 
 
--- TypeCheck an expression
+-- typeCheck an expression
 tcExpr :: Monad m => SExpr PosSpan 
                   -> Tc m ( SExpr (Typed PosSpan) )
 
@@ -199,7 +229,7 @@ tcExpr (SExpr_lam a vars bd) = do
     return $ SExpr_lam (typed lamType a) vars' bd'
 
 -- Type annotated
-tcExpr (SExpr_ann _ _ _) = throwError $ internalErr "annotations not impleented yet"
+tcExpr (SExpr_ann _ _ _) = throwError $ mkMsgs $ internalErr $ text "annotations not impleented yet"
 
 -- Utility function to search environment for expr.
 findPoly :: Monad m => Symbol -> Int -> Tc m RhoType
@@ -214,3 +244,6 @@ findPoly cnm ar = do
             return $ Rho_pi pi
     return tp
 
+
+unify :: Monad m => [Constraint (Typed PosSpan)] -> Tc m Substitution
+unify _ = return $ error "Unify: not implemented yet"
