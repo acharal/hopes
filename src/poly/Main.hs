@@ -1,5 +1,5 @@
 {-
- - A main module useful for testing
+ - A main module for testing
  -}
 
 
@@ -12,8 +12,9 @@ import Syntax
 import Parser
 import Prepr
 import TcUtils
+import TypeCheck
 
-
+import Control.Monad.Identity
 
 test file testThis = do 
     let fileFull = "../../pl/examples/" ++ file ++".pl" 
@@ -22,6 +23,9 @@ test file testThis = do
  
 testParse a = mapM_ (\x-> putStrLn $ show x) a
 testPre   a = mapM_ (\x-> putStrLn $ show x) (progToGroupDag a)
-
+testTc    a = case (runIdentity $ runTc emptyTcEnv $ progToGroupDag a) of
+    Left msgs -> mapM_ (putStrLn . show . ppr) (fst msgs)
+    Right dag -> mapM_ (putStrLn.show) (tcOutPreds dag)
+                    
 simple = "simple"
 aleph  = "aleph"

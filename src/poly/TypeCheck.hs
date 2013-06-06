@@ -5,11 +5,11 @@ import Prepr
 import TcUtils
 import Syntax
 import Types
---import Parser
 import Error
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Error
+import Control.Monad.Identity
 import Data.Maybe(fromJust)
 import Text.PrettyPrint(text)
 
@@ -21,18 +21,55 @@ import Text.PrettyPrint(text)
  -   convention
  -}
 
+data TcOutput = 
+    TcOutput { -- annotated program 
+               tcOutSyntax   :: SDepGroupDag (Typed PosSpan)  
+               -- new environment predicates
+             , tcOutPreds    :: [PolySig PredSig]            
+               -- Warnings
+             , tcOutWarnings :: Messages
+             }
 
-{-
-tcProgram 
+
+-- run the typeCheck monad with a starting environment
+runTc :: Monad m => TcEnv -> SDepGroupDag PosSpan -> m (Either Messages TcOutput)
+runTc env dag = runErrorT $ evalStateT (runReaderT (tcDag dag) env) emptyTcState 
+
+
+
+
+-- typeCheck program, and output all relevant information
+tcDag :: Monad m => SDepGroupDag PosSpan -> Tc m TcOutput
+{-tcDag dag = do { dag'     <- mapM tcGroup dag
+               ; predSigs <- asks polySigs
+               ; warnings <- gets msgs
+               ; return $ (dag', predSigs, warnings) 
+               } --`catchError` (\err -> return $ Left err)
 -}
+
+tcDag dag = do
+    (dag', preds) <- walk dag []
+    warnings      <- gets msgs
+    return $ TcOutput dag' preds warnings
+    
+    where -- reached the end of the dag, so return all preds. you found
+          walk [] preds = return ([], preds)
+          walk (grp:grps) preds = do
+              -- TypeCheck current group with current predicates
+              (grp' , preds' ) <- withEnvPreds preds $ tcGroup grp
+              -- Continue with the extra you found in this group
+              (grps', preds'') <- walk grps (preds' ++ preds)
+              -- return all groups and all predicates
+              return (grp':grps', preds'')
+
 
 
 -- typeCheck a dependency group
 tcGroup group = do
-    -- Find preds to be defined in this group
+    -- Find predicates to be defined in this group
     let preds = map (\pr -> ( predDefName pr , predDefArity pr)) group
     -- Make the most general types
-    types <- mapM (typeWithArity.snd) preds
+    types <- mapM (typeOfArity.snd) preds
     let polys = map piToPoly types
     -- typeCheck group with the new predicates in the env.
     -- and no other state
@@ -40,15 +77,18 @@ tcGroup group = do
     -- Get the created constraints from the state and unify
     stCons <- gets cnts
     subst  <- unify stCons
-    -- Substitute in type annotations in group
-    let groupSub = map (fmap $ substInTyped subst) group'
+    let -- Substitute in type annotations in group
+        groupSub = map (fmap $ substInTyped subst) group'
         -- ... and in new predicate types
-        typesSub = map (substInTyped subst) types
+        typesSub = map (substInPi subst) types
     -- Add the generalized types to the environment
-    withGenPreds (zip preds typesSub) (return groupSub)
+    --withEnvPreds (zip preds $ map generalize typesSub) (return groupSub)
+    return (groupSub, zip preds $ map generalize typesSub)
     where substInTyped subst typed = 
-            let newType = typed |> typeOf |> substitute subst in
-            hasType newType typed
+              let newType = typed |> typeOf |> subst in
+              hasType newType typed
+          substInPi subst pi = pi'
+              where Rho_pi pi' = subst $ Rho_pi pi
 
 -- typeCheck a predicate definition
 tcPredDef predDef = do
@@ -58,6 +98,8 @@ tcPredDef predDef = do
 
 -- typeCheck a clause
 tcClause (SClause a hd bd) = do 
+    -- Make sure head contains no illegal expressions
+    restrictHead hd
     -- Find all variables in the head and put them in the environment
     let vars = allNamedVars hd
     alphas <- newAlphas (length vars)
@@ -124,8 +166,8 @@ tcExpr ex@(SExpr_var a var@(Var _ _)) = do
         tp'@(Just _) -> return tp'
         Nothing  -> do
             -- If not found, search in exist. vars
-            st <- get 
-            return $ lookup (nameOf var) (exists st)
+            exBound <- gets exists
+            return $ lookup (nameOf var) exBound
     case tp of
         -- Found var in env+state
         Just tp' -> return $ fmap (typed tp') ex
@@ -151,7 +193,6 @@ tcExpr ex@(SExpr_app a fun@(SExpr_const _ _ False _ _) args) = do
     args' <- mapM tcExpr args
     -- Args must have type i
     mapM_ (\ex -> addConstraint (typeOf ex) Rho_i ex) args'
-    let argTps = map typeOf args'
     return $ SExpr_app (typed Rho_i a) fun' args'
 
 
@@ -160,8 +201,8 @@ tcExpr (SExpr_op a c False args) = do
     let c' = fmap (typed Rho_i) c -- TODO: UGLY, using i type as sigma
     -- typecheck args
     args' <- mapM tcExpr args
+    -- Args must have type i
     mapM_ (\ex -> addConstraint (typeOf ex) Rho_i ex) args'
-    let argTps = map typeOf args'
     return $ SExpr_op (typed Rho_i a) c' False args'
 
 -- List
@@ -215,7 +256,7 @@ tcExpr (SExpr_lam a vars bd) = do
     let varNames = map nameOf vars
     -- Bindings to pass down to body as extra env. Only named
     -- vars are needed
-    let bindings = zip varNames argTypes |> filter (\(nm, _) -> nm /= "_")
+    let bindings = zip varNames argTypes |> filter(\x -> fst x /= "_") 
     -- Put variables in the environment with fresh types
     -- and typeCheck body
     bd' <- withEnvVars bindings (tcExpr bd)
@@ -224,8 +265,9 @@ tcExpr (SExpr_lam a vars bd) = do
     let -- Type of the whole expression 
         lamType = Rho_pi $ Pi_fun argTypes (Pi_var phi)
         -- Variables with their types
-        vars'   = zip vars alphas |> 
-                  map ( \(var, al) -> fmap (typed (Rho_var al)) var)
+        vars'   = [ fmap (typed tp) var
+                  | (var,tp) <- zip vars argTypes 
+                  ] 
     return $ SExpr_lam (typed lamType a) vars' bd'
 
 -- Type annotated
@@ -237,13 +279,61 @@ findPoly cnm ar = do
     envTp <- asks $ lookupPoly (cnm,ar)
     tp <- case envTp of 
         Nothing -> do -- Type is left free
-            pi <- typeWithArity ar
+            pi <- typeOfArity ar
             return $ Rho_pi pi
         Just envTp' -> do
             pi <- freshen envTp'
             return $ Rho_pi pi
     return tp
 
+-- Unification
+unify :: (Monad m, Show a) => [Constraint a] -> Tc m Substitution
+-- No constraints
+unify [] = return id
+-- Equal types
+unify ( (rho1, rho2, _) : tl) | rho1 == rho2 = unify tl
+-- Argument variable
+unify ( (Rho_var alpha, rho2, _) : tl) 
+    | not $ alpha `elem` freeAlphas rho2 = do
+        let subst = substAlpha alpha rho2
+        subst' <- unify (substCnts subst tl)  
+        return $ subst' . subst
+unify ( (rho1, Rho_var alpha, _) : tl) 
+    | not $ alpha `elem` freeAlphas rho1 = do
+        let subst = substAlpha alpha rho1 
+        subst' <- unify (substCnts subst tl)  
+        return $ subst' . subst
+-- Predicate variable
+unify ( (Rho_pi (Pi_var phi), rho2@(Rho_pi pi), _) : tl ) 
+    | not $ phi `elem` freePhis rho2 = do
+        let subst = substPhi phi pi
+        subst' <- unify (substCnts subst tl)
+        return $ subst' . subst
+unify ( (rho1@(Rho_pi pi), Rho_pi (Pi_var phi), _) : tl ) 
+    | not $ phi `elem` freePhis rho1 = do
+        let subst = substPhi phi pi
+        subst' <- unify (substCnts subst tl)
+        return $ subst' . subst 
+-- Predicate function
+unify ( ( f1@(Rho_pi (Pi_fun rhos1 pi1)), f2@(Rho_pi (Pi_fun rhos2 pi2)), ex ) : tl) 
+    | length rhos1 == length rhos2 = do
+        -- Try to unify subtypes of these types 
+        partial <- unify ( (Rho_pi pi1, Rho_pi pi2, ex) : 
+                            zip3 rhos1 rhos2 (replicate (length rhos1) ex) 
+                          )
+                   -- if you catch something, throw a better message 
+                   -- for the whole type
+                   `catchError` (\_ -> throwError $ unificationError f1 f2 ex)
+        subst <- unify (substCnts partial tl)
+        return $ partial . subst
+-- Everything else is unification error
+unify ((rho1, rho2, ex) : _ ) = 
+    throwError $ unificationError rho1 rho2 ex
 
-unify :: Monad m => [Constraint (Typed PosSpan)] -> Tc m Substitution
-unify _ = return $ error "Unify: not implemented yet"
+
+unificationError rho1 rho2 ex = 
+    mkMsgs $ mkErr TypeError Fatal 
+           $ text $ "Unification Error : " ++ show ex  ++ " has type " ++ 
+                    show rho2 ++ " but was expected with type " ++ show rho1
+
+

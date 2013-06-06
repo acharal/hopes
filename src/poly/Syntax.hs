@@ -1,9 +1,9 @@
 module Syntax where
 
 import Types
-import Loc
+--import Loc
 import Basic
-import qualified Data.Foldable
+--import qualified Data.Foldable
 {-
  - Concrete syntax tree for the surface language.
  - Expressions are polymorphic to include extra information,
@@ -19,8 +19,8 @@ data Var a = Var a Symbol -- named variable
     deriving Functor
 
 {-
- - The syntactic structures are organized recursively from in
- - inclusion order
+ - The syntactic structures are organized recursively 
+ - in inclusion order
  -}
 
 -- Any sentence of the program
@@ -210,12 +210,12 @@ instance HasName (SExpr a) where
     nameOf (SExpr_app     _ ex' _  ) = nameOf ex'
     nameOf (SExpr_op      _ op _ _ ) = nameOf op
     nameOf (SExpr_number  _ n      ) = show n
-    nameOf (SExpr_lam     _ _ _    ) = "#LAMBDA#"
-    nameOf (SExpr_list    _ _ _    ) = "#LIST#"
+    nameOf (SExpr_lam     _ _ _    ) = error "Name of lambda"
+    nameOf (SExpr_list    _ _ _    ) = error "Name of list"
     nameOf (SExpr_ann     _ ex' _  ) = nameOf ex' 
 
 -- Get a list of all subexpressions contained in an expression
-instance Flatable SExpr where
+instance Flatable (SExpr a) where
     --flatten ex@(SExpr_paren a ex') = ex : flatten ex'
     flatten ex@(SExpr_app _ func args) =
         ex : func : ( concat $ map flatten args)

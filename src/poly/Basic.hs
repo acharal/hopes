@@ -7,10 +7,10 @@ type Symbol = String
 
 -- A class describing a data structure that can be flattened
 -- into a list
-class Flatable f where 
-    flatten :: f a -> [f a]
+class Flatable a where 
+    flatten :: a -> [a]
 
-instance Flatable [] where 
+instance Flatable [a] where 
     flatten = map (\a -> [a])
 
 -- Class for types with arity, inplemented as a partial

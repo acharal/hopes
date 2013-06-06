@@ -20,15 +20,15 @@ module Types where
 import Prelude hiding (concatMap, foldl, foldr)
 import Basic
 import Data.List (nub)
-import Data.Foldable hiding (maximum)
+import Data.Foldable hiding (maximum,concat)
 import Data.Monoid
 import Loc(HasLocation, Located(..))
 
 -- Argument variables
-newtype Alpha = Alpha String
+newtype Alpha = Alpha Symbol
   deriving Eq
 -- Predicate variables
-newtype Phi = Phi String
+newtype Phi = Phi Symbol
   deriving Eq
 
 -- Non generalized predicate
@@ -46,7 +46,7 @@ data FunType = Fun Int
 -- Polymorphic
 data PolyType = Poly_gen [Alpha] [Phi] PiType
     deriving Eq -- FIXME: modulo alpha-conversion
-
+{-
 -- All types. FIXME: needed???
 data AllTypes = All_fun  FunType 
               | All_rho  RhoType 
@@ -63,7 +63,7 @@ instance Eq AllTypes where
     All_poly (Poly_gen [] [] pi') == All_rho (Rho_pi pi) =
         pi == pi' -- FIXME : modulo alpha conversion ??? Prob not!
     _ == _ = False
-
+-}
 
 {-
 class (Show tp, Eq tp) => Type tp 
@@ -81,9 +81,9 @@ instance Show Phi where
   showsPrec p (Phi phi) = ( phi ++ )
 
 instance Show FunType where
-  showsPrec p (Fun n) = ("(" ++). walk n . (") -> i" ++)
-    where walk 1 = ("i" ++)
-          walk n = ("i, " ++) . walk (n-1)
+    showsPrec p (Fun n) = ("(" ++). walk n . (") -> i" ++)
+        where walk 1 = ("i" ++)
+              walk n = ("i, " ++) . walk (n-1)
 
 instance Show RhoType where
   showsPrec p Rho_i = ("i" ++)
@@ -93,21 +93,37 @@ instance Show RhoType where
 instance Show PiType where
   showsPrec p Pi_o = ("o" ++)
   showsPrec p (Pi_fun rhos pi) =
-    ("(" ++) . walk rhos . (") -> " ++) . showsPrec p pi
-    where walk [rho] = showsPrec p rho
-          walk (rho : rhos) = showsPrec p rho . (", " ++) . walk rhos
+      ("(" ++) . walk rhos . (") -> " ++) . showsPrec p pi
+      where walk [rho] = showsPrec p rho
+            walk (rho : rhos) = showsPrec p rho . (", " ++) . walk rhos
   showsPrec p (Pi_var phi) = showsPrec p phi
 
 instance Show PolyType where
   showsPrec p (Poly_gen alphas phis pi) =
-    walk alphas . walk' phis . showsPrec p pi
-    where walk [] = id
-          walk (x : xs) = ("∀" ++) . showsPrec p x . (". " ++) . walk xs
-          walk' [] = id
-          walk' (x : xs) = ("∀" ++) . showsPrec p x . (". " ++) . walk' xs
+      walk alphas . walk phis . showsPrec p pi
+      where walk [] = id
+            walk (x : xs) = ("∀" ++) . showsPrec p x . (". " ++) . walk xs
 
--- FIXME: Question: why does polymorphic walk not work???
+-- Type transformations, from mono- to poly
+piToPoly = Poly_gen [] []
 
+polyToPi (Poly_gen [] [] pi) = pi
+polyToPi poly = error $ "Monomorphism violation: " ++ show poly
+
+{-
+-- Find all variables in types
+allRhoVars Rho_i         = ([],   [])
+allRhoVars (Rho_var al)  = ([al], [])
+allRhoVars (Rho_pi pi)   = allPiVars pi
+
+allPiVars Pi_o              = ([], [])
+allPiVars (Pi_var phi)      = ([], [phi])
+allPiVars (Pi_fun rhos pi') = (nub $ piAs ++ rhoAs, nub $ piPhis ++ rhoPhis)
+    where (piAs,  piPhis )  = allPiVars pi'
+          (rhoAs, rhoPhis)  = (concat alists, concat philists)
+          (alists,philists) = map allRhoVars rhos --[([a],[p])]
+                            |> unzip --([[a]], [[p]])
+-}
 --instance Foldable MonoTypeV where
 --    foldMap f (TyVar a)     = f a
 --    foldMap f (TyGrd c)     = mempty
