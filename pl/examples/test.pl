@@ -5,7 +5,7 @@ b2(X) :- X(pred a/0).
 b3(X) :- X(pred a/1).
 
 
-map(R)([],[]). 
+map(_)([],[]). 
 map(R)([X|Xs],[Y|Ys]) :-
     R(X,Y), map(R)(Xs,Ys).
 

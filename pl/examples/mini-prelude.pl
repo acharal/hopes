@@ -87,11 +87,11 @@ rev_app( [ X | Xs ], L, R ) :- rev_app( Xs, [ X | L ], R ).
 % Basic Higher-Order List Predicates
 %
 
-all( R, [] ).
-all( R, [ X | Xs ] ) :- R( X ), all( R, Xs ).
+all(R, []).
+all(R, [ X | Xs ]) :- R( X ), all(R, Xs).
 
-map( R, [], [] ).
-map( R, [ X | Xs ], [ Y | Ys ] ) :- R( X, Y ), map( R, Xs, Ys ).
+map(R, [], []).
+map(R, [ X | Xs ], [ Y | Ys ] ) :- R( X, Y ), map( R, Xs, Ys ).
 
 %
 % applist( F, X0, [ X1, X2, ..., Xn ] )
@@ -102,8 +102,10 @@ map( R, [ X | Xs ], [ Y | Ys ] ) :- R( X, Y ), map( R, Xs, Ys ).
 % F( Xn-1, Xn )
 %
 
-applist( _, Z, [] ).
-applist( F, Z, [ X | Xs ] ) :- F( Z, X ), applist( F, X, Xs ).
+applist( _ , Z, [] ).
+applist( F , Z, [ X | Xs ] ) :- 
+    F( Z, X ), 
+    applist( F , X, Xs ).
 
 %
 % foldl( F, Z1, [ X1, X2, ..., Xn ], Z )
@@ -115,7 +117,9 @@ applist( F, Z, [ X | Xs ] ) :- F( Z, X ), applist( F, X, Xs ).
 %
 
 foldl( _, Z, [], Z ).
-foldl( F, Y0, [ X | Xs ], Z ) :- F( Y0, X, Y1 ), foldl( F, Y1, Xs, Z ).
+foldl( F, Y0, [ X | Xs ], Z ) :- 
+    F( Y0, X, Y1 ), 
+    foldl( F, Y1, Xs, Z ).
 
 
 
@@ -139,7 +143,7 @@ drop( N, L12, L2 ) :- splitAt( N, L12, _, L2 ).
 
 nth( s( N ), Xs, X ) :- drop( N, Xs, [ X | _ ] ).
 
-repeat( X, Xs ) :- applist( eq, X, Xs ).
+repeat( X, Xs ) :- applist( pred eq/2, X, Xs ).
 
 any( R, Xs ) :- member( X, Xs ), R( X ).
 
@@ -149,13 +153,13 @@ headtail( [ X | Xs ], X, Xs ).
 
 suffix_headtail( L, X, Xs ) :- suffix( [ X | Xs ], L ).
 
-append2( L1, L2, L12 ) :- foldl( headtail, L12, L1, L2 ).
+append2( L1, L2, L12 ) :- foldl(pred headtail/3, L12, L1, L2 ).
 
-sublist( S, L ) :- foldl( suffix_headtail, L, S, _ ).
+sublist( S, L ) :- foldl(pred suffix_headtail/3, L, S, _ ).
 
 combs( L, N, C ) :- sublist( C, L ), length( C, N ). % combs( L, 0, C ) loop
 
-concat( Ls, L ) :- foldl( append, [], Ls, L ). % concat( L, [] ) loop
+concat( Ls, L ) :- foldl(pred append/3, [], Ls, L ). % concat( L, [] ) loop
 
 % applist( leq, X, [ Y | 0 ] ) loop
 
@@ -166,11 +170,11 @@ combs2( L1, s( N ), [ X | C ] ) :- suffix( [ X | L ], L1 ), combs2( L, N, C ).
 
 
 true2( X, Y ).
-samelength( L1, L2 ) :- map( true2, L1, L2 ).
+samelength( L1, L2 ) :- map(pred true2/2, L1, L2 ).
 
 
 del( L1, X, L2 ) :- select( X, L1, L2 ).
-permutation( L, P ) :- samelength( L, P ), foldl( del, L, P, [] ).
+permutation( L, P ) :- samelength( L, P ), foldl( pred del/3, L, P, [] ).
 
 
 
@@ -197,7 +201,7 @@ inbt( X, btree( Y, L, R ) ) :- inbt( X, R ).
 
 
 
-pnats( N, L ) :- length( L, N ), applist( inc, 0, L ).
+pnats( N, L ) :- length( L, N ), applist( pred inc/2, 0, L ).
 
 
 
@@ -205,7 +209,7 @@ pnats( N, L ) :- length( L, N ), applist( inc, 0, L ).
 nqueens( N, L ) :-
 	length( L, N ),
 	add( N, N, s( K ) ),
-	map( pnats, [ N, K ], [ C, D ] ),
+	map(pred pnats/2, [ N, K ], [ C, D ] ),
 	nqueens_search( L, C, C, D, D ).
 
 
@@ -216,32 +220,15 @@ nqueens_search( [ Q | Qs ], Dx, Columns, Xs, Ys ) :-
 	nth( Q, Dx, X ), select( X, Xs, Xs1 ),
 	reverse( Dx, Dy ),
 	nth( Q, Dy, Y ), select( Y, Ys, Ys1 ),
-	map( inc, Dx, Dx1 ),
+	map(pred inc/2, Dx, Dx1 ),
 	nqueens_search( Qs, Dx1, Columns1, Xs1, Ys1 ).
 
-
-
-
-
-inclist( L1, L2 ) :- map( inc, L1, L2 ).
-
-
-
-
+inclist( L1, L2 ) :- map(pred inc/2, L1, L2 ).
 
 nonzero( s( X ) ).
 
-cont( Ys, Xs, N ) :- samelength( Xs, [ _ | L ] ), all( nonzero, L ), append( [ C | L ], [ D ], Ys ), foldl( add, 0, Xs, S ), foldl( substract, N, Ys, S ).
+cont( Ys, Xs, N ) :- samelength( Xs, [ _ | L ] ), all( pred nonzero/1, L ), append( [ C | L ], [ D ], Ys ), foldl(pred add/3, 0, Xs, S ), foldl(pred substract/3, N, Ys, S ).
 
-
-
-
-
-p( X ) :- p( X ).
-p( 0 ).
-
-
-empty( X ) :- empty( X ).
 
 
 closure(R, X, Y) :- R(X, Y).
@@ -252,4 +239,3 @@ ordered(R, [X]).
 ordered(R, [X, Y| Z]):- R(X,Y), ordered(R, [Y | Z]).
 
 
-test(X, X).
