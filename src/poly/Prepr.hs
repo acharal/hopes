@@ -15,7 +15,7 @@ import TcUtils
 import Data.List
 import Data.Maybe (fromJust)
 import Data.Graph
-
+import Data.Function(on)
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -34,7 +34,10 @@ predefSpecialPreds = [ ("->"  , 2)
                      --, ("once", 1)
                      --, ("findall", 1)
                      ]
-          
+ 
+predDefIndConsts = [ "[]" ]
+
+--predDefPredConsts = [ "!" ]         
 
 -- Infer arities and predicative status
 fixSentence c@(SSent_comm _ _) = c
@@ -60,8 +63,9 @@ fixExpr predSt ar ex = case ex of
     --SExpr_paren a ex1 -> 
     --    SExpr_paren a (fixExpr predSt ar ex1) 
 
+    -- List is never predicate
     SExpr_const a con _ givArr _ ->
-        SExpr_const a con predSt givArr ar 
+        SExpr_const a con (predSt && not (nameOf con `elem` predDefIndConsts)) givArr ar 
 
     SExpr_var a v ->
         SExpr_var a v
@@ -81,13 +85,13 @@ fixExpr predSt ar ex = case ex of
               args' = map (fixExpr argPredSt 0) args
               argPredSt = isPredConst func' && isSpecialConst func'
               isSpecialConst func = 
-                  elem (nameOf func, fromJust $ arity func) predefSpecialPreds
+                  (nameOf func, fromJust $ arity func) `elem` predefSpecialPreds
 
     SExpr_op a op _ args ->
         SExpr_op a op predSt (map (fixExpr argPredSt 0) args)
-        where argPredSt = predSt && isPredOp op ( length args)
-              isPredOp (Const _ c) opArr = 
-                  elem (c,opArr) predefSpecialPreds
+        where argPredSt = predSt && (nameOf op, length args) `elem` predefSpecialPreds --isPredOp op ( length args)
+              --isPredOp (Const _ c) opArr = 
+              --    elem (c,opArr) predefSpecialPreds
                  
     SExpr_lam a vars bd ->
         SExpr_lam a vars (fixExpr True 0 bd)
@@ -134,7 +138,7 @@ depAnalysis definitions =
         -- create nodes in the form (node, key, [key])
         -- (see Data.Graph)
         nodes = map (\def -> ( def
-                             , (nameOf def, fromJust $ arity def)
+                             , (predDefName def, predDefArity def)
                              , allDeps def
                              )
                     ) definitions
@@ -158,6 +162,7 @@ progToGroupDag sents =
                         -- Keep (def, clause) pairs, with def the defined predicate
                         |> map (\(SSent_clause _ cl) -> (findDefinedPred cl,cl))
                         -- Group by which predicate is defined
+                        |> sortBy  (compare `on` fst)
                         |> groupBy (\cl1 cl2 -> fst cl1 == fst cl2)
                         -- Now from each group, keep defined name and arity, 
                         -- and respective clauses

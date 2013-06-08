@@ -215,18 +215,20 @@ instance HasName (SExpr a) where
     nameOf (SExpr_ann     _ ex' _  ) = nameOf ex' 
 
 -- Get a list of all subexpressions contained in an expression
+-- WARNING: output includes variables bound by l-abstractions 
+--          and defining lambda abstractions
 instance Flatable (SExpr a) where
     --flatten ex@(SExpr_paren a ex') = ex : flatten ex'
     flatten ex@(SExpr_app _ func args) =
-        ex : func : ( concat $ map flatten args)
+        ex : flatten func ++ ( concatMap flatten args)
     flatten ex@(SExpr_op _ _ _ args) =
-        ex : (concat $ map flatten args)
+        ex : (concatMap flatten args)
     flatten ex@(SExpr_lam _ vars bd) =
         ex : (map varToExpr vars) ++ (flatten bd)
         where varToExpr v@(Var a s)   = SExpr_var a v
               varToExpr v@(AnonVar a) = SExpr_var a v
     flatten ex@(SExpr_list _ initEls tl) =
-        ex : ( concat $ map flatten initEls) ++ 
+        ex : ( concatMap flatten initEls) ++ 
             (case tl of 
                  Nothing -> [] 
                  Just ex -> flatten ex

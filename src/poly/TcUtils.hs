@@ -33,6 +33,7 @@ data TyEnv a b =
     TyEnv { rhoSigs  :: [ RhoSig  a ]
           , polySigs :: [ PolySig b ]
           }
+    deriving Show
 
 lookupRho :: Eq a => a -> TyEnv a b -> Maybe RhoType
 lookupRho a = (lookup a).rhoSigs
@@ -43,22 +44,40 @@ lookupPoly a = (lookup a).polySigs
 -- The empty type checking environment
 emptyTcEnv = TyEnv [] []
 
-
 -- Concrete type environment
 type PredSig = (Symbol, Int)
 type TcEnv = TyEnv Symbol PredSig
 
+-- Built-in predicates
+
+builtins = [ ( (";",2::Int), Pi_fun 
+                             [ Rho_pi phi
+                             , Rho_pi phi
+                             ] phi )
+           , ( (",",2::Int), Pi_fun 
+                             [ Rho_pi phi
+                             , Rho_pi phi
+                             ] phi )
+           , ( ("=",2::Int), Pi_fun
+                             [ Rho_i, Rho_i] Pi_o )
+           ]          
+
+    where phi = Pi_var $ Phi "phi"
+
+builtins' = [(sig, generalize pi) | (sig, pi) <- builtins]
+
+initTcEnv = TyEnv [] builtins'
 
 
 -- A constraint is a pair of types with an associated expression. 
 -- Convention: first type is the type syntactically assossiated with the expression
-type Constraint a = (RhoType, RhoType, SExpr a)
+type Constraint a = (RhoType, RhoType, SExpr (Typed a))
     
 
 -- Type Checker state
-data TcState  = 
+data TcState a = 
     TcState { uniq   :: Int             -- next fresh variable 
-            , cnts   :: [Constraint (Typed PosSpan)]  -- generated constraints     
+            , cnts   :: [Constraint a]  -- generated constraints     
             , exists :: [RhoSig Symbol] -- existentially quantified vars
             , msgs   :: Messages        -- error messages
             }
@@ -67,8 +86,8 @@ data TcState  =
 emptyTcState = TcState 1 [] [] ([],[])
 
 -- TypeCheck monad. 
--- Supports state, errors
-type Tc m = ReaderT TcEnv (StateT TcState (ErrorT Messages m)) 
+-- Supports environment, state, errors
+type Tc m inf = ReaderT TcEnv (StateT (TcState inf) (ErrorT Messages m)) 
 
 
 {-
@@ -77,7 +96,7 @@ type Tc m = ReaderT TcEnv (StateT TcState (ErrorT Messages m))
 
 -- Restrict an expression in the Head: no lambdas or predicate
 -- constants allowed
-restrictHead :: Monad m => SExpr a -> Tc m ()
+restrictHead :: Monad m => SExpr a -> Tc m a ()
 restrictHead h =  h |> flatten |> mapM_ restrict
     where restrict (SExpr_predCon _ _ _ _) = throwError restrictError
           restrict (SExpr_lam _ _ _)       = throwError restrictError
@@ -96,20 +115,20 @@ addExist var tp =
 
 -- Empty the state (except messages) to work in a new group
 withEmptyState m = do
-    modify (\st -> st{ uniq   = 1
-                     , exists = []
+    modify (\st -> st{ --uniq   = 1
+                       exists = []
                      , cnts   = []
                      }
            )
     local (\env -> env{rhoSigs = []}) m
  
 -- Work with new variables in the environment
-withEnvVars :: Monad m => [(Symbol,RhoType)] -> Tc m a -> Tc m a
+withEnvVars :: Monad m => [RhoSig Symbol] -> Tc m inf a -> Tc m inf a
 withEnvVars bindings = 
     local (\env -> env{ rhoSigs = bindings ++ rhoSigs env})
 
 -- Work with NO variable bindings in the environment
-withNoEnvVars :: Monad m => Tc m a -> Tc m a
+withNoEnvVars :: Monad m => Tc m inf a -> Tc m inf a
 withNoEnvVars m = do
     modify ( \st  -> st {exists  = []} )
     local  ( \env -> env{rhoSigs = []} ) m
@@ -127,21 +146,22 @@ withEnvPreds bindings =
  -}
 
 -- Find all named variables in an expression
+-- CAUTION: will contain a variable once for each of its appearances
 allNamedVars expr = expr |> flatten 
                          |> filter isVar 
                          |> map ( \(SExpr_var _ v) -> nameOf v)
                          |> filter (/= "_")
-
+                         
 
 -- Fresh variable generation 
-newAlpha :: Monad m => Tc m Alpha
+newAlpha :: Monad m => Tc m inf Alpha
 newAlpha = do
     st <- get
     let n = uniq st
     put st{uniq = n+1}
     return $ Alpha ('a' : show n)
 
-newPhi :: Monad m => Tc m Phi
+newPhi :: Monad m => Tc m inf Phi
 newPhi = do
     st <- get
     let n = uniq st
@@ -178,13 +198,13 @@ freePhis (Rho_pi pi) = aux pi
 freePhis _ = []
 
 -- Freshen a polymoprhic type
-freshen :: Monad m => PolyType -> Tc m PiType
+freshen :: Monad m => PolyType -> Tc m inf PiType
 freshen (Poly_gen alphas phis pi) = do
     alphas' <- newAlphas $ length alphas
     phis'   <- newPhis   $ length phis
     let ss = [ substAlpha alpha (Rho_var alpha') 
              | (alpha, alpha') <- zip alphas alphas'] ++
-             [ substPhi phi (Pi_var phi) 
+             [ substPhi phi (Pi_var phi') 
              | (phi, phi') <- zip phis phis']
     let s = foldl (.) id ss
     let Rho_pi pi' = s (Rho_pi pi)
@@ -271,30 +291,21 @@ substAlpha alpha rho (Rho_pi pi) = Rho_pi (aux alpha rho pi)
     where aux alpha rho (Pi_fun rhos pi) =
               Pi_fun (map (substAlpha alpha rho) rhos) (aux alpha rho pi)
           aux alpha rho pi = pi
-substAlpha alpha rho rho' = rho'
+substAlpha _ _ Rho_i = Rho_i
 
 -- Elementary substitution of a predicate type variable with a type
 substPhi phi pi (Rho_pi pi') = Rho_pi (aux phi pi pi')
-  where aux phi pi pi'@(Pi_var phi') | phi == phi' = pi
+  where aux phi pi pi'@(Pi_var phi') 
+            | phi == phi' = pi
+            | otherwise   = pi'
         aux phi pi (Pi_fun rhos pi') =
             Pi_fun (map (substPhi phi pi) rhos) (aux phi pi pi')
-        aux phi pi pi' = pi'
+        aux _ _ Pi_o = Pi_o
 substPhi phi pi rho = rho
 
 -- Apply a substitution on a list of constraints
 substCnts :: Substitution -> [Constraint a] -> [Constraint a]
 substCnts s cstr = [(s rho1, s rho2, ex) | (rho1, rho2,ex) <- cstr]
-
-
-
-{-
-genEnvAndReturn :: Monad m => Substitution -> SDepGroup (Typed a) -> Tc m (Typed a)
-genEnvAndReturn _ = return $ error "subtitute : not implemented yet!"
-
--}
-
-
-
 
 
 

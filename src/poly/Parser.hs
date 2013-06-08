@@ -227,10 +227,10 @@ list = try listEmpty <|> listNonEmpty -- <?> ("list")
     where 
         listEmpty = do { symbol "[]"; return $ sNil bogusSpan }
         listNonEmpty = brackets $ do 
-                         es <- listatom
+                         es <- listatoms
                          tl <- optionMaybe tail
                          return $ mkList es tl 
-        listatom  = commaSep1 argExpr
+        listatoms = commaSep1 argExpr
         tail      = do { symbol "|"
                        ; variable <|> list 
                          -- Comment: This disallows 
@@ -275,13 +275,13 @@ application  = try ( do
 -- Everything except application or lambda. Functions as head
 -- of application
 atomicExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
-atomicExpr = choice [ variable
+atomicExpr = choice [ predConst
+                    , list
                     , constant
-                    , predConst
+                    , variable
                     , numberExpr
                     --, trueExpr
                     --, failExpr
-                    , list
                     , cut
                     , parens (try fullExpr <|> allExpr)
                             -- FIXME : is allExpr really

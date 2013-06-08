@@ -36,6 +36,8 @@ data Message =
         desc    :: ErrDesc
     }
 
+instance Show Message where show = show.ppr
+
 instance HasLocation Message where
     loc (Msg l _ _ _) = l
 

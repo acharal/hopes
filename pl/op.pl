@@ -45,7 +45,7 @@
 
 :- op( 600,  fy, '\\+').    % negation as failure
 
-:- op(1100, xfx,'|').       % or alternative to ';'
+%:- op(1100, xfx,'|').       % list tail or alternative to ';'
 
 :- op( 701,  fy, 'dynamic').
 :- op( 701,  fy, 'multifile').

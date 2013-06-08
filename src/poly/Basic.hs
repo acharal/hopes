@@ -10,8 +10,6 @@ type Symbol = String
 class Flatable a where 
     flatten :: a -> [a]
 
-instance Flatable [a] where 
-    flatten = map (\a -> [a])
 
 -- Class for types with arity, inplemented as a partial
 -- function

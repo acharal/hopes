@@ -11,6 +11,7 @@ import Control.Monad.Reader
 import Control.Monad.Error
 import Control.Monad.Identity
 import Data.Maybe(fromJust)
+import Data.List(group, sort)
 import Text.PrettyPrint(text)
 
 {-
@@ -21,9 +22,10 @@ import Text.PrettyPrint(text)
  -   convention
  -}
 
-data TcOutput = 
+-- A data type for all relevant information the type checking outputs
+data TcOutput a = 
     TcOutput { -- annotated program 
-               tcOutSyntax   :: SDepGroupDag (Typed PosSpan)  
+               tcOutSyntax   :: SDepGroupDag (Typed a)  
                -- new environment predicates
              , tcOutPreds    :: [PolySig PredSig]            
                -- Warnings
@@ -32,14 +34,14 @@ data TcOutput =
 
 
 -- run the typeCheck monad with a starting environment
-runTc :: Monad m => TcEnv -> SDepGroupDag PosSpan -> m (Either Messages TcOutput)
+runTc :: (Show a, Monad m) => TcEnv -> SDepGroupDag a -> m (Either Messages (TcOutput a))
 runTc env dag = runErrorT $ evalStateT (runReaderT (tcDag dag) env) emptyTcState 
 
 
 
 
 -- typeCheck program, and output all relevant information
-tcDag :: Monad m => SDepGroupDag PosSpan -> Tc m TcOutput
+tcDag :: (Show a, Monad m) => SDepGroupDag a -> Tc m a (TcOutput a)
 {-tcDag dag = do { dag'     <- mapM tcGroup dag
                ; predSigs <- asks polySigs
                ; warnings <- gets msgs
@@ -67,7 +69,8 @@ tcDag dag = do
 -- typeCheck a dependency group
 tcGroup group = do
     -- Find predicates to be defined in this group
-    let preds = map (\pr -> ( predDefName pr , predDefArity pr)) group
+    let preds = [(predDefName pr, predDefArity pr) | pr <- group ] 
+              --map (\pr -> ( predDefName pr , predDefArity pr)) group
     -- Make the most general types
     types <- mapM (typeOfArity.snd) preds
     let polys = map piToPoly types
@@ -100,15 +103,21 @@ tcPredDef predDef = do
 tcClause (SClause a hd bd) = do 
     -- Make sure head contains no illegal expressions
     restrictHead hd
-    -- Find all variables in the head and put them in the environment
-    let vars = allNamedVars hd
+    -- Find all variables in the head and group them
+    let vars = allNamedVars hd |> sort |> group  
     alphas <- newAlphas (length vars)
-    let varTypes = map Rho_var alphas 
-    hd' <- withEnvVars (zip vars varTypes) (tcExpr hd)
+    --let varTypes = map Rho_var alphas 
+    -- More than 1 appearances of a variable means it has type i
+    let varsWithTypes = 
+            [ if length var > 1 then (head var, Rho_i) else (head var, tp)
+            | (var, tp) <- zip vars (map Rho_var alphas)
+            ]     
+
+    hd' <- withEnvVars varsWithTypes (tcExpr hd)
     let rho_o = Rho_pi Pi_o
     case bd of 
         Just (gets, expr) -> do
-            expr' <- withEnvVars (zip vars varTypes) (tcExpr expr)
+            expr' <- withEnvVars varsWithTypes (tcExpr expr)
             case gets of 
                 SGets_mono -> do
                     -- Both head and body are booleans
@@ -128,8 +137,8 @@ tcClause (SClause a hd bd) = do
 
 
 -- typeCheck an expression
-tcExpr :: Monad m => SExpr PosSpan 
-                  -> Tc m ( SExpr (Typed PosSpan) )
+tcExpr :: Monad m => SExpr a
+                  -> Tc m a ( SExpr (Typed a) )
 
 -- 1) Individuals
 -- Number
@@ -243,7 +252,7 @@ tcExpr (SExpr_op a c@(Const cinf cnm) True args) = do
     -- To add constraint, create a 'ghost' constant expression
     -- with the correct information of the operator
     addConstraint headTp tp ( SExpr_const cinf' (Const cinf' cnm) True Nothing (length args) ) 
-    return $ SExpr_op a' c' False args'
+    return $ SExpr_op a' c' True args'
 
 -- 6) Rest 
 -- Lambda abstraction
@@ -271,10 +280,10 @@ tcExpr (SExpr_lam a vars bd) = do
     return $ SExpr_lam (typed lamType a) vars' bd'
 
 -- Type annotated
-tcExpr (SExpr_ann _ _ _) = throwError $ mkMsgs $ internalErr $ text "annotations not impleented yet"
+tcExpr (SExpr_ann _ _ _) = throwError $ mkMsgs $ internalErr $ text "annotations not implemented yet"
 
 -- Utility function to search environment for expr.
-findPoly :: Monad m => Symbol -> Int -> Tc m RhoType
+findPoly :: Monad m => Symbol -> Int -> Tc m a RhoType
 findPoly cnm ar = do
     envTp <- asks $ lookupPoly (cnm,ar)
     tp <- case envTp of 
@@ -287,7 +296,7 @@ findPoly cnm ar = do
     return tp
 
 -- Unification
-unify :: (Monad m, Show a) => [Constraint a] -> Tc m Substitution
+unify :: (Monad m, Show a) => [Constraint a] -> Tc m a Substitution
 -- No constraints
 unify [] = return id
 -- Equal types
@@ -317,15 +326,22 @@ unify ( (rho1@(Rho_pi pi), Rho_pi (Pi_var phi), _) : tl )
 -- Predicate function
 unify ( ( f1@(Rho_pi (Pi_fun rhos1 pi1)), f2@(Rho_pi (Pi_fun rhos2 pi2)), ex ) : tl) 
     | length rhos1 == length rhos2 = do
+
         -- Try to unify subtypes of these types 
         partial <- unify ( (Rho_pi pi1, Rho_pi pi2, ex) : 
-                            zip3 rhos1 rhos2 (replicate (length rhos1) ex) 
-                          )
+                           zip3 rhos1 rhos2 (replicate (length rhos1) ex) 
+                         )
                    -- if you catch something, throw a better message 
                    -- for the whole type
                    `catchError` (\_ -> throwError $ unificationError f1 f2 ex)
-        subst <- unify (substCnts partial tl)
-        return $ partial . subst
+        subst' <- unify (substCnts partial tl)
+        return $ subst' . partial
+       
+        {- Something simpler that is more likely to work -}{-
+        unify $ ( zip3 rhos1 rhos2 (replicate (length rhos1) ex) ) ++ 
+                [( Rho_pi pi1, Rho_pi pi2, ex )] ++
+                tl  -}
+              
 -- Everything else is unification error
 unify ((rho1, rho2, ex) : _ ) = 
     throwError $ unificationError rho1 rho2 ex
@@ -333,7 +349,7 @@ unify ((rho1, rho2, ex) : _ ) =
 
 unificationError rho1 rho2 ex = 
     mkMsgs $ mkErr TypeError Fatal 
-           $ text $ "Unification Error : " ++ show ex  ++ " has type " ++ 
-                    show rho2 ++ " but was expected with type " ++ show rho1
+           $ text $ "Unification Error : {" ++ show ex  ++ "} has type " ++ 
+                    show rho1 ++ " but was expected with type " ++ show rho2
 
 
