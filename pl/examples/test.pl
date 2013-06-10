@@ -1,3 +1,5 @@
+% Pls9 examples etc.
+
 a.
 a(X) :- X = 0.
 b1(X) :- X(a).
@@ -5,7 +7,7 @@ b2(X) :- X(pred a/0).
 b3(X) :- X(pred a/1).
 
 
-map(_)([],[]). 
+map(_)([],[]).
 map(R)([X|Xs],[Y|Ys]) :-
     R(X,Y), map(R)(Xs,Ys).
 
@@ -18,8 +20,6 @@ isZero(X) :- apply( (\~(Y) => Y=0), X).
 applyCur(X)(Y) :-  X(Y).
 isZeroCur(X) :- applyCur((\~(Y) => Y=0))(X).
 
-p(Z)(W) :- W(Z).
-p1(X)([]) :- X([]).
 
 foo2(X) :- bar2(X).
 bar2(X) :- foo2(X).
@@ -29,6 +29,3 @@ closure(R)(X,Y) :- R(X,Y).
 closure(R)(X,Y) :-
     R(X,Z), closure(R)(Z,Y).
 
-eq(X,X).
-
-ex1(s(X),Y,Y) :- ex2(X,Y).
