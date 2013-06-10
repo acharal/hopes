@@ -58,7 +58,7 @@ tcDag dag = do
           walk [] preds = return ([], preds)
           walk (grp:grps) preds = do
               -- TypeCheck current group with current predicates
-              (grp' , preds' ) <- withEnvPreds preds $ tcGroup grp
+              (grp' , preds' ) <- withEnvPreds preds $ withEmptyState (tcGroup grp)
               -- Continue with the extra you found in this group
               (grps', preds'') <- walk grps (preds' ++ preds)
               -- return all groups and all predicates
@@ -70,13 +70,12 @@ tcDag dag = do
 tcGroup group = do
     -- Find predicates to be defined in this group
     let preds = [(predDefName pr, predDefArity pr) | pr <- group ] 
-              --map (\pr -> ( predDefName pr , predDefArity pr)) group
     -- Make the most general types
     types <- mapM (typeOfArity.snd) preds
     let polys = map piToPoly types
     -- typeCheck group with the new predicates in the env.
     -- and no other state
-    group' <- withEnvPreds (zip preds polys) $ withEmptyState (mapM tcPredDef group)
+    group' <- withEnvPreds (zip preds polys) (mapM tcPredDef group)
     -- Get the created constraints from the state and unify
     stCons <- gets cnts
     subst  <- unify stCons
@@ -84,8 +83,7 @@ tcGroup group = do
         groupSub = map (fmap $ substInTyped subst) group'
         -- ... and in new predicate types
         typesSub = map (substInPi subst) types
-    -- Add the generalized types to the environment
-    --withEnvPreds (zip preds $ map generalize typesSub) (return groupSub)
+    -- Return annotated group along with new predicate signatures
     return (groupSub, zip preds $ map generalize typesSub)
     where substInTyped subst typed = 
               let newType = typed |> typeOf |> subst in

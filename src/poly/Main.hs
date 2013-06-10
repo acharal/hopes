@@ -32,12 +32,12 @@ testParse = testGen id
 
 testPre = testGen progToGroupDag 
 
-testTc file = do
+testTc verbatim file = do
     snt <- content file 
     case (runIdentity $ runTc initTcEnv $ progToGroupDag snt) of
         Left msgs -> mapM_ (putStrLn . show . ppr) (fst msgs)
         Right dag -> do 
-            mapM_ (putStrLn.show) (tcOutSyntax dag)
+            when verbatim $ mapM_ (putStrLn.show) (tcOutSyntax dag)
             mapM_ (putStrLn.show) (tcOutPreds dag)
 
 testGen test file  = do

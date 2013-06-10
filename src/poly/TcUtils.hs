@@ -115,8 +115,8 @@ addExist var tp =
 
 -- Empty the state (except messages) to work in a new group
 withEmptyState m = do
-    modify (\st -> st{ --uniq   = 1
-                      exists = []
+    modify (\st -> st{ uniq   = 1
+                     , exists = []
                      , cnts   = []
                      }
            )

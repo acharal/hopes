@@ -35,7 +35,7 @@ predefSpecialPreds = [ ("->"  , 2)
                      --, ("findall", 1)
                      ]
  
-predDefIndConsts = [ "[]" ]
+--predDefIndConsts = [ "[]" ]
 
 --predDefPredConsts = [ "!" ]         
 
@@ -63,9 +63,9 @@ fixExpr predSt ar ex = case ex of
     --SExpr_paren a ex1 -> 
     --    SExpr_paren a (fixExpr predSt ar ex1) 
 
-    -- List is never predicate
+    -- List is never predicate (don't need this)
     SExpr_const a con _ givArr _ ->
-        SExpr_const a con (predSt && not (nameOf con `elem` predDefIndConsts)) givArr ar 
+        SExpr_const a con (predSt {-&& not (nameOf con `elem` predDefIndConsts)-}) givArr ar 
 
     SExpr_var a v ->
         SExpr_var a v
