@@ -65,15 +65,16 @@ testGen test file  = do
     snt <- content file
     mapM_ (putStrLn . show) (test snt)
 
-simple = "simple"
-aleph  = "aleph"
+simple   = "simple"
+aleph    = "aleph"
 testFile = "test"
-
+prelude  = "mini-prelude"
 
 --- TESTING GENERAL FUNCTIONS ---
-testFlatten = testGen $ concatMap (flatten . snd .fromJust . 
-                             clBody. (\(SSent_clause  cl) -> cl) 
-                            )
+testFlatten = testGen $ 
+    concatMap ( flatten . snd . fromJust . clBody .
+                (\(SSent_clause  cl) -> cl) 
+              )
 
 testFree1 rho = freeAlphas rho
 testFree2 rho = freePhis   rho

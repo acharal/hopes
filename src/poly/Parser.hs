@@ -99,9 +99,9 @@ mkList hds tl p1 p2 = SExpr_list (mkSpan p1 p2) hds tl
 mkLam vars bd p1 p2 = SExpr_lam (mkSpan p1 p2) vars bd
 
 -- Operator expression
-mkOpExpr op [arg] = SExpr_op span op False [arg] 
+mkOpExpr pre op [arg] = SExpr_op span op pre False [arg] 
     where span = posSpan op `mappend` posSpan arg
-mkOpExpr op args@([arg1, arg2]) = SExpr_op span op False args
+mkOpExpr pre op args@([arg1, arg2]) = SExpr_op span op pre False args
     where span = posSpan arg1 `mappend` posSpan arg2
 
 -- Inverse follows symbol
@@ -265,14 +265,15 @@ list = (try listEmpty) <|> (try listNonEmpty) -- <?> ("list")
                            -- Comment: This disallows irregular lists
                          }
         
-
-lambda :: Stream s m Char => ParserT s m (SExpr PosSpan)
-lambda = try ( do 
+-- Parameter true -> ',' is allowed in body (we are not in an argument)
+lambda :: Stream s m Char => Bool -> ParserT s m (SExpr PosSpan)
+lambda isFull = try ( do 
     { pos1 <- getPosition
     ; symbol "\\~" 
     ; vars <- parens $ commaSep1 $ varLit -- <?> "lambda variables"
     ; symbol "=>"
-    ; ex   <- try fullExpr <|> allExpr -- TODO : clear the matter: maybe argExpr here
+    ; ex   <- try (if isFull then fullExpr else argExpr) <|> 
+              (allExpr isFull) -- TODO : clear the matter: maybe argExpr here
     ; pos2 <- getPosition
     ; return $ mkLam (vars) ex pos1 pos2
     } ) --  <?> "lambda"
@@ -302,8 +303,8 @@ application  = try ( do
     )
     where 
         args = do { pos1    <- getPosition
-                  ; argsSet <- parens $ commaSep1 (try argExpr <|> allExpr)  
-                                                --Used to say "try argExpr"
+                  ; argsSet <- parens $ -- Disallow ',' in lambda
+                        commaSep1 (try argExpr <|> (allExpr False) )  
                   ; pos2    <- getPosition
                   ; return (argsSet,  pos2)
                   }
@@ -317,14 +318,15 @@ atomicExpr = choice [ predConst
                     , variable
                     , numberExpr
                     , cut
-                    , parens (try fullExpr <|> allExpr)
+                    , parens (try fullExpr <|> (allExpr True))
                             -- FIXME : is allExpr really
                             -- needed here?
                     ] -- <?> ("atomicExpr")
 
 -- Used as an argument to expr to create expr. parser
-allExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
-allExpr = try lambda <|> application
+-- Boolean parameter says if fullExpr is allowed in lambda body
+allExpr :: Stream s m Char => Bool -> ParserT s m (SExpr PosSpan)
+allExpr fullLam = try (lambda fullLam) <|> application
 
 
 -- Expressions with operators, built from the operator table
@@ -335,8 +337,11 @@ allExpr = try lambda <|> application
 argExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
 argExpr = do { st <- getState
              ; let opTbl = map snd $ cachedTable st
-             ; buildExpressionParser opTbl allExpr
+             ; buildExpressionParser opTbl (allExpr False)
              } -- <?> "operator"
+
+-- The precedence of the ',' operator
+commaPrec = 1000
 
 -- General expressions (',' operator allowed)
 fullExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
@@ -345,21 +350,21 @@ fullExpr = do { -- Grab state and add ',' operator
               ; let opTbl = map snd cachedTable''
                         where cachedTable'  = cachedTable st
                               -- Find the right spot to put ','
-                              (t1, t2) = span ((<1000).fst) cachedTable'
+                              (t1, t2) = span ((<commaPrec).fst) cachedTable'
                               cachedTable'' = case t2 of 
-                                  []        -> t1 ++ [ (1000, [commaOp])]
-                                  (hd2:tl2) -> if fst hd2 == 1000 
-                                                 then t1 ++ (1000, commaOp:snd hd2) : tl2
-                                                 else t1 ++ (1000, [commaOp]) : t2
+                                  []        -> t1 ++ [ (commaPrec, [commaOp])]
+                                  (hd2:tl2) -> if fst hd2 == commaPrec 
+                                                 then t1 ++ (commaPrec, commaOp:snd hd2) : tl2
+                                                 else t1 ++ (commaPrec, [commaOp]) : t2
                               -- ',' must get special treatment because it is not a graphic token
                               commaOp = Infix (try $ do { pos1 <- getPosition
                                                         ; symbol ","
                                                         ; pos2 <- getPosition
-                                                        ; return $ (\x y-> mkOpExpr (mkConst "," pos1 pos2) [x,y])
+                                                        ; return $ (\x y-> mkOpExpr commaPrec (mkConst "," pos1 pos2) [x,y])
                                                         }
                                               ) AssocLeft
                 -- Now build an expression parser with the new operator table
-              ; buildExpressionParser opTbl allExpr
+              ; buildExpressionParser opTbl (allExpr True)
               } -- <?> "operator"
 
 
@@ -380,15 +385,15 @@ head_c = try $ do pos1 <- getPosition
 
 -- Clause
 clause :: Stream s m Char => ParserT s m (SSent PosSpan)
-clause = try $ do pos1 <- getPosition
-                  h <- head_c
-                  b <- optionMaybe $ do 
-                      gets <- symbol ":-" <|> symbol "<-" -- mono or poly?
-                      body <- try fullExpr <|> allExpr
-                      return (mkGets gets, body)
-                  symbol "."
-                  pos2 <- getPosition
-                  return $ SSent_clause $ SClause (mkSpan pos1 pos2) h b
+clause = do pos1 <- getPosition
+            h <- head_c
+            b <- optionMaybe $ do 
+                gets <- symbol ":-" <|> symbol "<-" -- mono or poly?
+                body <- try fullExpr <|> (allExpr True)
+                return (mkGets gets, body)
+            symbol "." -- <?> "dot"
+            pos2 <- getPosition
+            return $ SSent_clause $ SClause (mkSpan pos1 pos2) h b
 
 
 {-
@@ -402,7 +407,7 @@ clause = try $ do pos1 <- getPosition
 command :: Stream s m Char => ParserT s m (SSent PosSpan)
 command = do { pos1 <- getPosition 
              ; symbol ":-"
-             ; ex <- try fullExpr <|> allExpr
+             ; ex <- try fullExpr <|> (allExpr True)
              ; symbol "."
              ; pos2 <- getPosition
              ; return $ SSent_comm $ SCommand (mkSpan pos1 pos2) ex
@@ -412,7 +417,7 @@ command = do { pos1 <- getPosition
 goal :: Stream s m Char => ParserT s m (SSent PosSpan)
 goal = do { pos1 <- getPosition
           ; symbol "?-"
-          ; ex <- try fullExpr <|> allExpr
+          ; ex <- try fullExpr <|> (allExpr True)
           ; symbol "."
           ; pos2 <- getPosition
           ; return $ SSent_comm $ SCommand (mkSpan pos1 pos2) ex
@@ -422,8 +427,8 @@ goal = do { pos1 <- getPosition
 sentence :: Stream s m Char => ParserT s m (SSent PosSpan)
 sentence = choice [ try goal
                   , try command
-                  , try clause
-                  ]  -- <?> ("sentence") 
+                  , clause
+                  ] -- <?> ("sentence") 
 
 -- | Directives must be only in goal clause (without head literal)
 -- Only recognizing op directives thus far. TODO add more
@@ -452,15 +457,16 @@ buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator
 buildOpTable = do { st <- getState
                   ; return $ mkOpTable (operatorTable st)
                   }
-    where mkOpTable ops = map (\(p, op) -> (p, map opMap op)) $ Operators.groupByPrec ops
+    where mkOpTable ops = map (\(p, op) -> (p, map (opMap p) op)) $ Operators.groupByPrec ops
               where 
-                  opMap op | Operators.isPrefixOp  op = prefixOp (Operators.opName op)
-                           | Operators.isPostfixOp op = postfixOp (Operators.opName op)
-                           | otherwise                = infixOp (Operators.opName op) (assocMap op)
+                  opMap pre op | Operators.isPrefixOp  op = prefixOp  pre (Operators.opName op)
+                               | Operators.isPostfixOp op = postfixOp pre (Operators.opName op)
+                               | otherwise                = infixOp   pre (Operators.opName op) (assocMap op)
                       where 
-                            infixOp name assoc = Infix (oper (\n -> \x -> \y -> mkOpExpr n [x,y]) name) assoc
-                            prefixOp name      = Prefix  (oper (\n -> \x -> mkOpExpr n [x]) name) 
-                            postfixOp name     = Postfix (oper (\n -> \x -> mkOpExpr n [x]) name)
+                            -- Pass precedence to the operator expressions to store it in the synax tree
+                            infixOp   pre name assoc = Infix   (oper (\n -> \x -> \y -> mkOpExpr pre n [x,y]) name) assoc
+                            prefixOp  pre name       = Prefix  (oper (\n -> \x -> mkOpExpr pre n [x]) name) 
+                            postfixOp pre name       = Postfix (oper (\n -> \x -> mkOpExpr pre n [x]) name)
                             assocMap op | Operators.isAssocLeft  op = AssocLeft
                                         | Operators.isAssocRight op = AssocRight
                                         | otherwise                 = AssocNone
@@ -497,9 +503,9 @@ parseHopes2 input = do
     where st' = ParseSt initOps []
           initOps = [] -- No initial operators needed
           parse st src input = case runHopesParser (buildTable >> do { sents <- many1 sentence' 
-                                                                      ; eof
-                                                                      ; return sents
-                                                                      }
+                                                                     ; eof
+                                                                     ; return sents
+                                                                     }
                                                     ) st src input of
                                    Left err ->  do putStr "parse error at "
                                                    print err

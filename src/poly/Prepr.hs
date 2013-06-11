@@ -98,8 +98,8 @@ fixExpr predSt ar ex = case ex of
                   (nameOf func, fromJust $ arity func) `elem` predefSpecialPreds
 
     -- Similarly to above, only more concise
-    SExpr_op a op _ args ->
-        SExpr_op a op predSt (map (fixExpr argPredSt 0) args)
+    SExpr_op a op prec _ args ->
+        SExpr_op a op prec predSt (map (fixExpr argPredSt 0) args)
         where argPredSt = predSt && (nameOf op, length args) `elem` predefSpecialPreds 
      
     -- Body of a lambda abstraction in a predicate            

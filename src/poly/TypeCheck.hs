@@ -215,13 +215,13 @@ tcExpr ex@(SExpr_app a fun@(SExpr_const _ _ False _ _) args) = do
 
 
 -- Operator, functional
-tcExpr (SExpr_op a c False args) = do    
+tcExpr (SExpr_op a c prec False args) = do    
     let c' = fmap (typed Rho_i) c -- TODO: UGLY, using i type as sigma
     -- typecheck args
     args' <- mapM tcExpr args
     -- Args must have type i
     mapM_ (\ex -> addConstraint (typeOf ex) Rho_i ex) args'
-    return $ SExpr_op (typed Rho_i a) c' False args'
+    return $ SExpr_op (typed Rho_i a) c' prec False args'
 
 -- List
 tcExpr (SExpr_list a hds tl) = do
@@ -250,7 +250,7 @@ tcExpr (SExpr_app a func args) = do
     return $ SExpr_app (typed (Rho_pi $ Pi_var phi) a) func' args'
 
 -- Operator, predicate
-tcExpr (SExpr_op a c@(Const cinf cnm) True args) = do   
+tcExpr (SExpr_op a c@(Const cinf cnm) prec True args) = do   
     headTp <- findPoly cnm (length args)
     args'  <- mapM tcExpr args
     phi    <- newPhi
@@ -261,7 +261,7 @@ tcExpr (SExpr_op a c@(Const cinf cnm) True args) = do
     -- To add constraint, create a 'ghost' constant expression
     -- with the correct information of the operator
     addConstraint headTp tp ( SExpr_const cinf' (Const cinf' cnm) True Nothing (length args) ) 
-    return $ SExpr_op a' c' True args'
+    return $ SExpr_op a' c' prec True args'
 
 -- 6) Rest 
 -- Lambda abstraction

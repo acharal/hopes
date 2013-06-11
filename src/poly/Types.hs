@@ -47,7 +47,7 @@ data RhoType = Rho_i
 data FunType = Fun Int
 -- Polymorphic
 data PolyType = Poly_gen [Alpha] [Phi] PiType
-    deriving Eq -- FIXME: modulo alpha-conversion
+--    deriving Eq -- FIXME: modulo alpha-conversion
 {-
 -- All types. FIXME: needed???
 data AllTypes = All_fun  FunType 

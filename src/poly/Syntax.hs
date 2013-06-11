@@ -81,6 +81,7 @@ data SExpr a = SExpr_const   a            -- constant
              | SExpr_app  a (SExpr a) [SExpr a]  -- application
              | SExpr_op   a          -- operator
                           (Const a)  -- id
+                          Int        -- precedence
                           Bool       -- interpreted as pred?
                           [SExpr a]  -- arguments
              | SExpr_lam  a [Var a] (SExpr a)    -- lambda abstr.
@@ -189,7 +190,7 @@ isPredConst _ = False
 -- Everything that can contain a predicate constant
 hasPredConst (SExpr_predCon _ _ _ _) = True
 hasPredConst (SExpr_const _ _ predStatus _ _) = predStatus
-hasPredConst (SExpr_op  _ _ predStatus _) = predStatus 
+hasPredConst (SExpr_op  _ _ _ predStatus _) = predStatus 
 hasPredConst _ = False
 
 
@@ -208,21 +209,21 @@ instance HasArity (SExpr a) where
         case given of 
             Just n  -> Just n 
             Nothing -> Just inferred
-    arity (SExpr_op _ _ _ args) = Just $ length args      
+    arity (SExpr_op _ _ _ _ args) = Just $ length args      
     arity (SExpr_ann _ ex _) = arity ex
     -- Complex structures have no arity
     arity _ = Nothing
 
 instance HasName (SExpr a) where 
-    nameOf (SExpr_const   _ c _ _ _) = nameOf c
-    nameOf (SExpr_var     _ v      ) = nameOf v
-    nameOf (SExpr_predCon _ c _ _  ) = nameOf c
-    nameOf (SExpr_app     _ ex' _  ) = nameOf ex'
-    nameOf (SExpr_op      _ op _ _ ) = nameOf op
-    nameOf (SExpr_number  _ n      ) = show n
-    nameOf (SExpr_lam     _ _ _    ) = error "Name of lambda"
-    nameOf (SExpr_list    _ _ _    ) = error "Name of list"
-    nameOf (SExpr_ann     _ ex' _  ) = nameOf ex' 
+    nameOf (SExpr_const   _ c _ _ _  ) = nameOf c
+    nameOf (SExpr_var     _ v        ) = nameOf v
+    nameOf (SExpr_predCon _ c _ _    ) = nameOf c
+    nameOf (SExpr_app     _ ex' _    ) = nameOf ex'
+    nameOf (SExpr_op      _ op _ _ _ ) = nameOf op
+    nameOf (SExpr_number  _ n        ) = show n
+    nameOf (SExpr_lam     _ _ _      ) = error "Name of lambda"
+    nameOf (SExpr_list    _ _ _      ) = error "Name of list"
+    nameOf (SExpr_ann     _ ex' _    ) = nameOf ex' 
 
 -- Get a list of all subexpressions contained in an expression
 -- WARNING: output includes variables bound by l-abstractions 
@@ -231,7 +232,7 @@ instance Flatable (SExpr a) where
     --flatten ex@(SExpr_paren a ex') = ex : flatten ex'
     flatten ex@(SExpr_app _ func args) =
         ex : flatten func ++ ( concatMap flatten args)
-    flatten ex@(SExpr_op _ _ _ args) =
+    flatten ex@(SExpr_op _ _ _ _ args) =
         ex : (concatMap flatten args)
     flatten ex@(SExpr_lam _ vars bd) =
         ex : (map varToExpr vars) ++ (flatten bd)
@@ -255,7 +256,7 @@ getInfo (SExpr_var     a _        ) =  a
 getInfo (SExpr_number  a _        ) =  a
 getInfo (SExpr_predCon a _ _ _    ) =  a
 getInfo (SExpr_app     a _ _      ) =  a
-getInfo (SExpr_op      a _ _ _    ) =  a
+getInfo (SExpr_op      a _ _ _ _  ) =  a
 getInfo (SExpr_lam     a _ _      ) =  a
 getInfo (SExpr_list    a _ _      ) =  a
 getInfo (SExpr_ann     a _ _      ) =  a
@@ -265,7 +266,7 @@ setInfo inf (SExpr_var     _ b      ) = SExpr_var     inf b
 setInfo inf (SExpr_number  _ b      ) = SExpr_number  inf b        
 setInfo inf (SExpr_predCon _ b c d  ) = SExpr_predCon inf b c d    
 setInfo inf (SExpr_app     _ b c    ) = SExpr_app     inf b c      
-setInfo inf (SExpr_op      _ b c d  ) = SExpr_op      inf b c d    
+setInfo inf (SExpr_op      _ b c d e) = SExpr_op      inf b c d e
 setInfo inf (SExpr_lam     _ b c    ) = SExpr_lam     inf b c      
 setInfo inf (SExpr_list    _ b c    ) = SExpr_list    inf b c      
 setInfo inf (SExpr_ann     _ b c    ) = SExpr_ann     inf b c      

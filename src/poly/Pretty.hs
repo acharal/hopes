@@ -31,6 +31,7 @@ import Pos
 import Types 
 import Data.List (nub)
 
+
 class Pretty a where
     ppr :: a -> Doc
 
@@ -95,7 +96,7 @@ tvmap tys v =
             Just n  -> text n
 -}
 {-
-instance Pretty a => Pretty (TySig a) where
+instance Pretty a => Pretty (RhoSig a) where
     ppr (a,t) = sep [ ppr a, dcolon <+> ppr t]
 
 instance Pretty a => Pretty (PolySig a) where
