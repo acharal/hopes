@@ -1,6 +1,27 @@
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 2, or (at your option)
+--  any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program; see the file COPYING.  If not, write to
+--  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+--  Boston, MA 02110-1301, USA.
+
+
+-- The module implementing a lexer for polyHOPES
+
 module Lexer (
         module Text.Parsec.Token,
-        prologStyle, prologDef, prolog, stringLiteral2, varIdent, conIdent,graphicToken
+        hopesStyle, hopesDef, hopes, stringLiteral2, varIdent, conIdent,graphicToken
     ) where
 
 import Text.Parsec
@@ -10,16 +31,17 @@ import Text.Parsec.Language
 
 type Lexer s u m = GenTokenParser s u m
 
-prologStyle :: Stream s m Char => GenLanguageDef s u m
-prologStyle = emptyDef 
+-- A general language definition for a hopes-like higher order language
+hopesStyle :: Stream s m Char => GenLanguageDef s u m
+hopesStyle = emptyDef 
                { commentStart    = "/*"
                , commentEnd      = "*/"
                , commentLine     = "%"
                , nestedComments  = False
                , identStart      = letter <|> digit <|> graphicToken
                , identLetter     = alphaNum <|> oneOf "_"
-               , opStart         = identStart prologStyle
-               , opLetter        = identLetter prologStyle
+               , opStart         = identStart hopesStyle
+               , opLetter        = identLetter hopesStyle
                , reservedNames   = ["pred", "true", "false"]
                , reservedOpNames = ["=>", "\\~"]
                , caseSensitive   = True
@@ -28,12 +50,14 @@ prologStyle = emptyDef
 graphicToken :: Stream s m Char => ParsecT s u m Char
 graphicToken = oneOf "#$&*+-;/:<=>?@^~\\|"
 
-prologDef :: Stream s m Char => GenLanguageDef s u m
-prologDef = prologStyle
+hopesDef :: Stream s m Char => GenLanguageDef s u m
+hopesDef = hopesStyle
 
-prolog :: Stream s m Char => GenTokenParser s u m
-prolog  = makeTokenParser prologDef
+-- The actual polyHOPES lexer
+hopes :: Stream s m Char => GenTokenParser s u m
+hopes  = makeTokenParser hopesDef
 
+-- Variable token ( _ or alphanumeric starting with capital)
 varIdent :: Stream s m Char => GenTokenParser s u m -> ParsecT s u m String
 varIdent lexer = lexeme lexer $ try $
     do { c  <- underscore <|> upper
@@ -42,7 +66,7 @@ varIdent lexer = lexeme lexer $ try $
        }
     where underscore = char '_'
 
-
+-- Constant. Either alphanumeric starting with small letter, or graphic token string
 conIdent :: Stream s m Char => GenTokenParser s u m -> ParsecT s u m String
 conIdent lexer = lexeme lexer $ try $ 
           choice [ graphicTokenString
@@ -50,24 +74,17 @@ conIdent lexer = lexeme lexer $ try $
                  ]
     where graphicTokenString = do { tk  <- graphicToken
                                   ; tks <- many (graphicToken <|> char '.')
-                                  --; notFollowedBy graphicToken
                                   ; return (tk:tks)
                                   }
-          {- old version 
-          graphicTokenString = do { c <- graphicToken
-                                  ; cs <- many (graphicToken <|> identLetter)
-                                  ; return (c:cs)
-                                  } -}
-          
           letterIdent  = do { c  <- identStart
                             ; cs <- many identLetter
-                            --; notFollowedBy identLetter
                             ; return (c:cs)
                             } 
           identStart   = lower
           identLetter  = alphaNum <|> underscore
           underscore   = char '_'
 
+-- atom surrounded by " or '. TODO " -> char list
 stringLiteral2 :: Stream s m Char => GenTokenParser s u m -> ParsecT s u m String
 stringLiteral2 lexer = quotedString lexer '\'' <|> quotedString lexer '"'
 
@@ -88,6 +105,8 @@ stringChar quote = do{ c <- stringLetter quote; return (Just c) }
 stringLetter :: Stream s m Char => Char -> ParsecT s u m Char
 stringLetter quote = satisfy (\c -> (c /= quote) && (c /= '\\'))
 
+
+-- Escape characters
 stringEscape :: Stream s m Char => ParsecT s u m (Maybe Char)
 stringEscape = do { char '\\'
                   ;     do { escapeGap ; return Nothing }

@@ -1,4 +1,5 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,6 +16,10 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{- 
+ - Pretty printing
+ -}
+
 module Pretty (
         module Pretty,
         module Text.PrettyPrint
@@ -22,8 +27,7 @@ module Pretty (
 
 import Text.PrettyPrint
 
-import Loc (Loc(..), LocSpan(..))
---import Lang (Sym(..))
+import Pos 
 import Types 
 import Data.List (nub)
 
@@ -49,18 +53,22 @@ entails = text ":-"
 curly a = text "{" <+> a <+> text "}"
 --brackets a = text "[" <+> a <+> text "]"
 
-instance Pretty Loc where
-    ppr (Loc _ (-1) (-1)) = text "<no-location>"
-    ppr (Loc f l c) = hcat $ punctuate colon [ text f, int l, int c ]
+instance Pretty SourcePos where
+    ppr sp = 
+        if sp == bogusPos
+            then text "<no-location>"
+            else hcat $ punctuate colon [ text (sourceName sp), int (sourceLine sp), int (sourceColumn sp) ]
 
-instance Pretty LocSpan where
+instance Pretty PosSpan where
     ppr (OneLineSpan f l c1 c2) =
         hcat $ punctuate colon [ text f, int l, parens $ int c1 <> char '-' <> int c2 ]
     ppr (MultiLineSpan f l1 c1 l2 c2) = 
         hcat $ punctuate colon [ text f, ppr_par l1 c1 <> char '-' <> ppr_par l2 c2 ]
         where ppr_par l c = parens (int l <> comma <> int c)
-    ppr (LocSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
+    ppr (PosSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
 
+instance Show PosSpan where
+    show = show . ppr
 
 -- Types
 instance Pretty RhoType where

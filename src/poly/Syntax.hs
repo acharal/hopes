@@ -1,9 +1,27 @@
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 2, or (at your option)
+--  any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program; see the file COPYING.  If not, write to
+--  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+--  Boston, MA 02110-1301, USA.
+
 module Syntax where
 
 import Types
---import Loc
 import Basic
---import qualified Data.Foldable
+import Pos
+
 {-
  - Concrete syntax tree for the surface language.
  - Expressions are polymorphic to include extra information,
@@ -24,9 +42,9 @@ data Var a = Var a Symbol -- named variable
  -}
 
 -- Any sentence of the program
-data SSent a = SSent_clause a (SClause  a)
-             | SSent_goal   a (SGoal    a)
-             | SSent_comm   a (SCommand a)
+data SSent a = SSent_clause (SClause  a)
+             | SSent_goal   (SGoal    a)
+             | SSent_comm   (SCommand a)
     deriving Functor
 
 -- A goal sentence
@@ -37,7 +55,7 @@ data SGoal a = SGoal a (SExpr a)
 data SCommand a = SCommand a (SExpr a)
     deriving Functor
 
--- A clause. Nothing in the body represents a fact, Just a rule.
+-- A clause. If clBody is Just we have a rule, else a fact
 data SClause a = SClause { clInfo :: a 
                          , clHead :: SExpr a --SHead a
                          , clBody :: Maybe (SGets, SExpr a)
@@ -45,23 +63,10 @@ data SClause a = SClause { clInfo :: a
     deriving Functor
 
 -- Monomorphic or polymorphic gets
--- TODO implement polymorphic
 data SGets = SGets_mono | SGets_poly 
 
-{- Trying to simplify and remove this
--- Clause head
-data SHead a = SHead { headInfo :: a        -- Info
-                     , headName :: Const a  -- clause name 
-                     , headGivenAr :: Maybe Int 
-                                -- optional GIVEN arity 
-                     , headInfAr :: Int  -- inferred arity
-                     , headArgs  :: [[SExpr a]] -- Arguments
-                     }
-    deriving Functor
--}
 -- Expressions 
-data SExpr a = --SExpr_paren   a (SExpr a)  -- in Parens  
-               SExpr_const   a            -- constant 
+data SExpr a = SExpr_const   a            -- constant 
                              (Const a)    -- id
                              Bool         -- interpreted as predicate?
                              (Maybe Int)  -- optional GIVEN arity 
@@ -81,7 +86,6 @@ data SExpr a = --SExpr_paren   a (SExpr a)  -- in Parens
              | SExpr_lam  a [Var a] (SExpr a)    -- lambda abstr.
              | SExpr_list a [SExpr a] (Maybe (SExpr a))
                           -- list: initial elements, maybe tail
-             -- | SExpr_eq   a (SExpr a) (SExpr a)  -- unification
              | SExpr_ann  a (SExpr a) RhoType    -- type annotated
     deriving Functor
 
@@ -114,7 +118,6 @@ deriving instance Show a => Show (Const a)
 deriving instance Show a => Show (Var a)
 deriving instance Show a => Show (SClause a)
 deriving instance           Show SGets
---deriving instance Show a => Show (SHead a)
 deriving instance Show a => Show (SExpr a)
 deriving instance Show a => Show (SGoal a)
 deriving instance Show a => Show (SCommand a)
@@ -124,24 +127,39 @@ instance Show a => Show (SPredDef a) where
     show (SPredDef nm ar cls) = 
         nm ++ "/" ++ show ar ++ "\n" ++ foldr (\cl rest -> show cl ++ "\n" ++ rest) "" cls
 
--- constants, variables
+{-
+ - Simple predicates, utility functions, and class declarations 
+ - on syntax structures
+ -}
+
+-- 1) constants, variables
 instance HasName (Const a) where 
     nameOf (Const _ nm) = nm
 instance HasName (Var a ) where 
     nameOf (Var _ nm)  = nm
-    nameOf (AnonVar _) = "_" -- TODO
+    nameOf (AnonVar _) = "_" 
 
+instance HasPosition a => HasPosition (Const a) where
+    posSpan (Const a _)  = posSpan a  
+instance HasPosition a => HasPosition (Var a) where
+    posSpan (Var a _)  = posSpan a
+    posSpan (AnonVar a) = posSpan a
+
+-- Is a variable anonymous?
 isAnon (AnonVar _ ) = True
 isAnon _ = False 
 
--- Head
 
---instance HasName (SHead a) where 
---    nameOf = nameOf.headName
---instance HasArity (SHead a) where
---    arity h = case headGivenAr h of 
---        Just n  -> Just n
---        Nothing -> Just $ headInfAr h
+-- Sentences
+isGoal (SSent_goal _) = True
+isGoal _ = False 
+
+isClause (SSent_clause _) = True 
+isClause _ = False
+
+isCommand (SSent_comm _) = True
+isCommand _ = False
+
 
 -- PredDef
 
@@ -150,29 +168,19 @@ instance HasName (SPredDef a) where
 instance HasArity (SPredDef a) where
     arity = Just . predDefArity
 
--- Clause
+
+-- Clauses
 instance HasName (SClause a) where 
     nameOf = nameOf.clHead
 instance HasArity (SClause a) where
     arity = arity.clHead
-
-
--- Simple predicates on sentences
-isGoal (SSent_goal _ _) = True
-isGoal _ = False 
-
-isClause (SSent_clause _ _) = True 
-isClause _ = False
-
-isCommand (SSent_comm _ _) = True
-isCommand _ = False
 
 isFact :: SClause a -> Bool
 isFact (SClause _ _ Nothing) = True
 isFact _ = False
 
 
--- Predicates on expressions 
+-- EXPRESSIONS 
 -- Filter everything that can be a predicate constant
 isPredConst (SExpr_predCon _ _ _ _) = True
 isPredConst (SExpr_const _ _ predStatus _ _) = predStatus
@@ -188,9 +196,10 @@ hasPredConst _ = False
 isVar (SExpr_var _ _) = True
 isVar _              = False
 
--- Finds arity of a constant expression
+
+-- Finds arity of a constant expression.
+-- Arity given by the user takes precedance over inferred arity
 instance HasArity (SExpr a) where 
-    --arity (SExpr_paren _ ex) = arity ex
     arity (SExpr_const _ _ _ given inferred) =
         case given of 
             Just n  -> Just n 
@@ -201,6 +210,7 @@ instance HasArity (SExpr a) where
             Nothing -> Just inferred
     arity (SExpr_op _ _ _ args) = Just $ length args      
     arity (SExpr_ann _ ex _) = arity ex
+    -- Complex structures have no arity
     arity _ = Nothing
 
 instance HasName (SExpr a) where 
@@ -239,23 +249,74 @@ instance Flatable (SExpr a) where
         ex : (flatten ex')
     flatten ex = [ex]  -- nothing else has subexpressions
 
+-- Get/set information that expressions carry
+getInfo (SExpr_const   a _ _ _ _  ) =  a
+getInfo (SExpr_var     a _        ) =  a
+getInfo (SExpr_number  a _        ) =  a
+getInfo (SExpr_predCon a _ _ _    ) =  a
+getInfo (SExpr_app     a _ _      ) =  a
+getInfo (SExpr_op      a _ _ _    ) =  a
+getInfo (SExpr_lam     a _ _      ) =  a
+getInfo (SExpr_list    a _ _      ) =  a
+getInfo (SExpr_ann     a _ _      ) =  a
 
--- Syntax constructs have types if it exists in the 
+setInfo inf (SExpr_const   _ b c d e) = SExpr_const   inf b c d e
+setInfo inf (SExpr_var     _ b      ) = SExpr_var     inf b        
+setInfo inf (SExpr_number  _ b      ) = SExpr_number  inf b        
+setInfo inf (SExpr_predCon _ b c d  ) = SExpr_predCon inf b c d    
+setInfo inf (SExpr_app     _ b c    ) = SExpr_app     inf b c      
+setInfo inf (SExpr_op      _ b c d  ) = SExpr_op      inf b c d    
+setInfo inf (SExpr_lam     _ b c    ) = SExpr_lam     inf b c      
+setInfo inf (SExpr_list    _ b c    ) = SExpr_list    inf b c      
+setInfo inf (SExpr_ann     _ b c    ) = SExpr_ann     inf b c      
+
+-- Syntax constructs have type/location if it exists in the 
 -- information they carry
 
 instance HasType a => HasType (SExpr a) where
-    typeOf (SExpr_const   a _ _ _ _  ) = typeOf a
-    typeOf (SExpr_var     a _        ) = typeOf a
-    typeOf (SExpr_number  a _        ) = typeOf a
-    typeOf (SExpr_predCon a _ _ _    ) = typeOf a
-    typeOf (SExpr_app     a _ _      ) = typeOf a
-    typeOf (SExpr_op      a _ _ _    ) = typeOf a
-    typeOf (SExpr_lam     a _ _      ) = typeOf a
-    typeOf (SExpr_list    a _ _      ) = typeOf a
-    --typeOf (SExpr_eq      a _ _      ) = typeOf a
-    typeOf (SExpr_ann     a _ _      ) = typeOf a
+    typeOf e = typeOf (getInfo e)
+    hasType tp e = let newInf = e |> getInfo |> hasType tp
+                   in  setInfo newInf e
 
-    hasType tp (SExpr_const   a b c d e) = SExpr_const   (hasType tp a) b c d e
+instance HasPosition a => HasPosition (SExpr a) where
+    posSpan e = posSpan (getInfo e)
+
+
+{-
+ - Old stuff...
+ -}
+
+
+{-
+-- A class describing all syntactic items carrying information
+class HasInfo s where 
+    getInfo :: s a -> a
+    setInfo :: a -> s a -> s a
+
+-- Constants, variables instances
+instance HasInfo Const where 
+    getInfo (Const a _ ) = a
+    setInfo inf (Const _ c) = Const inf c
+
+instance HasInfo Var where 
+    getInfo (Var a _ )  = a
+    getInfo (AnonVar a) = a
+    setInfo inf (Var _ v) = Var inf v
+    setInfo inf (AnonVar _) = AnonVar inf
+-}
+
+{-
+instance (HasInfo s, HasType a) => HasType (s a) where
+    typeOf synt = typeOf $ getInfo synt
+   
+    hasType tp synt = let newInf = synt |> getInfo |> hasType tp 
+                      in  setInfo newInf synt
+
+instance (HasInfo s, HasPosition a) => HasPosition (s a) where
+    posSpan synt = posSpan $ getInfo synt
+-}
+{-
+(SExpr_const   a b c d e) = SExpr_const   (hasType tp a) b c d e
     hasType tp (SExpr_var     a b      ) = SExpr_var     (hasType tp a) b        
     hasType tp (SExpr_number  a b      ) = SExpr_number  (hasType tp a) b        
     hasType tp (SExpr_predCon a b c d  ) = SExpr_predCon (hasType tp a) b c d    
@@ -265,85 +326,9 @@ instance HasType a => HasType (SExpr a) where
     hasType tp (SExpr_list    a b c    ) = SExpr_list    (hasType tp a) b c      
     --hasType tp (SExpr_eq      a b c    ) = SExpr_eq      (hasType tp a) b c      
     hasType tp (SExpr_ann     a b c    ) = SExpr_ann     (hasType tp a) b c      
-
-
-{-
-
-instance HasType a => HasType (Const a) where
-    typeOf (Const a _ _) = typeOf a
-    hasType tp (Const a s i) = Const (hasType tp a) s i
-
-instance HasType a => HasType (Var a) where
-    typeOf (Var a _)   = typeOf a
-    typeOf (AnonVar a) = typeOf a
-    hasType tp (Var a s)   = Var (hasType tp a) s
-    hasType tp (AnonVar a) = AnonVar (hasType tp a)
--- FIXME : complete these!
-instance HasType a => HasType (SClause a) where
-    typeOf (SClause a _ _ _) = typeOf a 
-    --hasType tp (SClause a _ _ _) = hasType tp a
-
-instance HasType a => HasType (SHead a) where
-    typeOf (SHead a _ _) = typeOf a
-    --hasType tp (SHead a _ _) = hasType tp a
-
-instance HasType a => HasType (SBody a) where
-    typeOf (SBody_par a _ )     = typeOf a
-    typeOf (SBody_pop a _ _ _ ) = typeOf a
-    typeOf (SBody_pe  a _ )     = typeOf a
-    --hasType tp (SBody_par a _ )     = hasType tp a
-    --hasType tp (SBody_pop a _ _ _ ) = hasType tp a
-   -- hasType tp (SBody_pe  a _ )     = hasType tp a
-
-instance HasType a => HasType (SOp a) where
-    typeOf (SAnd a) = typeOf a
-    typeOf (SOr  a) = typeOf a
-    typeOf (SFollows a) = typeOf a
-  --  hasType tp (SAnd a) = hasType tp a
-   -- hasType tp (SOr  a) = hasType tp a
-  --  hasType tp (SFollows a) = hasType tp a
-
-instance HasType a => HasType (SExpr a) where
-    typeOf (SExpr a _ _ ) = typeOf a
-  --  hasType tp (SExpr a _ _ ) = hasType tp a
-
-instance HasType a => HasType (SGoal a) where
-    typeOf (SGoal a ) = typeOf a
-  --  hasType tp (SGoal a) = hasType tp a
-
--- Syntax constructs have location if it exists in the 
--- information they carry
--- Maybe useful later
-instance HasLocation a => HasLocation (Const a) where
-    loc (Const a _ _) = loc a
-    
-instance HasLocation a => HasLocation (Var a) where
-    loc (Var a _)   = loc a
-    loc (AnonVar a) = loc a
-
-instance HasLocation a => HasLocation (SClause a) where
-    loc (SClause a _ _ _) = loc a
-
-instance HasLocation a => HasLocation (SHead a) where
-    loc (SHead a _ _) = loc a
-
-instance HasLocation a => HasLocation (SBody a) where
-    loc (SBody_par a _ )     = loc a
-    loc (SBody_pop a _ _ _ ) = loc a
-    loc (SBody_pe  a _ )     = loc a
-
-instance HasLocation a => HasLocation (SOp a) where
-    loc (SAnd a) = loc a
-    loc (SOr  a) = loc a
-    loc (SFollows a) = loc a
-
-instance HasLocation a => HasLocation (SExpr a) where
-    loc (SExpr a _ _ ) = loc a
-
-instance HasLocation a => HasLocation (SGoal a) where
-    loc (SGoal a) = loc a
 -}
 
+{-
 -- true and fail constants
 
 sTrue :: a -> SExpr a
@@ -372,4 +357,4 @@ sNil a = SExpr_const a
                      False
                      Nothing
                      (-1)
-
+-}

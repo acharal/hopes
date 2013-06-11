@@ -1,4 +1,5 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -18,80 +19,85 @@
 
 
 -- Model a location in a program
-module Loc where
+module Pos (
+    module Pos, 
+    module Text.Parsec.Pos,
+    module Data.Monoid
+) where
 
-
-import Data.Monoid
+import Text.Parsec.Pos
+import Data.Monoid hiding ((<>))
 import Control.Monad.Identity
 
+-- A position range
+data PosSpan = 
+      PosSpan SourcePos SourcePos
+    | OneLineSpan   FilePath Line Column Column
+    | MultiLineSpan FilePath Line Column Line Column
+  deriving (Eq)
 
-type Line = Int
-type Col  = Int
 
-data Loc = Loc {
-    locFile   :: !FilePath,
-    locLine   :: !Line,
-    locOffset :: !Col }
- deriving Eq
 
-data LocSpan = 
-      LocSpan Loc Loc
-    | OneLineSpan   FilePath Line Col Col
-    | MultiLineSpan FilePath Line Col Line Col
-  deriving Eq
+bogusPos  = newPos "bogusFile" (-1) (-1)
+bogusSpan = PosSpan bogusPos bogusPos
 
-bogusLoc  = Loc "bogus" (-1) (-1)
-bogusSpan = LocSpan bogusLoc bogusLoc
+-- Start of a span/range
+spanBegin (OneLineSpan f l c1 c2)       = newPos f l c1
+spanBegin (MultiLineSpan f l1 c1 l2 c2) = newPos f l1 c1
+spanBegin (PosSpan l1 l2)               = l1
 
-spanBegin (OneLineSpan f l c1 c2)       = Loc f l c1
-spanBegin (MultiLineSpan f l1 c1 l2 c2) = Loc f l1 c1
-spanBegin (LocSpan l1 l2)               = l1
+-- End of a span
+spanEnd (OneLineSpan f l c1 c2)         = newPos f l c2
+spanEnd (MultiLineSpan f l1 c1 l2 c2)   = newPos f l2 c2
+spanEnd (PosSpan l1 l2)                 = l2
 
-spanEnd (OneLineSpan f l c1 c2)         = Loc f l c2
-spanEnd (MultiLineSpan f l1 c1 l2 c2)   = Loc f l2 c2
-spanEnd (LocSpan l1 l2)                 = l2
 
-mkSpan :: Loc -> Loc -> LocSpan
+mkSpan :: SourcePos -> SourcePos -> PosSpan
 mkSpan l1 l2 =
-    if locFile l1  == locFile l2 then
-        if locLine l1 == locLine l2 then
-            OneLineSpan (locFile l1) (locLine l1) (locOffset l1) (locOffset l2)
+    if sourceName l1  == sourceName l2 then
+        if sourceLine l1 == sourceLine l2 then
+            OneLineSpan (sourceName l1) (sourceLine l1) (sourceColumn l1) (sourceColumn l2)
         else
-            MultiLineSpan (locFile l1) (locLine l1) (locOffset l1) (locLine l2) (locOffset l2)
+            MultiLineSpan (sourceName l1) (sourceLine l1) (sourceColumn l1) 
+                                          (sourceLine l2) (sourceColumn l2)
     else
-        LocSpan l1 l2
+        PosSpan l1 l2
 
 
--- Location is a Monoid with neutral element = bogusloc
-instance Monoid Loc where
-    mempty = bogusLoc
+-- Location is a Monoid with neutral element = bogusPos
+instance Monoid SourcePos where
+    mempty = bogusPos
     mappend a b
-        | a == bogusLoc = b
+        | a == bogusPos = b
         | otherwise = a
 
-instance Monoid LocSpan where
+instance Monoid PosSpan where
     mempty = bogusSpan
     mappend a b
         | a == bogusSpan = b
-        | otherwise = mkSpan (spanBegin (locSpan a)) (spanEnd (locSpan b))
+        | otherwise = mkSpan (spanBegin a) (spanEnd b)
 
 
--- | Class which will be later implemented by tokens, syntactic
--- structures, errors and of course locations. Ensures a
--- location and a location span.
--- Minimum definition: loc OR locSpan
-class HasLocation a where
-    loc :: a ->  Loc
-    locSpan :: a -> LocSpan
-    locSpan x = mkSpan s s where s = loc x
-    loc x = spanBegin (locSpan x)
+-- | Class which is implemented by syntactic structures, 
+-- errors and of course positions themselves. Ensures a
+-- position and a position span.
+-- Minimum definition: pos OR posSpan
+class HasPosition a where
+    pos     :: a -> SourcePos
+    posSpan :: a -> PosSpan
+    posSpan x = mkSpan s s where s = pos x
+    pos x     = spanBegin (posSpan x)
 
-instance HasLocation Loc where
-    loc x = x
-instance HasLocation LocSpan where
-    locSpan x = x
+instance HasPosition SourcePos where
+    pos x = x
+instance HasPosition PosSpan where
+    posSpan x = x
 
 
+
+
+
+{-
 instance (HasLocation a, HasLocation b) => HasLocation (a, b) where
     locSpan (a, b) = locSpan a `mappend` locSpan b
 
@@ -139,3 +145,5 @@ instance MonadLoc Identity where
 instance MonadSetLoc Identity where
     withLoc _ a = a
 
+
+-}

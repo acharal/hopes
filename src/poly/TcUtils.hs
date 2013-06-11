@@ -1,3 +1,21 @@
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 2, or (at your option)
+--  any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program; see the file COPYING.  If not, write to
+--  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+--  Boston, MA 02110-1301, USA.
+
 {-
  - Utility functions for Type checking
  -}
@@ -139,8 +157,6 @@ withEnvPreds bindings =
   
 
 
-
-
 {-
  - Other auxilliary TypeCheck functions
  -}
@@ -210,74 +226,9 @@ freshen (Poly_gen alphas phis pi) = do
     let Rho_pi pi' = s (Rho_pi pi)
     return pi'
 
-{-
-    let ss = [ Left $ (al, Rho_var al') 
-             | (al, al') <- zip alphas alphas'] ++
-             [ Right $ (phi, Pi_var phi') 
-             | (phi, phi') <- zip phis phis']
-        Rho_pi pi' = substitute subst (Rho_pi pi)
-    return pi'
--}
-
-{-
-
-
 {- 
- - Substitutions and unification
+ - Substitutions 
  -}
--- The last element of the subst. to be applied first
-type Substitution = [Either (Alpha, RhoType) (Phi, PiType)]
-{-
-substAlpha :: Alpha   -- variable to be subst.
-           -> RhoType -- with this type
-           -> RhoType -- in this type
-
-substAlpha al rho rhoStart@(Rho_var al') | al == al' = rho
-substAlpha al rho (Rho_pi pi) = Rho_pi $ aux al rho pi
-    where aux alpha rho (Pi_fun rhos pi) =
-              Pi_fun (map (substAlpha al rho) rhos) (aux al rho pi)
-          aux _ _ pi = pi
-substAlpha _ _ rhoStart = rhoStart
-
-substPhi phi pi (Rho_pi piStart) = Rho_pi $ aux phi pi piStart
-    where aux phi pi piStart@(Pi_var phi') | phi == phi' = phi
-          aux phi pi (Pi_fun rhos pi') =
-              Pi_fun (map (substPhi phi pi) rhos) (aux phi pi pi')
-          aux _ _ piStart = piStart
-substPhi _ _ phiStart = phiStart
--}
-
--- apply a substitution on a type
-substitute :: Substitution -> RhoType -> RhoType
-substitute s Rho_i = Rho_i
-substitute s (Rho_var al) = substAlpha s al
-    where substAlpha s al = case lookupLeft al s of
-                                Just rho' -> rho'
-                                Nothing   -> Rho_var al 
-          lookupLeft al [] = Nothing
-          lookupLeft al (Left (al', rho) : _) | al == al' = Just rho
-          lookupLeft al (_:tl) = lookupLeft al tl
-
-substitute s (Rho_pi pi ) = Rho_pi $ aux s pi
-    where aux s (Pi_var phi) = substPhi s phi
-          aux s Pi_o = Pi_o
-          aux s (Pi_fun rhos pi) = Pi_fun (map (substitute s) rhos) (aux s pi)
-            
-          substPhi s phi  = case lookupRight phi s of
-                                Just pi'  -> pi'
-                                Nothing   -> Pi_var phi
-
-          
-          lookupRight phi [] = Nothing
-          lookupRight phi (Right (phi', pi) : _) | phi == phi' = Just pi
-          lookupRight phi (_:tl) = lookupRight phi tl
-
--- Apply substitution in a constraint list
-substCnts s constr = [(substitute s rho1, substitute s rho2, exp) 
-                     | (rho1, rho2, exp) <- constr ] 
-
--}
-
 
 type Substitution = RhoType -> RhoType
 
@@ -306,13 +257,4 @@ substPhi phi pi rho = rho
 -- Apply a substitution on a list of constraints
 substCnts :: Substitution -> [Constraint a] -> [Constraint a]
 substCnts s cstr = [(s rho1, s rho2, ex) | (rho1, rho2,ex) <- cstr]
-
-
-
-
-
-
-
-
-
 

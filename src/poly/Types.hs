@@ -1,4 +1,5 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -7,13 +8,14 @@
 --
 --  This program is distributed in the hope that it will be useful,
 --  but WITHOUT ANY WARRANTY; without even the implied warranty of
---  MERCHANTABILITY or FITNESS FOR A PATICULAR PURPOSE.  See the
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 --  GNU General Public License for more details.
 --
 --  You should have received a copy of the GNU General Public License
 --  along with this program; see the file COPYING.  If not, write to
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
+
 
 module Types where
 
@@ -22,7 +24,7 @@ import Basic
 import Data.List (nub)
 import Data.Foldable hiding (maximum,concat)
 import Data.Monoid
-import Loc(HasLocation, Located(..))
+import Pos(HasPosition(..))
 
 -- Argument variables
 newtype Alpha = Alpha Symbol
@@ -65,12 +67,6 @@ instance Eq AllTypes where
     _ == _ = False
 -}
 
-{-
-class (Show tp, Eq tp) => Type tp 
-instance Type PiType
-instance Type Type 
-instance Type PolyType
--}
 
 -- Pretty printing for types
 
@@ -110,43 +106,6 @@ piToPoly = Poly_gen [] []
 polyToPi (Poly_gen [] [] pi) = pi
 polyToPi poly = error $ "Monomorphism violation: " ++ show poly
 
-{-
--- Find all variables in types
-allRhoVars Rho_i         = ([],   [])
-allRhoVars (Rho_var al)  = ([al], [])
-allRhoVars (Rho_pi pi)   = allPiVars pi
-
-allPiVars Pi_o              = ([], [])
-allPiVars (Pi_var phi)      = ([], [phi])
-allPiVars (Pi_fun rhos pi') = (nub $ piAs ++ rhoAs, nub $ piPhis ++ rhoPhis)
-    where (piAs,  piPhis )  = allPiVars pi'
-          (rhoAs, rhoPhis)  = (concat alists, concat philists)
-          (alists,philists) = map allRhoVars rhos --[([a],[p])]
-                            |> unzip --([[a]], [[p]])
--}
---instance Foldable MonoTypeV where
---    foldMap f (TyVar a)     = f a
---    foldMap f (TyGrd c)     = mempty
---    foldMap f (TyFun t1 t2) = foldMap f t1 `mappend` foldMap f t2
---    foldMap f (TyTup tl)    = mconcat (map (foldMap f) tl)
-
-
-
---instance Functor MonoTypeV where
---    fmap f (TyVar a)     = TyVar (f a)
---    fmap f (TyGrd c)     = TyGrd c
---    fmap f (TyFun t1 t2) = TyFun (fmap f t1) (fmap f t2)
---    fmap f (TyTup tl)    = TyTup (map (fmap f) tl)
-
-
---tyargs :: TypeV a -> [TypeV a]
---tyargs (TyFun t t') = t : tyargs t'
---    --where   h (TyTup tl) = tl
---    --        h t = [t]
---tyargs _ = []
-
---tyvars ty = nub $ foldMap (:[]) ty
-
 
 -- | Wrapper type for rho-typed objects
 
@@ -171,14 +130,14 @@ instance HasType (Typed a) where
     typeOf (T _ ty) = ty
     hasType ty (T a _) = T a ty
 
-instance Functor Typed where
-    fmap f (T a ty) = T (f a) ty
+--instance Functor Typed where
+--    fmap f (T a ty) = T (f a) ty
 
 
 -- Combine type with location
-instance HasType a => HasType (Located a) where
-    typeOf (L _ a) = typeOf a
-    hasType ty (L l a) = L l (hasType ty a)
+instance HasPosition a => HasPosition (Typed a) where 
+    posSpan (T a _) = posSpan a
+
 
 order :: HasType a => a -> Int
 order a =

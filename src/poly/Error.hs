@@ -1,4 +1,5 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -20,17 +21,16 @@ module Error (
     module Control.Monad.Error
 ) where
 
-import Loc
+import Pos
 import Pretty
 import Control.Monad.Error
 
-{- this is a comment -}
 
 type ErrDesc = Doc
 
 data Message =
    Msg { 
-        errloc  :: Loc,
+        errloc  :: SourcePos,
         errtyp  :: ErrType,
         level   :: ErrLevel,
         desc    :: ErrDesc
@@ -38,9 +38,10 @@ data Message =
 
 instance Show Message where show = show.ppr
 
-instance HasLocation Message where
-    loc (Msg l _ _ _) = l
+instance HasPosition Message where
+    pos (Msg p _ _ _) = p
 
+-- Errors and warnings
 type Messages = ([Message], [Message])
 
 data ErrLevel = 
@@ -62,7 +63,7 @@ instance Error Messages where
 
 instance Pretty Message where
     ppr err
-       | errloc err == bogusLoc = desc err
+       | errloc err == bogusPos = desc err
        | otherwise              = hang (ppr (errloc err) <>colon) 4 (desc err)
 
 
@@ -72,11 +73,12 @@ class Monad m => MonadWarn m w where
     addWarning w = fail $ show w
 -}
 
+-- Utilities 
 
 isWarn msg = level msg == Warning
 isFail = not . isWarn
 
-mkErr typ lev msg = Msg bogusLoc typ lev msg
+mkErr typ lev msg = Msg bogusPos typ lev msg
 
 mkErrWithLoc l typ lev msg = Msg l typ lev msg
 

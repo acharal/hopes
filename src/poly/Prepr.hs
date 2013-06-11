@@ -1,3 +1,22 @@
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 2, or (at your option)
+--  any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program; see the file COPYING.  If not, write to
+--  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+--  Boston, MA 02110-1301, USA.
+
+
 {-
  - Preprocess expressions before typecheck
  -}
@@ -7,7 +26,6 @@ module Prepr where
 
 import Basic
 import Types 
-import Loc
 import Syntax
 import Parser
 import Error
@@ -35,47 +53,39 @@ predefSpecialPreds = [ ("->"  , 2)
                      --, ("findall", 1)
                      ]
  
---predDefIndConsts = [ "[]" ]
 
---predDefPredConsts = [ "!" ]         
+-- Infer arities and predicative status in syntactic structures
 
--- Infer arities and predicative status
-fixSentence c@(SSent_comm _ _) = c
-fixSentence (SSent_clause a' (SClause a hd bd) ) =
-    SSent_clause a' $ SClause a (fixExpr True 0 hd) 
-                    $ fmap (\(gets, exp) -> (gets, fixExpr True 0 exp)) bd
+-- TODO implement commands differently?
+fixSentence (SSent_comm (SCommand a ex)) = 
+    SSent_comm $ SCommand a $ fixExpr True 0 ex
+fixSentence (SSent_clause (SClause a hd bd) ) =
+    SSent_clause $ SClause a (fixExpr True 0 hd) 
+                 $ fmap ( \(gets, ex) -> (gets, fixExpr True 0 ex) ) bd
 
-{-
-fixHead (SHead a c givArr _ argList) = 
-    -- if there are no arguments, infer arity 0
-    let infArr = case argList of
-                     [] -> 0
-                     (hd:_) ->  length hd
-    in SHead a c givArr infArr $ 
-        map (map $ fixExpr False 0) argList
--}
-fixExpr :: Bool    -- interpred as predicate?
-        -> Int     -- arity
+fixExpr :: Bool    -- interpred as predicate? (predicate status)
+        -> Int     -- arguments FOLLOWING, so arity of this expression
         -> SExpr a -- examined expression
-        -> SExpr a
+        -> SExpr a -- fixed expression
 
 fixExpr predSt ar ex = case ex of
-    --SExpr_paren a ex1 -> 
-    --    SExpr_paren a (fixExpr predSt ar ex1) 
-
-    -- List is never predicate (don't need this)
+    
+    -- Arity and predicate status are passed from environment
     SExpr_const a con _ givArr _ ->
-        SExpr_const a con (predSt {-&& not (nameOf con `elem` predDefIndConsts)-}) givArr ar 
-
-    SExpr_var a v ->
-        SExpr_var a v
+        SExpr_const a con predSt givArr ar 
+    
+    -- Variables and numbers remain unchanged
+    e@(SExpr_var a v) ->
+        e
 
     e@(SExpr_number _ _ ) ->
         e
 
+    -- Predicate constants are passed their arity
     SExpr_predCon a c givArr _ ->
         SExpr_predCon a c givArr ar
 
+    -- Application
     SExpr_app a func args ->
         SExpr_app a func' args'        
         where -- pred. status goes to application functor
@@ -87,28 +97,25 @@ fixExpr predSt ar ex = case ex of
               isSpecialConst func = 
                   (nameOf func, fromJust $ arity func) `elem` predefSpecialPreds
 
+    -- Similarly to above, only more concise
     SExpr_op a op _ args ->
         SExpr_op a op predSt (map (fixExpr argPredSt 0) args)
-        where argPredSt = predSt && (nameOf op, length args) `elem` predefSpecialPreds --isPredOp op ( length args)
-              --isPredOp (Const _ c) opArr = 
-              --    elem (c,opArr) predefSpecialPreds
-                 
+        where argPredSt = predSt && (nameOf op, length args) `elem` predefSpecialPreds 
+     
+    -- Body of a lambda abstraction in a predicate            
     SExpr_lam a vars bd ->
         SExpr_lam a vars (fixExpr True 0 bd)
 
+    -- List elements are no predicates 
     SExpr_list a initElems tl ->
         SExpr_list a (map (fixExpr False 0) initElems) 
-            (fmap (fixExpr False 0) tl)
-            -- fmap maps into Maybe 
-
-    --SExpr_eq a ex1 ex2 ->
-    --    SExpr_eq a (fixExpr False 0 ex1) (fixExpr False 0 ex2)
-   
-    SExpr_ann a ex tp -> SExpr_ann a ex tp --TODO implement this!
+            (fmap (fixExpr False 0) tl) -- fmap maps into Maybe 
+    
+    
+    SExpr_ann a ex' tp -> SExpr_ann a (fixExpr predSt ar ex') tp --TODO implement this!
 
 
--- Find all predicates with their arities defined in a clause
--- body
+-- Find all predicates with their arities defined in a clause body
 findReferredPreds :: SClause a -> [PredSig]
 findReferredPreds clau = case clBody clau of 
     Nothing -> []
@@ -137,11 +144,9 @@ depAnalysis definitions =
         allDeps def = nub $ concatMap findReferredPreds (predDefClauses def) 
         -- create nodes in the form (node, key, [key])
         -- (see Data.Graph)
-        nodes = map (\def -> ( def
-                             , (predDefName def, predDefArity def)
-                             , allDeps def
-                             )
-                    ) definitions
+        nodes = [(def, (predDefName def, predDefArity def), allDeps def)
+                | def <- definitions
+                ]  
         -- Find strongly connected components
         depGroups = stronglyConnComp nodes
     in map flattenSCC depGroups
@@ -160,7 +165,7 @@ progToGroupDag sents =
                         -- Fix arities and pred. statuses
                         |> map fixSentence 
                         -- Keep (def, clause) pairs, with def the defined predicate
-                        |> map (\(SSent_clause _ cl) -> (findDefinedPred cl,cl))
+                        |> map (\(SSent_clause cl) -> (findDefinedPred cl,cl))
                         -- Group by which predicate is defined
                         |> sortBy  (compare `on` fst)
                         |> groupBy (\cl1 cl2 -> fst cl1 == fst cl2)
@@ -173,14 +178,4 @@ progToGroupDag sents =
                                )
     -- Feed the definitions into dependency analysis
     in depAnalysis cldefs
-
-{-
-        clGroups = groupBy (\cl1 cl2 -> nameOf cl1 == nameOf cl2 && arity cl1 == arity cl2) clauses
-        defs = map (\grp -> SPredDef { predDefName = nameOf $ head grp 
-                                     , predDefArity = fromJust $ arity $ head grp
-                                     , predDefClauses = grp
-                                     }
-                   ) clGroups 
-    in depAnalysis defs
--}
 
