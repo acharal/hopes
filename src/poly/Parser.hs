@@ -511,6 +511,7 @@ runHopesParser p st sourcename input = runP p' st sourcename input
             return (res, st')
 
 -- Wrapper function for runP. Returns both parsed program and final state
+-- Parameters : initial state, input file.
 runHopesParser2 st inputFile = do
     input <- readFile inputFile
     return $ runP p' st inputFile input
@@ -522,11 +523,11 @@ runHopesParser2 st inputFile = do
               return (sents, st')
           sentence' = do
               s <- sentence
-              when (isCommand s) (opDirective1 s)
+              when (isCommand s) (opDirective1 s)  
               return s
 
 -- The empty parser state
-emptyState = ParseSt [] []
+emptyParseState = ParseSt [] []
 
 
 

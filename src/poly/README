@@ -1,0 +1,6 @@
+./interactive Main.hs 
+    Open an interactive and compile sources
+./compile
+    Compile into polyhopes executable
+./clean
+    Delete .o and .hi files

@@ -19,7 +19,7 @@
 
 
 {-
- - A main module for testing
+ - A main module for testing/ invoking the type checker
  -}
 
 
@@ -36,18 +36,49 @@ import TypeCheck
 import Types
 import Pos
 
-import Data.Maybe
+import Data.Maybe(fromJust)
 import Data.List(null)
-import System.Environment
+import System.Environment(getArgs)
 import System.Exit
 
-main = do
+-- Calling main' inputfile verbose from interactive:
+--     Parses operator file
+--     Parces and typeChecks builtins file
+--     Parces and typeChecks inputFile
+--     Prints either error or typechecked predicates
+--     If verbose, prints syntax tree with annotations
+main' inputFile verbose = do
     -- Parse operators 
-    Right (_, opTable) <- runHopesParser2 emptyState "../../pl/op.pl"
+    Right (_, opTable) <- runHopesParser2 emptyParseState "../../pl/op.pl"
     -- Parse builtins
     Right (buis, buisST) <- runHopesParser2 opTable "../../pl/builtins.pl"
     -- Tc builtins
     let Right buis' = runTc' initTcEnv buis
+    -- Parce input
+    maybeParsed <- runHopesParser2 buisST inputFile   
+    case maybeParsed of 
+        Left err -> do
+            putStr "Parse error at "
+            print err
+            --exitFailure
+        Right (parsed, _) -> do
+            let env = addPredsToEnv initTcEnv (tcOutPreds buis')
+                typeChecked = runTc' env parsed
+            case typeChecked of
+                Left (errs, warns) ->
+                    mapM_ (putStrLn . render . ppr) errs
+                Right dag -> do
+                    when verbose $  mapM_ (putStrLn . show) (tcOutSyntax dag)
+                    mapM_ (putStrLn . show) (tcOutPreds dag)
+
+
+-- Invoking polyhopes program:
+--     Parses operator file
+--     Parces and typeChecks builtins file
+--     Parces and typeChecks first command line argument
+--     Prints either error or typechecked predicates
+-- Fails if (length args =\= 1)
+main = do
     args <- getArgs
     when (null args) $ do
         putStrLn $ "Error: no file given"
@@ -55,34 +86,32 @@ main = do
     when (length args > 1) $ do 
         putStrLn $ "Only one file allowed"
         exitFailure
-    -- Parce input
-    let inputFile = head args
-    maybeParsed <- runHopesParser2 buisST inputFile   
-    case maybeParsed of 
-        Left err -> do
-            putStr "Parse error at "
-            print err
-            exitFailure
-        Right (parsed, _) -> do
-            let env = addPredsToEnv initTcEnv (tcOutPreds buis')
-                typeChecked = runTc' env parsed
-            case typeChecked of
-                Left (errs, warns) -> mapM_ (putStrLn . render . ppr) errs
-                Right dag -> 
-                    mapM_ (putStrLn . show) (tcOutPreds dag)
-                    
+    main' (head args) False 
 
 -- Wrapper for runTc
 runTc' env prog = runIdentity $ runTc env $ progToGroupDag prog
 
-testTc verbatim file = do
+simple   = "../../pl/examples/simple.pl"
+aleph    = "../../pl/examples/aleph.pl"
+testFile = "../../pl/examples/test.pl"
+prelude  = "../../pl/examples/mini-prelude.pl"
+
+
+
+
+------------- Various tests --------------
+
+
+
+-- Old typeCheck tester
+testTc verbose file = do
     bui <- content "../../pl/builtins.pl" 
     let Right buis = runIdentity $ runTc initTcEnv $ progToGroupDag bui
     fl <- content file
     case (runIdentity $ runTc ( addPredsToEnv initTcEnv (tcOutPreds buis) ) $ progToGroupDag fl) of
         Left msgs -> mapM_ (putStrLn . show . ppr) (fst msgs)
         Right dag -> do
-            when verbatim $ mapM_ (putStrLn.show) (tcOutSyntax dag)
+            when verbose $ mapM_ (putStrLn.show) (tcOutSyntax dag)
             mapM_ (putStrLn.show) (tcOutPreds dag)
 
 
@@ -105,10 +134,6 @@ testGen test file  = do
     snt <- content fileFull
     mapM_ (putStrLn . show) (test snt)
 
-simple   = "simple"
-aleph    = "aleph"
-testFile = "test"
-prelude  = "mini-prelude"
 
 --- TESTING GENERAL FUNCTIONS ---
 testFlatten = testGen $ 
