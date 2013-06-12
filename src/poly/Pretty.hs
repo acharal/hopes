@@ -29,7 +29,6 @@ import Text.PrettyPrint
 
 import Pos 
 import Types 
-import Data.List (nub)
 
 
 class Pretty a where

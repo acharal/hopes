@@ -29,7 +29,7 @@ data Operator = Operator { opName :: String,  opAssoc :: String }
 type OperatorTable = [(Int, Operator)]
 
 
-precOp (prec, op) = prec
+precOp = fst
 
 updateOpTable table op = op : deleteBy eqOp op table
    where eqOp (_, op1) (_, op2) = op1 == op2

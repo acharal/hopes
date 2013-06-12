@@ -37,16 +37,15 @@ import Types
 import Pos
 
 import Data.Maybe(fromJust)
-import Data.List(null)
 import System.Environment(getArgs)
 import System.Exit
 
 -- Calling main' inputfile verbose from interactive:
 --     Parses operator file
---     Parces and typeChecks builtins file
---     Parces and typeChecks inputFile
---     Prints either error or typechecked predicates
+--     Parses and typeChecks builtins file
+--     Parses and typeChecks inputFile
 --     If verbose, prints syntax tree with annotations
+--     Prints either error or typechecked predicates
 main' inputFile verbose = do
     -- Parse operators 
     Right (_, opTable) <- runHopesParser2 emptyParseState "../../pl/op.pl"
@@ -60,7 +59,7 @@ main' inputFile verbose = do
         Left err -> do
             putStr "Parse error at "
             print err
-            --exitFailure
+        -- Successful parse: typeCheck
         Right (parsed, _) -> do
             let env = addPredsToEnv initTcEnv (tcOutPreds buis')
                 typeChecked = runTc' env parsed
@@ -84,7 +83,7 @@ main = do
         putStrLn $ "Error: no file given"
         exitFailure
     when (length args > 1) $ do 
-        putStrLn $ "Only one file allowed"
+        putStrLn $ "Error: Only one file allowed"
         exitFailure
     main' (head args) False 
 

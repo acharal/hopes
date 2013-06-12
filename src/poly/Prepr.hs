@@ -25,17 +25,12 @@
 module Prepr where
 
 import Basic
-import Types 
 import Syntax
-import Parser
-import Error
 import TcUtils
 import Data.List
 import Data.Maybe (fromJust)
 import Data.Graph
 import Data.Function(on)
-import Control.Monad.Reader
-import Control.Monad.State
 
 
 {-
@@ -77,7 +72,7 @@ fixExpr predSt ar ex = case ex of
         SExpr_const a con predSt givArr ar 
     
     -- Variables and numbers remain unchanged
-    e@(SExpr_var a v) ->
+    e@(SExpr_var _ _) ->
         e
 
     e@(SExpr_number _ _ ) ->

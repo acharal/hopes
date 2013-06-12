@@ -19,11 +19,7 @@
 
 module Types where
 
-import Prelude hiding (concatMap, foldl, foldr)
 import Basic
-import Data.List (nub)
-import Data.Foldable hiding (maximum,concat)
-import Data.Monoid
 import Pos(HasPosition(..))
 
 -- Argument variables

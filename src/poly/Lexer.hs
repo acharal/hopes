@@ -26,10 +26,8 @@ module Lexer (
 
 import Text.Parsec
 import Text.Parsec.Token
-import qualified Text.Parsec.Token as L
 import Text.Parsec.Language
 
-type Lexer s u m = GenTokenParser s u m
 
 -- A general language definition for a hopes-like higher order language
 hopesStyle :: Stream s m Char => GenLanguageDef s u m

@@ -27,7 +27,6 @@ module Pos (
 
 import Text.Parsec.Pos
 import Data.Monoid hiding ((<>))
-import Control.Monad.Identity
 
 -- A position range
 data PosSpan = 

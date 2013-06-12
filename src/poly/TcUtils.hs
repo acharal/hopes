@@ -32,10 +32,9 @@ import Basic
 import Types 
 import Syntax
 import Error
-import Pretty
+import Pretty(text)
 
-import Data.List
-import Data.Maybe (fromJust)
+import Data.List(nub)
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Identity

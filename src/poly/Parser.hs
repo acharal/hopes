@@ -28,7 +28,6 @@
 
 module Parser where
 
-import Basic
 import qualified Lexer as L
 import Syntax
 import qualified Operator as Operators
@@ -36,33 +35,27 @@ import Pos
 
 import Text.Parsec
 import Text.Parsec.Expr
-import Data.Char
-import Data.List 
 import Control.Monad (when)
-
-{-
-import qualified Data.ByteString.Char8 as C
-import Text.Parsec.ByteString
--}
 
 -- type OperatorTable s u m a = [[Operator s u m a]]
 
+-- The user state in the parser. Contains an operator table as well as a 
+-- cached operator table as Text.Parsec.Expr demands it
 data ParseState s m = 
     ParseSt { operatorTable :: Operators.OperatorTable
             , cachedTable   :: [(Int, [Operator s (ParseState s m) m ( SExpr PosSpan )])]
             } 
 
+-- The empty parser state
+emptyParseState = ParseSt [] []
+
+-- A ParsecT type with user state as defined above
 type ParserT s m a = ParsecT s (ParseState s m) m a
 
 
--- helpers
-
-followedBy p after = do { rv <- p; after; return rv }
-
--- |  opposite of take
-skip n [] = []
-skip 0 x = x
-skip n (x:xs) = skip (n-1) xs
+{- 
+ - Utility parsing functions
+ -}
 
 -- Takes a functor and a list of argument lists with positions,
 -- and makes a compatible nested application
@@ -126,7 +119,9 @@ mkGets _    = error "gets" -- TODO some better error discipline
 mkClause hd bd p1 p2 = SClause (mkSpan p1 p2) hd bd
 
 
--- Lexer 
+{-
+ - Lexers, imported from Lexer module
+ -}
 
 commaSep :: Stream s m Char => ParsecT s u m a -> ParsecT s u m [a]
 commaSep  = L.commaSep1 L.hopes
@@ -165,6 +160,7 @@ conIdent = L.conIdent L.hopes
 natural :: Stream s m Char => ParsecT s u m Integer
 natural = L.natural L.hopes
 
+-- Atom is either a constant, or a string literal
 atom :: Stream s m Char => ParsecT s u m String
 atom = try conIdent <|> stringLiteral -- <?> "atom"
 
@@ -180,8 +176,7 @@ float = L.float L.hopes
 symbol :: Stream s m Char => String -> ParsecT s u m String
 symbol = L.symbol L.hopes
 
-
---reserved
+-- reserved keyword
 predTK :: Stream s m Char => ParsecT s u m ()
 predTK = L.reserved L.hopes "pred"
 {-
@@ -194,11 +189,14 @@ failTK = L.reserved L.hopes "fail"
 
 
 
--- parser 
--- TODO : implement optional arities in constants/ 
---        poymorphic clause heads
--- TODO : implement type annotations
--- TODO : improve position recording where constants/atoms are involved
+{-
+ - Parser 
+ - 
+ - TODO : implement optional arities in constants/ 
+ -        poymorphic clause heads
+ - TODO : implement type annotations
+ - TODO : improve position recording where constants/atoms are involved
+ -}
 
 -- Basic structures
 
@@ -308,10 +306,8 @@ lambda isFull = try ( do
 -- describe all expressions.
 application :: Stream s m Char => ParserT s m (SExpr PosSpan)
 application  = try ( do 
-    { pos1 <- getPosition
-    ; s    <- atomicExpr
+    { s    <- atomicExpr
     ; as   <- many args -- as :: [[SExpr PosSpan]]  
-    --; pos2 <- getPosition
     ; case as of 
         [] -> return s
         _  -> return $ nestedApp s as
@@ -458,13 +454,12 @@ opDirective ( SExpr_app _ (SExpr_const _ (Const _ "op") _ _ _ )
             , SExpr_const _ (Const _ a) _ _ _
             , SExpr_const _ (Const _ n) _ _ _
             ]) = do
-          st <- getState
-          updateState (\st -> st{ operatorTable = (t st)})
-          cached <- buildOpTable
-          updateState (\st -> st{ cachedTable = cached })
-      where t st = Operators.updateOpTable (operatorTable st) op
-            op   = mkOp ((fromInteger p)::Int, a, n)
-            mkOp (p, a, n) = (p, Operators.Operator n a)
+    updateState (\st -> st{ operatorTable = (t st)})
+    cached <- buildOpTable
+    updateState (\st -> st{ cachedTable = cached })
+    where t st = Operators.updateOpTable (operatorTable st) op
+          op   = mkOp ((fromInteger p)::Int, a, n)
+          mkOp (p, a, n) = (p, Operators.Operator n a)
 
 opDirective _ = return ()
 
@@ -474,16 +469,16 @@ buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator
 buildOpTable = do { st <- getState
                   ; return $ mkOpTable (operatorTable st)
                   }
-    where mkOpTable ops = map (\(p, op) -> (p, map (opMap p) op)) $ Operators.groupByPrec ops
+    where mkOpTable ops = map (\(p, op) -> (p, map opMap op)) $ Operators.groupByPrec ops
               where 
-                  opMap pre op | Operators.isPrefixOp  op = prefixOp  pre (Operators.opName op)
-                               | Operators.isPostfixOp op = postfixOp pre (Operators.opName op)
-                               | otherwise                = infixOp   pre (Operators.opName op) (assocMap op)
+                  opMap op | Operators.isPrefixOp  op = prefixOp  (Operators.opName op)
+                           | Operators.isPostfixOp op = postfixOp (Operators.opName op)
+                           | otherwise                = infixOp   (Operators.opName op) (assocMap op)
                       where 
                             -- Pass precedence to the operator expressions to store it in the synax tree
-                            infixOp   pre name assoc = Infix   (oper (\n -> \x -> \y -> mkOpExpr False n [x,y]) name) assoc
-                            prefixOp  pre name       = Prefix  (oper (\n -> \x -> mkOpExpr True  n [x]) name) 
-                            postfixOp pre name       = Postfix (oper (\n -> \x -> mkOpExpr False n [x]) name)
+                            infixOp   name assoc = Infix   (oper (\n -> \x -> \y -> mkOpExpr False n [x,y]) name) assoc
+                            prefixOp  name       = Prefix  (oper (\n -> \x -> mkOpExpr True  n [x]) name) 
+                            postfixOp name       = Postfix (oper (\n -> \x -> mkOpExpr False n [x]) name)
                             assocMap op | Operators.isAssocLeft  op = AssocLeft
                                         | Operators.isAssocRight op = AssocRight
                                         | otherwise                 = AssocNone
@@ -525,10 +520,6 @@ runHopesParser2 st inputFile = do
               s <- sentence
               when (isCommand s) (opDirective1 s)  
               return s
-
--- The empty parser state
-emptyParseState = ParseSt [] []
-
 
 
 -- Parse after reading operators
