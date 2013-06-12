@@ -19,18 +19,14 @@
 module TypeCheck where
 
 import Basic
-import Prepr
 import TcUtils
 import Syntax
 import Types
 import Error
-import Control.Monad.State
-import Control.Monad.Reader
-import Control.Monad.Error
-import Control.Monad.Identity
+import Pos
 import Data.Maybe(fromJust)
 import Data.List(group, sort)
-import Text.PrettyPrint(text)
+import Pretty
 
 {-
  - Type check a program
@@ -52,14 +48,14 @@ data TcOutput a =
 
 
 -- run the typeCheck monad with a starting environment
-runTc :: (Show a, Monad m) => TcEnv -> SDepGroupDag a -> m (Either Messages (TcOutput a))
+runTc :: (Show a, HasPosition a, Monad m) => TcEnv -> SDepGroupDag a -> m (Either Messages (TcOutput a))
 runTc env dag = runErrorT $ evalStateT (runReaderT (tcDag dag) env) emptyTcState 
 
 
 
 
 -- typeCheck program, and output all relevant information
-tcDag :: (Show a, Monad m) => SDepGroupDag a -> Tc m a (TcOutput a)
+tcDag :: (Show a, HasPosition a, Monad m) => SDepGroupDag a -> Tc m a (TcOutput a)
 tcDag dag = do
     (dag', preds) <- walk dag []
     warnings      <- gets msgs
@@ -291,6 +287,11 @@ tcExpr (SExpr_lam a vars bd) = do
 -- Type annotated
 tcExpr (SExpr_ann _ _ _) = throwError $ mkMsgs $ internalErr $ text "annotations not implemented yet"
 
+-- In parens
+tcExpr (SExpr_paren a ex) = do
+    ex' <- tcExpr ex
+    return $ SExpr_paren (getInfo ex') ex'
+
 -- Utility function to search environment for expr.
 findPoly :: Monad m => Symbol -> Int -> Tc m a RhoType
 findPoly cnm ar = do
@@ -305,7 +306,7 @@ findPoly cnm ar = do
     return tp
 
 -- Unification
-unify :: (Monad m, Show a) => [Constraint a] -> Tc m a Substitution
+unify :: (Monad m, Show a, HasPosition a) => [Constraint a] -> Tc m a Substitution
 -- No constraints
 unify [] = return id
 -- Equal types
@@ -355,10 +356,17 @@ unify ( ( f1@(Rho_pi (Pi_fun rhos1 pi1)), f2@(Rho_pi (Pi_fun rhos2 pi2)), ex ) :
 unify ((rho1, rho2, ex) : _ ) = 
     throwError $ unificationError rho1 rho2 ex
 
-
+unificationError :: (Show a, HasPosition a) 
+                 => RhoType -> RhoType -> SExpr a -> Messages
 unificationError rho1 rho2 ex = 
     mkMsgs $ mkErr TypeError Fatal 
-           $ text $ "Unification Error : {" ++ show ex  ++ "} has type " ++ 
-                    show rho1 ++ " but was expected with type " ++ show rho2
+           $ ppr (posSpan ex) <> text ": Type Error:" $$
+             (nest 4 $ text "Could not match expected type" <+> (quotes $ ppr rho2) ) $$ 
+             (nest 4 $ text "with actual type" <+> (quotes $ ppr rho1) ) $$
+             (nest 4 $ text "in expression " <+> (doubleQuotes $ ppr ex) )
 
-
+{- another version
+             (nest 4 $ text "type error: expression" <+> ppr ex) $$ 
+             (nest 4 $ text "has type:" <+> ppr rho1) $$
+             (nest 4 $ text "but was exprected with type:" <+> ppr rho2)
+-}

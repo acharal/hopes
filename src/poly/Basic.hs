@@ -22,8 +22,6 @@
 
 module Basic where
 
-import Text.Parsec.Pos
-
 -- Symbol is an alias for the string type 
 type Symbol = String
 

@@ -34,35 +34,75 @@ import Prepr
 import TcUtils
 import TypeCheck
 import Types
-import Control.Monad.State
-import Control.Monad.Reader
-import Control.Monad.Error
-import Control.Monad.Identity
 import Pos
 
 import Data.Maybe
+import Data.List(null)
+import System.Environment
+import System.Exit
+
+main = do
+    -- Parse operators 
+    Right (_, opTable) <- runHopesParser2 emptyState "../../pl/op.pl"
+    -- Parse builtins
+    Right (buis, buisST) <- runHopesParser2 opTable "../../pl/builtins.pl"
+    -- Tc builtins
+    let Right buis' = runTc' initTcEnv buis
+    args <- getArgs
+    when (null args) $ do
+        putStrLn $ "Error: no file given"
+        exitFailure
+    when (length args > 1) $ do 
+        putStrLn $ "Only one file allowed"
+        exitFailure
+    -- Parce input
+    let inputFile = head args
+    maybeParsed <- runHopesParser2 buisST inputFile   
+    case maybeParsed of 
+        Left err -> do
+            putStr "Parse error at "
+            print err
+            exitFailure
+        Right (parsed, _) -> do
+            let env = addPredsToEnv initTcEnv (tcOutPreds buis')
+                typeChecked = runTc' env parsed
+            case typeChecked of
+                Left (errs, warns) -> mapM_ (putStrLn . render . ppr) errs
+                Right dag -> 
+                    mapM_ (putStrLn . show) (tcOutPreds dag)
+                    
+
+-- Wrapper for runTc
+runTc' env prog = runIdentity $ runTc env $ progToGroupDag prog
+
+testTc verbatim file = do
+    bui <- content "../../pl/builtins.pl" 
+    let Right buis = runIdentity $ runTc initTcEnv $ progToGroupDag bui
+    fl <- content file
+    case (runIdentity $ runTc ( addPredsToEnv initTcEnv (tcOutPreds buis) ) $ progToGroupDag fl) of
+        Left msgs -> mapM_ (putStrLn . show . ppr) (fst msgs)
+        Right dag -> do
+            when verbatim $ mapM_ (putStrLn.show) (tcOutSyntax dag)
+            mapM_ (putStrLn.show) (tcOutPreds dag)
+
+
+
 
 
 --- TESTING FILE PROCESSING ---
-content file = do 
-    let fileFull = "../../pl/examples/" ++ file ++".pl" 
-    (a,b) <- parseHopes2 fileFull
+content file = do
+    (a,b) <- parseHopes2 file
     return a
  
 testParse = testGen id 
 
+testPretty = testGen ( map (render . ppr) )
+
 testPre = testGen progToGroupDag 
 
-testTc verbatim file = do
-    snt <- content file 
-    case (runIdentity $ runTc initTcEnv $ progToGroupDag snt) of
-        Left msgs -> mapM_ (putStrLn . show . ppr) (fst msgs)
-        Right dag -> do 
-            when verbatim $ mapM_ (putStrLn.show) (tcOutSyntax dag)
-            mapM_ (putStrLn.show) (tcOutPreds dag)
-
 testGen test file  = do
-    snt <- content file
+    let fileFull = "../../pl/examples/" ++ file ++".pl" 
+    snt <- content fileFull
     mapM_ (putStrLn . show) (test snt)
 
 simple   = "simple"

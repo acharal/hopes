@@ -42,7 +42,7 @@ hopesStyle = emptyDef
                , identLetter     = alphaNum <|> oneOf "_"
                , opStart         = identStart hopesStyle
                , opLetter        = identLetter hopesStyle
-               , reservedNames   = ["pred", "true", "false"]
+               , reservedNames   = ["pred"] --, "true", "false"]
                , reservedOpNames = ["=>", "\\~"]
                , caseSensitive   = True
                }
@@ -78,7 +78,9 @@ conIdent lexer = lexeme lexer $ try $
                                   }
           letterIdent  = do { c  <- identStart
                             ; cs <- many identLetter
-                            ; return (c:cs)
+                            ; if (c:cs) == "pred" -- TODO: make this more general
+                                  then fail "pred" 
+                                  else return (c:cs)
                             } 
           identStart   = lower
           identLetter  = alphaNum <|> underscore

@@ -20,21 +20,26 @@
  - Utility functions for Type checking
  -}
 
-module TcUtils where
+module TcUtils (
+    module TcUtils,
+    module Control.Monad.State,
+    module Control.Monad.Reader,
+    module Control.Monad.Error,
+    module Control.Monad.Identity
+) where
 
 import Basic
 import Types 
---import Parser
 import Syntax
 import Error
+import Pretty
+
 import Data.List
 import Data.Maybe (fromJust)
-import Data.Graph
-import Text.PrettyPrint
-
 import Control.Monad.Reader
 import Control.Monad.State
-
+import Control.Monad.Identity
+import Control.Monad.Error
 
 -- | Monomorphic type signature (variables)
 type RhoSig a  = (a, RhoType)
@@ -76,8 +81,9 @@ builtins = [ ( (";",2::Int), Pi_fun
                              [ Rho_pi phi
                              , Rho_pi phi
                              ] phi )
-           , ( ("=",2::Int), Pi_fun
-                             [ Rho_i, Rho_i] Pi_o )
+           --, ( ("=",2::Int), Pi_fun
+           --                  [ Rho_i, Rho_i] Pi_o )
+           , ( ("\\+", 1::Int), Pi_fun [Rho_pi Pi_o] Pi_o )
            ]          
 
     where phi = Pi_var $ Phi "phi"
@@ -86,6 +92,7 @@ builtins' = [(sig, generalize pi) | (sig, pi) <- builtins]
 
 initTcEnv = TyEnv [] builtins'
 
+addPredsToEnv env predSigs = env{polySigs = predSigs ++ polySigs env}
 
 -- A constraint is a pair of types with an associated expression. 
 -- Convention: first type is the type syntactically assossiated with the expression

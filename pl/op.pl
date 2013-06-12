@@ -33,8 +33,8 @@
 :- op( 400, yfx, '//').     % integer division
 :- op( 400, yfx, 'rem').    % remainder
 :- op( 400, yfx, 'mod').    % modulo
-:- op( 400, yfx, '<<').     % bitswift leftwards
-:- op( 400, yfx, '>>').     % bitswift rightwards
+:- op( 400, yfx, '<<').     % bitshift leftwards
+:- op( 400, yfx, '>>').     % bitshift rightwards
 :- op( 200, xfx, '**').     % exponent
 :- op( 200, xfy, '^').
 :- op( 200,  fy, '\\').     % bitwise complement

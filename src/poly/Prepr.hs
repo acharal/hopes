@@ -59,6 +59,8 @@ predefSpecialPreds = [ ("->"  , 2)
 -- TODO implement commands differently?
 fixSentence (SSent_comm (SCommand a ex)) = 
     SSent_comm $ SCommand a $ fixExpr True 0 ex
+fixSentence (SSent_goal (SGoal a ex)) = 
+    SSent_goal $ SGoal a $ fixExpr True 0 ex
 fixSentence (SSent_clause (SClause a hd bd) ) =
     SSent_clause $ SClause a (fixExpr True 0 hd) 
                  $ fmap ( \(gets, ex) -> (gets, fixExpr True 0 ex) ) bd
@@ -114,6 +116,7 @@ fixExpr predSt ar ex = case ex of
     
     SExpr_ann a ex' tp -> SExpr_ann a (fixExpr predSt ar ex') tp --TODO implement this!
 
+    SExpr_paren a ex' -> SExpr_paren a (fixExpr predSt ar ex')
 
 -- Find all predicates with their arities defined in a clause body
 findReferredPreds :: SClause a -> [PredSig]

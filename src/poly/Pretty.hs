@@ -46,10 +46,25 @@ instance Pretty [Char] where
 instance Pretty Int where
     ppr = int
 
+instance Pretty Integer where
+    ppr = text . show
+
+instance Pretty Double where
+    ppr = text . show
+
+instance Pretty a => Pretty (Maybe a) where
+    ppr (Just a) = ppr a
+    ppr Nothing  = empty
+
+instance (Pretty a, Pretty b) => Pretty (Either a b) where
+    ppr (Left  a) = ppr a
+    ppr (Right b) = ppr b
+
 dcolon  = text "::"
 arrow   = text "->"
 dot     = char '.'
 entails = text ":-"
+slash   = char '/'
 -- semi = text ";"
 curly a = text "{" <+> a <+> text "}"
 --brackets a = text "[" <+> a <+> text "]"
@@ -83,6 +98,7 @@ instance Pretty PolyType where
 
 instance Pretty FunType where
     ppr f = text $ show f
+
 
 {-
 tynames = letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
