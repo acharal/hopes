@@ -222,10 +222,9 @@ derive e =
                        | otherwise   = reduce e >>= returnSuccess
 
         deriveSeq e es d = ifte (deriveSingle e) succ f 
-            where succ (e', ss) = return (s ss (es ++ d) e', ss)
-                  succ (CFalse, ss) = return (CFalse, ss)
-                  succ (CTrue, ss)  = return (subst ss (foldAnd es), ss)
-                  succ (e', ss) = return (subst ss (foldAnd (e':es)), ss)
+            where succ (CFalse, ss) = return (CFalse, ss)
+                  succ (CTrue, ss)  = return (subst ss (foldAnd (d ++ es)),   ss)
+                  succ (e', ss) = return (subst ss (foldAnd (e':(d ++ es))), ss)
                   f | null es   = fail "all disequalities"
                     | otherwise = deriveSeq (head es) (tail es) (e:d)
 
