@@ -37,4 +37,6 @@ strange(X,X) <- pred ,/2.
 
 strange(X,Y,X,_) <- (pred ,/2 ; Y), _; strange(X=0).
 
-
+% err(pred err/2).
+% err2(X,X) :- X,X.
+% err3(X) <- X(X).
