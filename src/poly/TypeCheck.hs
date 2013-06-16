@@ -1,5 +1,6 @@
---  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
---                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
+--  Copyright (C) 2013 Angelos Charalambidis  <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos    <manoskouk@softlab.ntua.gr>
+--                     Nikolaos S. Papaspyrou <nickie@softlab.ntua.gr> 
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -24,9 +25,10 @@ import Syntax
 import Types
 import Error
 import Pos
+import Pretty
+
 import Data.Maybe(fromJust)
 import Data.List(group, sort)
-import Pretty
 
 {-
  - Type check a program
@@ -141,7 +143,8 @@ tcClause (SClause a hd bd) = do
  
 
 
--- typeCheck an expression
+-- typeCheck an expression. 
+--   Also mark ex. quantified variables the first time you see them
 tcExpr :: Monad m => SExpr a
                   -> Tc m a ( SExpr (Typed a) )
 
@@ -172,8 +175,8 @@ tcExpr ex@(SExpr_predCon _ c _ _) = do
 
 -- 3) Variable
 
--- Named variable 
-tcExpr ex@(SExpr_var a var@(Var _ _)) = do
+-- Named variable
+tcExpr ex@(SExpr_var a var@(Var _ _) isEx) = do
     -- search in environment
     envTp <- asks $ lookupRho $ nameOf var
     tp <- case envTp of
@@ -184,16 +187,20 @@ tcExpr ex@(SExpr_var a var@(Var _ _)) = do
             return $ lookup (nameOf var) exBound
     case tp of
         -- Found var in env+state
-        Just tp' -> return $ fmap (typed tp') ex
+        Just tp' -> return $ SExpr_var (typed tp' a) 
+                                      (fmap (typed tp') var)
+                                      False
         -- Did not find, so add it to the state
         Nothing -> do
             al <- newAlpha
             let newRho = Rho_var al
             addExist (nameOf var) newRho
-            return $ fmap (typed newRho) ex
+            return $ SExpr_var (typed newRho a) 
+                               (fmap (typed newRho) var) 
+                               True -- Mark as exist. quantified
 
 -- Anonymous variable
-tcExpr ex@(SExpr_var a (AnonVar vinf)) = do
+tcExpr ex@(SExpr_var a (AnonVar vinf) _) = do
     -- Anonymous variable has fresh type
     alpha <- newAlpha
     return $ fmap (typed $ Rho_var alpha) ex
@@ -359,11 +366,10 @@ unify ((rho1, rho2, ex) : _ ) =
 unificationError :: (Show a, HasPosition a) 
                  => RhoType -> RhoType -> SExpr a -> Messages
 unificationError rho1 rho2 ex = 
-    mkMsgs $ mkErr TypeError Fatal 
-           $ ppr (posSpan ex) <> text ": Type Error:" $$
-             (nest 4 $ text "Could not match expected type" <+> (quotes $ ppr rho2) ) $$ 
-             (nest 4 $ text "with actual type" <+> (quotes $ ppr rho1) ) $$
-             (nest 4 $ text "in expression " <+> (doubleQuotes $ ppr ex) )
+    mkMsgs $ mkErrWithPos (posSpan ex) TypeError Fatal $
+              (text "Type Error: Could not match expected type" <+> (quotes $ ppr rho2) ) $$
+              (text "with actual type" <+> (quotes $ ppr rho1) ) $$
+              (text "in expression" <+> (doubleQuotes $ ppr ex) )
 
 {- another version
              (nest 4 $ text "type error: expression" <+> ppr ex) $$ 

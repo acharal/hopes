@@ -1,5 +1,6 @@
---  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
---                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
+--  Copyright (C) 2013 Angelos Charalambidis  <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos    <manoskouk@softlab.ntua.gr>
+--                     Nikolaos S. Papaspyrou <nickie@softlab.ntua.gr> 
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -25,19 +26,18 @@ module TcUtils (
     module Control.Monad.State,
     module Control.Monad.Reader,
     module Control.Monad.Error,
-    module Control.Monad.Identity
 ) where
 
 import Basic
 import Types 
 import Syntax
 import Error
-import Pretty(text)
+import Pretty
+import Pos
 
 import Data.List(nub)
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Identity
 import Control.Monad.Error
 
 -- | Monomorphic type signature (variables)
@@ -68,6 +68,11 @@ emptyTcEnv = TyEnv [] []
 
 -- Concrete type environment
 type PredSig = (Symbol, Int)
+
+instance Pretty PredSig where
+    ppr (pr, ar) = text pr <> text "/" <> int ar
+
+
 type TcEnv = TyEnv Symbol PredSig
 
 -- Built-in predicates
@@ -120,13 +125,15 @@ type Tc m inf = ReaderT TcEnv (StateT (TcState inf) (ErrorT Messages m))
 
 -- Restrict an expression in the Head: no lambdas or predicate
 -- constants allowed
-restrictHead :: Monad m => SExpr a -> Tc m a ()
+restrictHead :: (Monad m, HasPosition a) => SExpr a -> Tc m a ()
 restrictHead h =  h |> flatten |> mapM_ restrict
-    where restrict (SExpr_predCon _ _ _ _) = throwError restrictError
-          restrict (SExpr_lam _ _ _)       = throwError restrictError
+    where restrict ex@(SExpr_predCon a _ _ _) = throwError $ restrictError ex
+          restrict ex@(SExpr_lam a _ _)       = throwError $ restrictError ex
           restrict _                       = return ()
-          restrictError =
-              mkMsgs $ mkErr TypeError Fatal $ text "predicate or lambda in head"
+          restrictError ex =
+              mkMsgs $ mkErrWithPos (posSpan ex) ParseError Fatal $ 
+                           (text "Error: predicate or lambda in clause head") $$
+                           (text "in expression" <+> (doubleQuotes $ ppr ex) )
 
 -- Add a constraint to the state
 addConstraint rho1 rho2 expr = 
@@ -171,7 +178,7 @@ withEnvPreds bindings =
 -- CAUTION: will contain a variable once for each of its appearances
 allNamedVars expr = expr |> flatten 
                          |> filter isVar 
-                         |> map ( \(SExpr_var _ v) -> nameOf v)
+                         |> map ( \(SExpr_var _ v _) -> nameOf v)
                          |> filter (/= "_")
                          
 

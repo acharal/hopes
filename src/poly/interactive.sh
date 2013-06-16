@@ -1,4 +1,4 @@
-ghci -W -cpp \
+ghci -cpp \
  -XTypeSynonymInstances -XFlexibleInstances  \
  -XFlexibleContexts -XMultiParamTypeClasses \
  -XFunctionalDependencies -XRankNTypes -XUndecidableInstances\

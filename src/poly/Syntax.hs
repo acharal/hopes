@@ -72,7 +72,9 @@ data SExpr a = SExpr_const   a            -- constant
                              Bool         -- interpreted as predicate?
                              (Maybe Int)  -- optional GIVEN arity 
                              Int          -- INFERRED arity
-             | SExpr_var     a (Var a)    -- variable
+             | SExpr_var     a            -- variable
+                             (Var a)      -- id
+                             Bool         -- Existentially quantified?
              | SExpr_number  a (Either Integer Double)
                                           -- numeric constant
              | SExpr_predCon a            -- predicate constant
@@ -149,6 +151,15 @@ instance HasPosition a => HasPosition (Const a) where
 instance HasPosition a => HasPosition (Var a) where
     posSpan (Var a _)  = posSpan a
     posSpan (AnonVar a) = posSpan a
+
+instance HasType a => HasType (Const a) where
+    typeOf (Const a _) = typeOf a
+    hasType tp (Const a c) = Const (hasType tp a) c
+instance HasType a => HasType (Var a) where 
+    typeOf (Var a _) = typeOf a
+    typeOf (AnonVar a) = typeOf a
+    hasType tp (Var a v) = Var (hasType tp a) v
+    hasType tp (AnonVar a) = AnonVar (hasType tp a)
 
 instance Pretty (Const a) where
     ppr = text . nameOf
@@ -229,8 +240,8 @@ hasPredConst (SExpr_op  _ _ _ predStatus _) = predStatus
 hasPredConst _ = False
 
 
-isVar (SExpr_var _ _) = True
-isVar _              = False
+isVar (SExpr_var _ _ _) = True
+isVar _                 = False
 
 
 -- Finds arity of a constant expression.
@@ -252,7 +263,7 @@ instance HasArity (SExpr a) where
 
 instance HasName (SExpr a) where 
     nameOf (SExpr_const   _ c _ _ _  ) = nameOf c
-    nameOf (SExpr_var     _ v        ) = nameOf v
+    nameOf (SExpr_var     _ v _      ) = nameOf v
     nameOf (SExpr_predCon _ c _ _    ) = nameOf c
     nameOf (SExpr_app     _ ex' _    ) = nameOf ex'
     nameOf (SExpr_op      _ op _ _ _ ) = nameOf op
@@ -273,8 +284,8 @@ instance Flatable (SExpr a) where
         ex : (concatMap flatten args)
     flatten ex@(SExpr_lam _ vars bd) =
         ex : (map varToExpr vars) ++ (flatten bd)
-        where varToExpr v@(Var a s)   = SExpr_var a v
-              varToExpr v@(AnonVar a) = SExpr_var a v
+        where varToExpr v@(Var a s)   = SExpr_var a v False
+              varToExpr v@(AnonVar a) = SExpr_var a v False
     flatten ex@(SExpr_list _ initEls tl) =
         ex : ( concatMap flatten initEls) ++ 
             (case tl of 
@@ -291,7 +302,7 @@ instance Flatable (SExpr a) where
 
 -- Get/set information that expressions carry
 getInfo (SExpr_const   a _ _ _ _  ) = a
-getInfo (SExpr_var     a _        ) = a
+getInfo (SExpr_var     a _ _      ) = a
 getInfo (SExpr_number  a _        ) = a
 getInfo (SExpr_predCon a _ _ _    ) = a
 getInfo (SExpr_app     a _ _      ) = a
@@ -302,7 +313,7 @@ getInfo (SExpr_ann     a _ _      ) = a
 getInfo (SExpr_paren   a _        ) = a
 
 setInfo inf (SExpr_const   _ b c d e) = SExpr_const   inf b c d e
-setInfo inf (SExpr_var     _ b      ) = SExpr_var     inf b        
+setInfo inf (SExpr_var     _ b c    ) = SExpr_var     inf b c  
 setInfo inf (SExpr_number  _ b      ) = SExpr_number  inf b        
 setInfo inf (SExpr_predCon _ b c d  ) = SExpr_predCon inf b c d    
 setInfo inf (SExpr_app     _ b c    ) = SExpr_app     inf b c      
@@ -335,7 +346,7 @@ instance Pretty (SExpr a) where
         Nothing -> ppr c
         Just ar -> ppr c <> slash <> int ar
 
-    ppr (SExpr_var _ var ) = 
+    ppr (SExpr_var _ var _) = 
         ppr var       
 
     ppr (SExpr_number _ n ) = 

@@ -72,7 +72,7 @@ fixExpr predSt ar ex = case ex of
         SExpr_const a con predSt givArr ar 
     
     -- Variables and numbers remain unchanged
-    e@(SExpr_var _ _) ->
+    e@(SExpr_var _ _ _) ->
         e
 
     e@(SExpr_number _ _ ) ->

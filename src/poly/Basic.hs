@@ -31,8 +31,7 @@ class Flatable a where
     flatten :: a -> [a]
 
 
--- Class for types with arity, inplemented as a partial
--- function
+-- Class for types with arity, defined as a partial function
 class HasArity a where 
     arity :: a -> Maybe Int
 

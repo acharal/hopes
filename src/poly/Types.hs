@@ -44,33 +44,15 @@ data FunType = Fun Int
 -- Polymorphic
 data PolyType = Poly_gen [Alpha] [Phi] PiType
 --    deriving Eq -- FIXME: modulo alpha-conversion
-{-
--- All types. FIXME: needed???
-data AllTypes = All_fun  FunType 
-              | All_rho  RhoType 
-              | All_poly PolyType
-   
-instance Eq AllTypes where 
-    All_fun (Fun n) == All_fun (Fun n') = n == n'
-    All_rho rho == All_rho rho' = 
-        rho == rho'
-    All_poly poly == All_poly poly' = 
-        poly == poly' 
-    All_rho (Rho_pi pi) == All_poly (Poly_gen [] [] pi') =
-        pi == pi' -- FIXME : modulo alpha conversion ??? Prob not!
-    All_poly (Poly_gen [] [] pi') == All_rho (Rho_pi pi) =
-        pi == pi' -- FIXME : modulo alpha conversion ??? Prob not!
-    _ == _ = False
--}
 
 
 -- Pretty printing for types
 
 instance Show Alpha where
-  showsPrec p (Alpha alpha) = ( alpha ++ )
+    showsPrec p (Alpha alpha) = ( alpha ++ )
 
 instance Show Phi where
-  showsPrec p (Phi phi) = ( phi ++ )
+    showsPrec p (Phi phi) = ( phi ++ )
 
 instance Show FunType where
     showsPrec p (Fun n) = ("(" ++). walk n . (") -> i" ++)
@@ -78,17 +60,24 @@ instance Show FunType where
               walk n = ("i, " ++) . walk (n-1)
 
 instance Show RhoType where
-  showsPrec p Rho_i = ("i" ++)
-  showsPrec p (Rho_pi pi) = showsPrec p pi
-  showsPrec p (Rho_var alpha) = showsPrec p alpha
+    showsPrec p Rho_i = ("i" ++)
+    showsPrec p (Rho_pi pi) = showsPrec p pi
+    showsPrec p (Rho_var alpha) = showsPrec p alpha
 
 instance Show PiType where
-  showsPrec p Pi_o = ("o" ++)
-  showsPrec p (Pi_fun rhos pi) =
-      ("(" ++) . walk rhos . (") -> " ++) . showsPrec p pi
-      where walk [rho] = showsPrec p rho
-            walk (rho : rhos) = showsPrec p rho . (", " ++) . walk rhos
-  showsPrec p (Pi_var phi) = showsPrec p phi
+    showsPrec p Pi_o = ("o" ++)
+    {- Add this? -}
+    showsPrec p (Pi_fun [rho] pi) | isSimple rho = 
+        showsPrec p rho . (" -> " ++) . showsPrec p pi
+        where isSimple (Rho_pi (Pi_fun _ _)) = False
+              isSimple _ = True
+    {- end -}
+    showsPrec p (Pi_fun rhos pi) =
+        ("(" ++) . walk rhos . (") -> " ++) . showsPrec p pi
+        where walk [rho] = showsPrec p rho
+              walk (rho : rhos) = showsPrec p rho . (", " ++) . walk rhos
+              
+    showsPrec p (Pi_var phi) = showsPrec p phi
 
 instance Show PolyType where
   showsPrec p (Poly_gen alphas phis pi) =

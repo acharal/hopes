@@ -14,11 +14,11 @@ map(R)([X|Xs],[Y|Ys]) :-
 foo(X) :- bar(X).
 bar(X) :- foo(s(X)).
 
-apply(X,Y) :- X(Y).
-isZero(X) :- apply( (\~(Y) => Y=0), X).
+apply(X,Y) <- X(Y).
+isZero(X) :- apply( \~(Y) => Y=0  ,  X).
 
-applyCur(X)(Y) :-  X(Y).
-isZeroCur(X) :- applyCur((\~(Y) => Y=0))(X).
+apply(X)(Y) <- X(Y).
+isZeroCur(X) :- applyCur( \~(Y) => Y=0 )(X).
 
 
 foo2(X) :- bar2(X).
@@ -28,4 +28,13 @@ baz2(X) :- foo2(s(X)), bar2(X).
 closure(R)(X,Y) :- R(X,Y).
 closure(R)(X,Y) :-
     R(X,Z), closure(R)(Z,Y).
+
+parent('John', 'Mike').
+
+ancestor/2 <- closure(pred parent/2).
+
+strange(X,X) <- pred ,/2.
+
+strange(X,Y,X,_) <- (pred ,/2 ; Y), _; strange(X=0).
+
 

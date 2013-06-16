@@ -30,7 +30,7 @@ type ErrDesc = Doc
 
 data Message =
    Msg { 
-        errloc  :: SourcePos,
+        errSpan :: PosSpan,
         errtyp  :: ErrType,
         level   :: ErrLevel,
         desc    :: ErrDesc
@@ -39,7 +39,7 @@ data Message =
 instance Show Message where show = show.ppr
 
 instance HasPosition Message where
-    pos (Msg p _ _ _) = p
+    posSpan (Msg p _ _ _) = p
 
 -- Errors and warnings
 type Messages = ([Message], [Message])
@@ -63,8 +63,8 @@ instance Error Messages where
 
 instance Pretty Message where
     ppr err
-       | errloc err == bogusPos = desc err
-       | otherwise              = hang (ppr (errloc err) <>colon) 4 (desc err)
+       | errSpan err == bogusSpan = desc err
+       | otherwise                = hang (ppr (errSpan err) <>colon) 4 (desc err)
 
 
 {-
@@ -78,9 +78,9 @@ class Monad m => MonadWarn m w where
 isWarn msg = level msg == Warning
 isFail = not . isWarn
 
-mkErr typ lev msg = Msg bogusPos typ lev msg
+mkErr typ lev msg = Msg bogusSpan typ lev msg
 
-mkErrWithLoc l typ lev msg = Msg l typ lev msg
+mkErrWithPos pos typ lev msg = Msg pos typ lev msg
 
 internalErr msg = mkErr Internal Fatal msg
 

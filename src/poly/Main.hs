@@ -35,10 +35,13 @@ import TcUtils
 import TypeCheck
 import Types
 import Pos
+import Core
+import Desugar
 
 import Data.Maybe(fromJust)
 import System.Environment(getArgs)
 import System.Exit
+import Control.Monad.Identity
 
 -- Calling main' inputfile verbose from interactive:
 --     Parses operator file
@@ -46,12 +49,12 @@ import System.Exit
 --     Parses and typeChecks inputFile
 --     If verbose, prints syntax tree with annotations
 --     Prints either error or typechecked predicates
-main' inputFile verbose = do
+main' verbose inputFile = do
     -- Parse operators 
     Right (_, opTable) <- runHopesParser2 emptyParseState "../../pl/op.pl"
     -- Parse builtins
     Right (buis, buisST) <- runHopesParser2 opTable "../../pl/builtins.pl"
-    -- Tc builtins
+    -- TypeCheck builtins
     let Right buis' = runTc' initTcEnv buis
     -- Parce input
     maybeParsed <- runHopesParser2 buisST inputFile   
@@ -64,11 +67,18 @@ main' inputFile verbose = do
             let env = addPredsToEnv initTcEnv (tcOutPreds buis')
                 typeChecked = runTc' env parsed
             case typeChecked of
+                -- Type error
                 Left (errs, warns) ->
                     mapM_ (putStrLn . render . ppr) errs
+                -- TypeCheck successful
                 Right dag -> do
-                    when verbose $  mapM_ (putStrLn . show) (tcOutSyntax dag)
-                    mapM_ (putStrLn . show) (tcOutPreds dag)
+                    when verbose $ mapM_ (mapM_ (putStrLn . show . ppr . desugarDef))
+                                         (tcOutSyntax dag)
+                    mapM_ (\(sig, tp) -> do { putStr   $ show (ppr sig)
+                                            ; putStrLn $ " :: " ++ show tp 
+                                            }
+                          ) 
+                          (tcOutPreds dag)
 
 
 -- Invoking polyhopes program:
@@ -85,10 +95,10 @@ main = do
     when (length args > 1) $ do 
         putStrLn $ "Error: Only one file allowed"
         exitFailure
-    main' (head args) False 
+    main' True (head args)
 
 -- Wrapper for runTc
-runTc' env prog = runIdentity $ runTc env $ progToGroupDag prog
+runTc' env prog = runIdentity $ runTc env (progToGroupDag prog)
 
 simple   = "../../pl/examples/simple.pl"
 aleph    = "../../pl/examples/aleph.pl"
@@ -129,8 +139,7 @@ testPretty = testGen ( map (render . ppr) )
 testPre = testGen progToGroupDag 
 
 testGen test file  = do
-    let fileFull = "../../pl/examples/" ++ file ++".pl" 
-    snt <- content fileFull
+    snt <- content file
     mapM_ (putStrLn . show) (test snt)
 
 

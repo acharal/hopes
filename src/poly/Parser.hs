@@ -92,7 +92,7 @@ mkPredCon s i p1 p2 p3 p4 = SExpr_predCon (mkSpan p1 p2) (Const (mkSpan p3 p4) s
 mkVar s p1 p2 = if s=="_" then AnonVar (mkSpan p1 p2) else Var (mkSpan p1 p2) s
 
 -- Variable expression
-mkVarEx s p1 p2 = SExpr_var (mkSpan p1 p2) $ mkVar s p1 p2
+mkVarEx s p1 p2 = SExpr_var (mkSpan p1 p2) (mkVar s p1 p2) False
 
 -- Numeric expression
 mkNum num p1 p2 = SExpr_number (mkSpan p1 p2) num
@@ -162,7 +162,7 @@ natural = L.natural L.hopes
 
 -- Atom is either a constant, or a string literal
 atom :: Stream s m Char => ParsecT s u m String
-atom = try conIdent <|> stringLiteral -- <?> "atom"
+atom = choice [try conIdent, try stringLiteral, symbol ","] -- <?> "atom"
 
 naturalOrFloat :: Stream s m Char => ParsecT s u m (Either Integer Double)
 naturalOrFloat = L.naturalOrFloat L.hopes
@@ -380,23 +380,28 @@ fullExpr = do { -- Grab state and add ',' operator
 
 
 -- Head of a clause 
-head_c :: Stream s m Char => ParserT s m (SExpr PosSpan)
-head_c = try $ do pos1 <- getPosition
-                  c    <- atom 
-                  pos2 <- getPosition 
-                  as   <- many args 
-                  let c' = mkConstEx c Nothing pos1 pos2
-                  return $ nestedApp c' as 
-{-    where args = do { pos1 <- getPosition
-                    ; as   <- parens $ commaSep1 argExpr
-                    ; pos2 <- getPosition
-                    ; return (as, pos2)
-                    }
--}
+-- Constant with arity (for polymorphic <-) or Prolog-style head
+headCl :: Stream s m Char => ParserT s m (SExpr PosSpan)
+headCl = ( try $ do pos1 <- getPosition
+                    c    <- atom
+                    symbol "/"
+                    pos2 <- getPosition
+                    n    <- natural
+                    let pos2' = incSourceColumn pos2 (length $ show n)
+                    return $ mkConstEx c (Just $ fromIntegral n) pos1 pos2'
+         ) <|>
+         ( try $ do pos1 <- getPosition
+                    c    <- atom 
+                    pos2 <- getPosition 
+                    as   <- many args 
+                    let c' = mkConstEx c Nothing pos1 pos2
+                    return $ nestedApp c' as 
+         )
+
 -- Clause
 clause :: Stream s m Char => ParserT s m (SSent PosSpan)
 clause = do pos1 <- getPosition
-            h <- head_c
+            h <- headCl
             b <- optionMaybe $ do 
                 gets <- symbol ":-" <|> symbol "<-" -- mono or poly?
                 body <- try fullExpr <|> (allExpr True)
