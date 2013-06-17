@@ -38,4 +38,18 @@ is(0,0).
 '>'(0,0).
 '>='(0,0).
 
+% IO
+write(0).
+read(0).
+nl.
 
+clause(0,0).
+asserta(0).
+assertz(0).
+retract(0).
+
+findall(0,0,0).
+once(0).
+call(0).
+
+close(0).

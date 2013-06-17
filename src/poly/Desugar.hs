@@ -107,7 +107,7 @@ desugarClause (SClause inf hd bd) =
                                           |> mapMaybe fromExVar 
         -- We created some extra quantifiable vars.
         exVarsArgs = concatMap allCVars finalPairs \\ concat args'
-        exVars = exVarsArgs ++ exVarsBd
+        exVars = nub $ exVarsArgs ++ exVarsBd
         -- Body with existentials
         exBody = foldr (\vr bd -> CExists (typeOf bd) vr bd) finalBd exVars
         -- Create the type of a lambda abstraction

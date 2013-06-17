@@ -87,7 +87,13 @@ builtins = [ ( (";",2::Int), Pi_fun
                              ] phi )
            --, ( ("=",2::Int), Pi_fun
            --                  [ Rho_i, Rho_i] Pi_o )
+           --, ( ("\\+", 1::Int), Pi_fun [Rho_i] Pi_o )
            , ( ("\\+", 1::Int), Pi_fun [Rho_pi Pi_o] Pi_o )
+           , ( ("->",2::Int), Pi_fun 
+                             [ Rho_pi phi
+                             , Rho_pi phi
+                             ] phi )
+
            ]          
 
     where phi = Pi_var $ Phi "phi"

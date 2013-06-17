@@ -790,8 +790,8 @@ gen_layer(Name/Arity,Depth):-
 		Depth1 is Depth - 1,
 		construct_incall(Lit,Depth1,[Arg/Type],Call1),
 		construct_call(Lit,Depth,OtherInputs,Call2)),
-	Call1,
-	Call2,
+	call(Call1), % MANOS
+	call(Call2), % MANOS
 	aleph_background_predicate(Lit),
 	get_successes(Lit,NSucc,mode(Mode,Input,Output,Constants)),
 	fail.
@@ -1777,7 +1777,7 @@ lit_redun(Lit,L):-
 
 execute_equality(Lit):-
 	functor(Lit,'=',2), !,
-	Lit.
+	call(Lit). % MANOS add call
 execute_equality(_).
 	
 theory_lang_ok([],_).
@@ -1919,7 +1919,7 @@ match_lazy_bottom(Clause,Lits):-
 	match_bot_lits(AlephClause,[],Lits).
 
 match_lazy_bottom1(Body):-
-	Body,
+	call(Body), % MANOS
 	match_body_modes(Body),
 	fail.
 match_lazy_bottom1(_):-
@@ -3707,7 +3707,7 @@ redundant(Lit,Lits,[Head|Body]):-
 	aleph_subsumes(Lits,Rest1).
 
 aleph_subsumes(Lits,Lits1):-
-	\+(\+((numbervars(Lits,0,_),numbervars(Lits1,0,_),aleph_subset1(Lits,Lits1)))).
+	\+(\+((numbervars(Lits,0,_),numbervars(Lits1,0,_),aleph_subset1(Lits,call(Lits1))))). % MANOS
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -5035,7 +5035,7 @@ process_hypothesis(overspecific because E):-
 	asserta('$aleph_global'(example_selected,example_selected(pos,N))),
 	nl, p_message('added new positive example').
 process_hypothesis(AlephCommand):-
-	AlephCommand.
+	call(AlephCommand). % MANOS
 
 show_options(example_selection):-
 	nl,
@@ -5214,7 +5214,7 @@ gen_abduced_atoms([AbAtom|AbAtoms],[AbGen|AbGens]):-
 
 remove_explained([],_,[]).
 remove_explained([AbAtom|AbAtoms],(Head:-Body),Rest):-
-	\+((\+ ((AbAtom = Head), Body))), !,
+	\+((\+ call((AbAtom = Head), Body))), !, % MANOS add call
 	remove_explained(AbAtoms,(Head:-Body),Rest).
 remove_explained([AbAtom|AbAtoms],(Head:-Body),[AbAtom|Rest]):-
 	remove_explained(AbAtoms,(Head:-Body),Rest).
@@ -5273,7 +5273,7 @@ soldnf_builtin(not(_Goal)):-!,fail.
 soldnf_builtin(A):-predicate_property(A,built_in).
 
 soldnfcall(Goal,true):-
-	Goal, !.
+	call(Goal), !. % MANOS add call
 soldnfcall(_,false).
 
 conj_status(true,true,true):- !.
@@ -5405,12 +5405,12 @@ call_library_pred(OldLit,Depth,Lit,I,O,D):-
 evaluate(OldLit,_,Lit,I,O,D):-
 	functor(OldLit,Name,Arity),
 	functor(NewLit,Name,Arity),
-	Lit,
+	call(Lit), % MANOS
 	copy_args(OldLit,NewLit,I),
 	copy_args(OldLit,NewLit,O),
 	copy_consts(Lit,NewLit,Arity),
 	update_lit(LitNum,false,NewLit,I,O,D),
-	\+('$aleph_local'(lazy_evaluated,LitNum)),
+	\+('$aleph_local'(lazy_evaluated,LitNum)), %MANOS
 	asserta('$aleph_local'(lazy_evaluated,LitNum)), !.
 evaluate(_,_,_,_,_,_).
 
@@ -5504,7 +5504,7 @@ lazy_index_prove(Start-Finish,Type,Lit,Head,Body):-
 % this is different from Aleph 2 where only a single binding was obtained
 lazy_index_prove1(Type,Lit,Head,Body,Num):-
         depth_bound_call((example(Num,Type,Head),Body)),
-	\+('$aleph_local'(lazy_evaluate,eval(Type,Lit))),
+	\+('$aleph_local'(lazy_evaluate,eval(Type,Lit))), %MANOS
         asserta('$aleph_local'(lazy_evaluate,eval(Type,Lit))),
         fail.
 lazy_index_prove1(_,_,_,_,_).
@@ -5668,7 +5668,7 @@ slprove(Mode,(Goal1;Goal2)):-
 	slprove(Mode,Goal2).
 slprove(_,Goal):-
 	predicate_property(Goal,built_in), !,
-	Goal.
+    call(Goal). % MANOS added call
 slprove(stochastic,Goal):-
 	findall(Count/Clause,
 		(clause(Goal,Body),Clause=(Goal:-Body),find_count(Clause,Count)),
@@ -5944,7 +5944,7 @@ process_determs:-
 	find_mode(modeb,Name1/Arity1,Mode),
 	copy_modeterms(Mode,Pred,Arity1),
 	Determ = '$aleph_determination'(Name/Arity,Pred),
-	(Determ -> true; assert(Determ)),
+	(call(Determ) -> true; assert(Determ)), % MANOS
 	fail.
 process_determs.
 
@@ -6069,7 +6069,7 @@ aleph_get_hlit(Name/Arity,Head):-
 	once(split_args(Mode,Mode,_,_,C)),
 	copy_modeterms(Mode,Head,Arity),
 	get_c_links(C,Head,true,Equalities),
-	Equalities.
+	call(Equalities). % MANOS add call
 
 aleph_get_lit(Lit,[H|Lits]):-
 	functor(H,Name,Arity),
@@ -6359,13 +6359,13 @@ estimate_forward1([T1|Types],Thresh,T,Score):-
         Score is S1 + S2.
 
 infer_mode(Pred,Thresh,Loc,Seen0,InferredMode,Seen):-
-	Pred =.. [Name|Types],
-	infer_mode1(Types,Thresh,Loc,Seen0,Modes),
+    Pred =.. [Name|Types], 
+    infer_mode1(Types,Thresh,Loc,Seen0,Modes),
 	Mode =.. [Name|Modes],
 	length(Types,Arity),
 	('$aleph_global'(targetpred,targetpred(Name/Arity)) ->
-		InferredMode = modeh(*,Mode);
-		InferredMode = mode(*,Mode)),
+        InferredMode = modeh(***,Mode); % MANOS : * -> ***
+		InferredMode = mode(***,Mode)), % MANOS : * -> ***
 	aleph_ord_union(Seen0,Types,Seen).
 
 infer_mode1([],_,_,_,[]).
@@ -6428,7 +6428,7 @@ grounding_equality((+N1 = #N1)):-
 add_inferred_modes([],_).
 add_inferred_modes([Mode|Modes],Flag):-
 	write(Mode), nl,
-	(Flag = true -> Mode; true),
+	(Flag = true -> call(Mode); true), %MANOS
 	add_inferred_modes(Modes,Flag).
 	
 
@@ -9278,7 +9278,7 @@ show(posleft):-
 	nl,
 	p_message('positives left'),
         example(_,pos,Atom),
-	\+(Atom),
+	\+(call(Atom)), % MANOS
         write(Atom), write('.'), nl,
 	fail.
 show(neg):-
