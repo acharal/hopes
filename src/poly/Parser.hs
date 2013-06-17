@@ -72,7 +72,7 @@ args = do symbol "("
           argsSet <- commaSep1 (try argExpr <|> (allExpr False) ) -- False disallows ',' in lambda
           pos2 <- getPosition  
           symbol ")"
-          return ( argsSet, (incSourceColumn pos2 1) )
+          return ( argsSet, incSourceColumn pos2 1 )
 
 
 {-
@@ -160,7 +160,7 @@ conIdent = L.conIdent L.hopes
 natural :: Stream s m Char => ParsecT s u m Integer
 natural = L.natural L.hopes
 
--- Atom is either a constant, or a string literal
+-- Atom is either a constant, or a string literal, or ',' atom
 atom :: Stream s m Char => ParsecT s u m String
 atom = choice [try conIdent, try stringLiteral, symbol ","] -- <?> "atom"
 
@@ -330,8 +330,6 @@ atomicExpr = choice [ predConst
                     , numberExpr
                     , cut
                     , inParens 
-                            -- FIXME : is allExpr really
-                            -- needed here?
                     ] -- <?> ("atomicExpr")
 
 -- Used as an argument to expr to create expr. parser
@@ -404,7 +402,7 @@ clause = do pos1 <- getPosition
             h <- headCl
             b <- optionMaybe $ do 
                 gets <- symbol ":-" <|> symbol "<-" -- mono or poly?
-                body <- try fullExpr <|> (allExpr True)
+                body <- (try fullExpr) <|> (allExpr True)
                 return (mkGets gets, body)
             pos2 <- getPosition
             symbol "." -- <?> "dot"

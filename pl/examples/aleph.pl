@@ -5410,7 +5410,7 @@ evaluate(OldLit,_,Lit,I,O,D):-
 	copy_args(OldLit,NewLit,O),
 	copy_consts(Lit,NewLit,Arity),
 	update_lit(LitNum,false,NewLit,I,O,D),
-	\+('$aleph_local'(lazy_evaluated,LitNum)), %MANOS
+	\+('$aleph_local'(lazy_evaluated,LitNum)), 
 	asserta('$aleph_local'(lazy_evaluated,LitNum)), !.
 evaluate(_,_,_,_,_,_).
 
@@ -5504,7 +5504,7 @@ lazy_index_prove(Start-Finish,Type,Lit,Head,Body):-
 % this is different from Aleph 2 where only a single binding was obtained
 lazy_index_prove1(Type,Lit,Head,Body,Num):-
         depth_bound_call((example(Num,Type,Head),Body)),
-	\+('$aleph_local'(lazy_evaluate,eval(Type,Lit))), %MANOS
+	\+('$aleph_local'(lazy_evaluate,eval(Type,Lit))), 
         asserta('$aleph_local'(lazy_evaluate,eval(Type,Lit))),
         fail.
 lazy_index_prove1(_,_,_,_,_).

@@ -4,3 +4,14 @@
     Compile into polyhopes executable
 ./clean
     Delete .o and .hi files
+
+-------
+
+polyhopes <file>: parse and typecheck <file>
+
+-------
+
+In an interactive, write 
+    main' <verbose> <file>
+to parse and typecheck <file>. If verbose, the core language expression 
+is also printed.

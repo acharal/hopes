@@ -46,7 +46,7 @@ hopesStyle = emptyDef
                }
 
 graphicToken :: Stream s m Char => ParsecT s u m Char
-graphicToken = oneOf "#$&*+-;/:<=>?@^~\\|"
+graphicToken = oneOf ".#$&*+-;/:<=>?@^~\\|" --FIXME added .
 
 hopesDef :: Stream s m Char => GenLanguageDef s u m
 hopesDef = hopesStyle
