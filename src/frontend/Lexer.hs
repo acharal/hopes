@@ -77,7 +77,7 @@ scanTok ('\\':cs) loc        = Tok TKbslash 1 cs
 scanTok (',':cs) loc         = Tok TKcomma  1 cs
 scanTok ('.':cs) loc         = Tok TKdot    1 cs
 scanTok ('_':cs) loc         = Tok TKwild   1 cs
-scanTok ('!':cs) loc         = Tok TKcut    1 cs
+scanTok ('!':cs) loc         = Tok (TKid "!") 1 cs
 scanTok (';':cs) loc         = Tok TKsemi   1 cs
 scanTok ('\'':cs) loc        = Tok TKsq     1 cs
 scanTok ('=':cs) loc         = Tok TKeq     1 cs

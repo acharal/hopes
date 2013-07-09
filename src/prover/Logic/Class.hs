@@ -54,12 +54,15 @@ class MonadPlus m => MonadLogic m where
             Nothing -> mzero
             Just (a,_) -> return a
 
+class Monad m => MonadCut m where
+    call :: m a -> m a
+    cut  :: m ()
+
 -- | this is the opposite of msplit
 -- | The law is : msplit tm >>= reflect = tm
 reflect r = case r of
                 Nothing -> mzero
                 Just (a,tmr) -> return a `mplus` tmr
-
 
 instance MonadLogic m => MonadLogic (StateT s m) where
     msplit (StateT m) =
@@ -77,6 +80,14 @@ instance MonadLogic m => MonadLogic (ReaderT r m) where
                 case r of
                     Nothing -> return Nothing
                     Just (a,m') -> return (Just (a, ReaderT $ \env' -> m'))
+
+instance MonadCut m => MonadCut (StateT s m) where 
+    call (StateT m) = StateT $ \s -> call (m s)
+    cut = StateT $ \s -> cut >> return ((), s)
+
+instance MonadCut m => MonadCut (ReaderT r m) where
+    call (ReaderT m) = ReaderT $ \env -> call (m env)
+    cut    = ReaderT $ \env -> cut
 
 bagofN (Just n) _ | n <= 0  = return []
 bagofN n m = msplit m >>= bagofN'
