@@ -226,7 +226,8 @@ derive e =
                   succ (CTrue, ss)  = return (subst ss (foldAnd (d ++ es)),   ss)
                   succ (e', ss) = return (subst ss (foldAnd (e':(d ++ es))), ss)
                   f | null es   = fail "all disequalities"
-                    | otherwise = deriveSeq (head es) (tail es) (e:d)
+                    | isPrimDisEq e = deriveSeq (head es) (tail es) (e:d)
+                    | otherwise = fail ""
 
         isVarApp' (Not e) = isVarApp'' e'
             where (_, e') = splitExist e
