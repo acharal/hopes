@@ -1,4 +1,4 @@
---  Copyright (C) 2006-2011 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2006-2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -23,12 +23,13 @@ import Logic (runLogicT, observe)
 import Logic (LogicT)
 import Types (hasType, HasType)
 import Subst (restrict, combine, success)
+import ComputedAnswer
 import Lang
 
-import ComputedAnswer
+import CoreLang (Expr(..), Program, fv, splitExist)
 
-import CoreLang (Expr(..), Program, fv)
 import qualified CoreLang
+
 
 -- import Control.Monad (msum, mplus, replicateM)
 import Control.Monad.Reader
@@ -39,12 +40,19 @@ import Trace.Class
 
 import Derive (derive)
 
+(>>-) = (>>=)
+
 newtype InferT a m b = InferT { unInferT :: ReaderT (Program a) (StateT Int (LogicT m)) b }
 
 runInfer p m = runLogicT Nothing $ evalStateT (runReaderT (unInferT m) p) 0
 
 infer :: Monad m => Program a -> InferT a m b -> m (Maybe (b, InferT a m b))
 infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
+
+
+
+-- ifte m th el = call $ (m >> cut >> th) `mplus` el
+-- ifte' m th el = call (m >>= \s -> cut >> th s `mplus` el) --call $ (m >>= \s -> cut >> th s) `mplus` el
 
 
 
@@ -57,7 +65,6 @@ infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
 prove g =  do
     ans <- refute g
     answer (fv g) ans
-
 
 answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
     where splitAnd (And e1 e2) = splitAnd e1 ++ splitAnd e2
@@ -77,7 +84,15 @@ refute''' g = ifte (derive g) cont failed
           failed = if isSuccessful g 
                    then return (g, success)
                    else fail "not successful goal"
-          isSuccessful e = (e == CTrue)
+          isSuccessful CTrue = True
+          isSuccessful (And e1 e2) = isSuccessful e1 && isSuccessful e2
+          isSuccessful (Not e) = 
+            let (v, e') = splitExist e
+            in case e' of
+                  Eq e1 e2 -> True
+                  _ -> False
+          isSuccessful _ = False
+
 
 instance Monad m => Monad (InferT a m) where
     return a = InferT $ return a
@@ -110,13 +125,7 @@ instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (InferT a m) w
         a' <- get
         modify (+1)
         return $ hasType ty $ liftSym ("V" ++ show a')
-{-
-instance (Symbol a, HasType a, Monad m, MonadFreeVarProvider a m) => MonadFreeVarProvider a (ReaderT s m) where
-    freshVarOfType = lift . freshVarOfType
--}
 
 instance (Symbol a, Eq a, Monad m) => MonadClauseProvider a (InferT a m) where
     clausesOf r = InferT $ asks (CoreLang.clausesOf r)
 
-instance (Symbol a, Eq a, Monad m, MonadClauseProvider a m) => MonadClauseProvider a (StateT s m) where
-    clausesOf = lift . clausesOf

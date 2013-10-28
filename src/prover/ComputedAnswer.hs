@@ -1,5 +1,6 @@
 
-module ComputedAnswer where
+module ComputedAnswer (ComputedAnswer(..)) where
+
 
 import Pretty
 import Subst (Subst)
@@ -17,13 +18,13 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Subst a) where
         where ppr_bind (v,t) = sep [ ppr v <+> text "=", ppr t ]
 
 instance (Pretty a, Eq a, Symbol a, Show a) => Pretty (ComputedAnswer a) where
-    ppr (Computed s e) = vcat [ pprsubst s ] --, ppr_expr' e ]
+    ppr (Computed s e) = vcat [ pprsubst s, ppr_expr' e ]
         where pprsubst  xs  = vcat $ map (ppr_bind "=" []) xs
               ppr_bind  s vs (v,t) = sep [ ppr v <+> text s, ppr_expr vs t ]
---              ppr_expr' ies = vcat $ map aux ies
---              aux (Not e) = 
---                let (v', Eq t1 t2) = splitExist e
---                in ppr_bind "\\=" v' (t1, t2)
+              ppr_expr' ies = vcat $ map aux ies
+              aux (Not e) = 
+                let (v', Eq t1 t2) = splitExist e
+                in ppr_bind "/=" v' (t1, t2)
 
 ppr_expr vs (Var v) | v `elem` vs = text "*" <> ppr v
                     | otherwise   = ppr v
@@ -74,7 +75,7 @@ mkbasic e =
         l f v e = f (reverse v) e
 
         simple' [] e       = mkvar e
---        simple' vs (Not e) = mkneg (tup vs e)
+        simple' vs (Not e) = mkneg (tup vs e)
         simple' vs e       = mkpos (tup vs e)
 
         simple = l simple' []
@@ -121,6 +122,7 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
     ppr (And e1 e2)  = sep $ punctuate comma [ppr e1, ppr e2]
     ppr (Or e1 e2)   = sep $ punctuate (text ";") [ppr e1, ppr e2]
     ppr (Eq e1 e2)   = sep $ [ppr e1, text "=" , ppr e2]
+    ppr (Not e1)     = text "not" <> parens (ppr e1)
     ppr e@(Lambda _ _) = parens (text "\\" <> sep (map ppr xs) <> text "^" <> ppr e')
         where (xs, e') = splitLambda e
 --    ppr (Not e1)     = text "not" <> parens (ppr e1)
@@ -135,6 +137,5 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
                 where (es, tail) = lst e2
               lst e = ([], Just e)
 --    ppr (Forall v e) = parens (text "F" <> ppr v <+> ppr e)
---    ppr (Cut)        = text "!"
---    ppr e            = error (show e)
+    ppr (Cut)        = text "!"
 

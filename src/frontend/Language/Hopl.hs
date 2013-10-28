@@ -53,6 +53,9 @@ instance (Symbol a, Eq a)  => HasLogicConstants (Expr a) where
     cor     = Rigid $ liftSym ";"
     cand    = Rigid $ liftSym ","
 
+isCut sym = sym == (Rigid $ liftSym "!")
+isNot sym = sym == (Rigid $ liftSym "not")
+
 {-
 instance (HasConstants a, HasType a) => HasConstants (Typed a) where
     ctop = typed tyBool ctop

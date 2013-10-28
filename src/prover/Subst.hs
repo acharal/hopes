@@ -20,6 +20,7 @@ module Subst where
 -- import Language.Hopl (Expr(..), Clause(..))
 -- import Data.Monoid (mconcat)
 import CoreLang
+import Data.List (union)
 
 type Subst a = [ (a, Expr a) ]
 
@@ -47,11 +48,12 @@ instance Eq a => (Substitutable (Expr a) a) where
                   aux _ = error "Cannot substitute lambda bounds vars with expr"
         subst theta (Exists x e) = maybe (Exists x (subst theta e)) aux $ lookup x theta
             where aux (Var y) = Exists y (subst theta e)
-                  aux _ = error "Cannot substitute lambda bounds vars with expr"
+                  aux _ = error "Cannot substitute exist bounds vars with expr"
 --        subst theta (Forall x e) = maybe (Forall x (subst theta e)) aux $ lookup x theta
 --            where aux (Var y) = Forall y (subst theta e)
 --                  aux _ = error "Cannot substitute lambda bounds vars with expr"
         subst theta e@(Var x) = maybe e id $ lookup x theta
+        subst theta (Not e) = Not (subst theta e)
         subst theta (ListCons e1 e2) = ListCons (subst theta e1) (subst theta e2)
         subst theta e = e
 
@@ -66,4 +68,12 @@ combine theta zeta  =
     let ss    = map fst theta
         zeta' = [ (v, e) | (v, e) <- zeta, v `notElem` ss ]
     in  subst theta zeta ++ zeta'
+
+
+dom theta   = map fst theta
+range theta = concatMap fv (map snd theta)
+vars theta  = dom theta `union` range theta
+
+
+isRenamingSubst s = all (\(_, x) -> isVar x) s
 

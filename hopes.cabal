@@ -58,7 +58,7 @@ Executable      hopes
                   Lang, Types,
                   Tc, WellForm, TypeCheck, Restrict,
                   Pretty, Error, Loc, Desugar,
-                  Language.Hopl, Logic, Logic.Class, Infer, Subst,
+                  Language.Hopl, Logic, Logic.Class, Infer, Subst, 
                   CoreLang,
                   Shell, Driver
   Extensions:     RankNTypes
@@ -70,5 +70,4 @@ Executable      hopes
                   CPP
                   UndecidableInstances
                   NoMonomorphismRestriction
-  Ghc-Options:    -fwarn-unused-imports
 
