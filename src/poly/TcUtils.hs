@@ -31,9 +31,9 @@ module TcUtils (
 import Basic
 import Types 
 import Syntax
-import Error
+import Error (Messages, mkErrWithPos, mkMsgs, ErrType(..), ErrLevel(..))
 import Pretty
-import Pos
+import Pos (HasPosition(..))
 
 import Data.List(nub)
 import Control.Monad.Reader

@@ -22,6 +22,7 @@ module Error (
 
 import Loc
 import Pretty
+import BasicPretty
 import Control.Monad.Error
 
 {- this is a comment -}

@@ -20,70 +20,15 @@
  - Pretty printing
  -}
 
-module Pretty (
-        module Pretty,
-        module Text.PrettyPrint
+module BasicPretty (
+        module Pretty
     ) where
 
-import Text.PrettyPrint
+import Pretty
 
 import Pos 
 import Types 
 
-
-class Pretty a where
-    ppr :: a -> Doc
-
-pprint a = print (ppr a)
-
-instance Pretty Doc where
-    ppr = id
-
-instance Pretty [Char] where
-    ppr = text
-
-instance Pretty Int where
-    ppr = int
-
-instance Pretty Integer where
-    ppr = text . show
-
-instance Pretty Double where
-    ppr = text . show
-
-instance Pretty a => Pretty (Maybe a) where
-    ppr (Just a) = ppr a
-    ppr Nothing  = empty
-
-instance (Pretty a, Pretty b) => Pretty (Either a b) where
-    ppr (Left  a) = ppr a
-    ppr (Right b) = ppr b
-
-dcolon  = text "::"
-arrow   = text "->"
-dot     = char '.'
-entails = text ":-"
-slash   = char '/'
--- semi = text ";"
-curly a = text "{" <+> a <+> text "}"
---brackets a = text "[" <+> a <+> text "]"
-
-instance Pretty SourcePos where
-    ppr sp = 
-        if sp == bogusPos
-            then text "<no-location>"
-            else hcat $ punctuate colon [ text (sourceName sp), int (sourceLine sp), int (sourceColumn sp) ]
-
-instance Pretty PosSpan where
-    ppr (OneLineSpan f l c1 c2) =
-        hcat $ punctuate colon [ text f, int l, parens $ int c1 <> char '-' <> int c2 ]
-    ppr (MultiLineSpan f l1 c1 l2 c2) = 
-        hcat $ punctuate colon [ text f, ppr_par l1 c1 <> char '-' <> ppr_par l2 c2 ]
-        where ppr_par l c = parens (int l <> comma <> int c)
-    ppr (PosSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
-
-instance Show PosSpan where
-    show = show . ppr
 
 -- Types
 instance Pretty RhoType where

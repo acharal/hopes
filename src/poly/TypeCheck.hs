@@ -23,8 +23,8 @@ import Basic
 import TcUtils
 import Syntax
 import Types
-import Error
-import Pos
+import Error (Messages, internalErr, mkMsgs, mkErrWithPos, ErrType(..), ErrLevel(..) )
+import Pos (HasPosition(..))
 import Pretty
 
 import Data.Maybe(fromJust)

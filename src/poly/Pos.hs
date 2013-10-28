@@ -19,14 +19,11 @@
 
 
 -- Model a location in a program
-module Pos (
-    module Pos, 
-    module Text.Parsec.Pos,
-    module Data.Monoid
-) where
+module Pos where
 
-import Text.Parsec.Pos
-import Data.Monoid hiding ((<>))
+import Text.Parsec.Pos (SourcePos(..), Line, Column, newPos, sourceName, sourceLine, sourceColumn)
+import Data.Monoid (Monoid(..))
+import Pretty
 
 -- A position range
 data PosSpan = 
@@ -92,6 +89,23 @@ instance HasPosition SourcePos where
 instance HasPosition PosSpan where
     posSpan x = x
 
+
+instance Pretty SourcePos where
+    ppr sp = 
+        if sp == bogusPos
+            then text "<no-location>"
+            else hcat $ punctuate colon [ text (sourceName sp), int (sourceLine sp), int (sourceColumn sp) ]
+
+instance Pretty PosSpan where
+    ppr (OneLineSpan f l c1 c2) =
+        hcat $ punctuate colon [ text f, int l, parens $ int c1 <> char '-' <> int c2 ]
+    ppr (MultiLineSpan f l1 c1 l2 c2) = 
+        hcat $ punctuate colon [ text f, ppr_par l1 c1 <> char '-' <> ppr_par l2 c2 ]
+        where ppr_par l c = parens (int l <> comma <> int c)
+    ppr (PosSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
+
+instance Show PosSpan where
+    show = show . ppr
 
 
 

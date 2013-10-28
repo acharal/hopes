@@ -18,6 +18,7 @@
 module Language.Hopl.Syntax.Pretty () where
 
 import Pretty
+import BasicPretty
 import Loc (unLoc)
 import Language.Hopl.Syntax
 

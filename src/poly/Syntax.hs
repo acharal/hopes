@@ -22,6 +22,7 @@ import Types
 import Basic
 import Pos
 import Pretty
+import BasicPretty
 
 {-
  - Concrete syntax tree for the surface language.

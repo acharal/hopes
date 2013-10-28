@@ -29,13 +29,13 @@ module Desugar where
 
 
 import Syntax
-import Types 
+import Types
 import Core
 import Basic
-import TcUtils(generalize)
+import TcUtils (generalize)
 
 import Data.Maybe(fromJust, mapMaybe)
-import Data.List
+import Data.List (nub, (\\))
 import Control.Monad.State
 
 -- Desugar the dependency group DAG

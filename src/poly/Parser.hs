@@ -35,6 +35,8 @@ import Pos
 
 import Text.Parsec
 import Text.Parsec.Expr
+import Text.Parsec.Pos (updatePosString)
+import Data.Monoid (mappend)
 import Control.Monad (when)
 
 -- type OperatorTable s u m a = [[Operator s u m a]]
