@@ -107,7 +107,7 @@ setTok tok = modify (\s -> s{ ptok = tok })
 
 parseErrorWithLoc :: Monad m => Loc -> ErrDesc -> ParserT m a
 parseErrorWithLoc loc msg =
-    throwError $ mkMsgs $ mkErrWithLoc loc ParseError Failure msg
+    throwError $ mkMsgs $ mkErrWithLoc (locSpan loc) ParseError Failure msg
 
 parseError :: Monad m => ErrDesc -> ParserT m a
 parseError msg = do

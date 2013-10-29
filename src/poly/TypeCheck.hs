@@ -23,8 +23,8 @@ import Basic
 import TcUtils
 import Syntax
 import Types
-import Error (Messages, internalErr, mkMsgs, mkErrWithPos, ErrType(..), ErrLevel(..) )
-import Pos (HasPosition(..))
+import Error (Messages, internalErr, mkMsgs, mkErrWithLoc, ErrType(..), ErrLevel(..) )
+import Loc (HasLocation(..))
 import Pretty
 
 import Data.Maybe(fromJust)
@@ -50,14 +50,14 @@ data TcOutput a =
 
 
 -- run the typeCheck monad with a starting environment
-runTc :: (Show a, HasPosition a, Monad m) => TcEnv -> SDepGroupDag a -> m (Either Messages (TcOutput a))
+runTc :: (Show a, HasLocation a, Monad m) => TcEnv -> SDepGroupDag a -> m (Either Messages (TcOutput a))
 runTc env dag = runErrorT $ evalStateT (runReaderT (tcDag dag) env) emptyTcState 
 
 
 
 
 -- typeCheck program, and output all relevant information
-tcDag :: (Show a, HasPosition a, Monad m) => SDepGroupDag a -> Tc m a (TcOutput a)
+tcDag :: (Show a, HasLocation a, Monad m) => SDepGroupDag a -> Tc m a (TcOutput a)
 tcDag dag = do
     (dag', preds) <- walk dag []
     warnings      <- gets msgs
@@ -313,7 +313,7 @@ findPoly cnm ar = do
     return tp
 
 -- Unification
-unify :: (Monad m, Show a, HasPosition a) => [Constraint a] -> Tc m a Substitution
+unify :: (Monad m, Show a, HasLocation a) => [Constraint a] -> Tc m a Substitution
 -- No constraints
 unify [] = return id
 -- Equal types
@@ -363,10 +363,10 @@ unify ( ( f1@(Rho_pi (Pi_fun rhos1 pi1)), f2@(Rho_pi (Pi_fun rhos2 pi2)), ex ) :
 unify ((rho1, rho2, ex) : _ ) = 
     throwError $ unificationError rho1 rho2 ex
 
-unificationError :: (Show a, HasPosition a) 
+unificationError :: (Show a, HasLocation a) 
                  => RhoType -> RhoType -> SExpr a -> Messages
 unificationError rho1 rho2 ex = 
-    mkMsgs $ mkErrWithPos (posSpan ex) TypeError Fatal $
+    mkMsgs $ mkErrWithLoc (locSpan ex) TypeError Fatal $
               (text "Type Error: Could not match expected type" <+> (quotes $ ppr rho2) ) $$
               (text "with actual type" <+> (quotes $ ppr rho1) ) $$
               (text "in expression" <+> (doubleQuotes $ ppr ex) )

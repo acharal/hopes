@@ -31,9 +31,10 @@ module TcUtils (
 import Basic
 import Types 
 import Syntax
-import Error (Messages, mkErrWithPos, mkMsgs, ErrType(..), ErrLevel(..))
+import Error (Messages, mkErrWithLoc, mkMsgs, ErrType(..), ErrLevel(..))
 import Pretty
-import Pos (HasPosition(..))
+-- import Pos (HasPosition(..))
+import Loc (HasLocation(..))
 
 import Data.List(nub)
 import Control.Monad.Reader
@@ -131,13 +132,13 @@ type Tc m inf = ReaderT TcEnv (StateT (TcState inf) (ErrorT Messages m))
 
 -- Restrict an expression in the Head: no lambdas or predicate
 -- constants allowed
-restrictHead :: (Monad m, HasPosition a) => SExpr a -> Tc m a ()
+restrictHead :: (Monad m, HasLocation a) => SExpr a -> Tc m a ()
 restrictHead h =  h |> flatten |> mapM_ restrict
     where restrict ex@(SExpr_predCon a _ _ _) = throwError $ restrictError ex
           restrict ex@(SExpr_lam a _ _)       = throwError $ restrictError ex
           restrict _                       = return ()
           restrictError ex =
-              mkMsgs $ mkErrWithPos (posSpan ex) ParseError Fatal $ 
+              mkMsgs $ mkErrWithLoc (locSpan ex) ParseError Fatal $ 
                            (text "Error: predicate or lambda in clause head") $$
                            (text "in expression" <+> (doubleQuotes $ ppr ex) )
 

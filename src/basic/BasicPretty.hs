@@ -28,17 +28,6 @@ import Lang (Sym(..))
 import Types (Typed(..), TyVar(..), MonoTypeV(..), GrdType(..), TyEnv(..), TySig(..), tyvars)
 import Data.List (nub)
 
-instance Pretty Loc where
-    ppr (Loc _ (-1) (-1)) = text "<no-location>"
-    ppr (Loc f l c) = hcat $ punctuate colon [ text f, int l, int c ]
-
-instance Pretty LocSpan where
-    ppr (OneLineSpan f l c1 c2) =
-        hcat $ punctuate colon [ text f, int l, parens $ int c1 <> char '-' <> int c2 ]
-    ppr (MultiLineSpan f l1 c1 l2 c2) = 
-        hcat $ punctuate colon [ text f, ppr_par l1 c1 <> char '-' <> ppr_par l2 c2 ]
-        where ppr_par l c = parens (int l <> comma <> int c)
-    ppr (LocSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
 
 instance Pretty Sym where
     ppr (Sym s) = ppr s

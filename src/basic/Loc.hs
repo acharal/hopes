@@ -17,8 +17,8 @@
 
 module Loc where
 
-
-import Data.Monoid
+import Pretty
+import Data.Monoid (Monoid(..))
 import Control.Monad.Identity
 
 
@@ -48,15 +48,34 @@ spanEnd (OneLineSpan f l c1 c2)         = Loc f l c2
 spanEnd (MultiLineSpan f l1 c1 l2 c2)   = Loc f l2 c2
 spanEnd (LocSpan l1 l2)                 = l2
 
-mkSpan :: Loc -> Loc -> LocSpan
+mkSpan :: (HasLocation a, HasLocation b) => a -> b -> LocSpan
 mkSpan l1 l2 =
-    if locFile l1  == locFile l2 then
-        if locLine l1 == locLine l2 then
-            OneLineSpan (locFile l1) (locLine l1) (locOffset l1) (locOffset l2)
-        else
-            MultiLineSpan (locFile l1) (locLine l1) (locOffset l1) (locLine l2) (locOffset l2)
-    else
-        LocSpan l1 l2
+    let locl1 = loc l1 
+        locl2 = loc l2
+    in if locFile locl1  == locFile locl2 then
+          if locLine locl1 == locLine locl2 then
+               OneLineSpan (locFile locl1) (locLine locl1) (locOffset locl1) (locOffset locl2)
+          else
+               MultiLineSpan (locFile locl1) (locLine locl1) (locOffset locl1) (locLine locl2) (locOffset locl2)
+       else
+          LocSpan locl1 locl2
+
+
+instance Pretty Loc where
+    ppr (Loc _ (-1) (-1)) = text "<no-location>"
+    ppr (Loc f l c) = hcat $ punctuate colon [ text f, int l, int c ]
+
+instance Pretty LocSpan where
+    ppr (OneLineSpan f l c1 c2) =
+        hcat $ punctuate colon [ text f, int l, parens $ int c1 <> char '-' <> int c2 ]
+    ppr (MultiLineSpan f l1 c1 l2 c2) = 
+        hcat $ punctuate colon [ text f, ppr_par l1 c1 <> char '-' <> ppr_par l2 c2 ]
+        where ppr_par l c = parens (int l <> comma <> int c)
+    ppr (LocSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
+
+
+instance Show LocSpan where
+    show = show . ppr
 
 class HasLocation a where
     loc :: a ->  Loc

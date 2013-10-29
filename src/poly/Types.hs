@@ -20,7 +20,8 @@
 module Types where
 
 import Basic
-import Pos(HasPosition(..))
+--import Pos(HasPosition(..))
+import Loc(HasLocation(..))
 
 import Pretty
 
@@ -137,8 +138,8 @@ instance HasType (Typed a) where
 
 
 -- Combine type with location
-instance HasPosition a => HasPosition (Typed a) where 
-    posSpan (T a _) = posSpan a
+instance HasLocation a => HasLocation (Typed a) where 
+    locSpan (T a _) = locSpan a
 
 
 order :: HasType a => a -> Int

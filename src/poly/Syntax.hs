@@ -20,7 +20,7 @@ module Syntax where
 
 import Types
 import Basic
-import Pos
+import Loc
 import Pretty
 
 {-
@@ -146,11 +146,11 @@ instance HasName (Var a ) where
     nameOf (Var _ nm)  = nm
     nameOf (AnonVar _) = "_" 
 
-instance HasPosition a => HasPosition (Const a) where
-    posSpan (Const a _)  = posSpan a  
-instance HasPosition a => HasPosition (Var a) where
-    posSpan (Var a _)  = posSpan a
-    posSpan (AnonVar a) = posSpan a
+instance HasLocation a => HasLocation (Const a) where
+    locSpan (Const a _) = locSpan a  
+instance HasLocation a => HasLocation (Var a) where
+    locSpan (Var a _)   = locSpan a
+    locSpan (AnonVar a) = locSpan a
 
 instance HasType a => HasType (Const a) where
     typeOf (Const a _) = typeOf a
@@ -331,8 +331,8 @@ instance HasType a => HasType (SExpr a) where
     hasType tp e = let newInf = e |> getInfo |> hasType tp
                    in  setInfo newInf e
 
-instance HasPosition a => HasPosition (SExpr a) where
-    posSpan e = posSpan (getInfo e)
+instance HasLocation a => HasLocation (SExpr a) where
+    locSpan e = locSpan (getInfo e)
 
 
 {- 

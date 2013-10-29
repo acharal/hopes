@@ -31,15 +31,16 @@ module Parser (runParser, parseSrc, emptyParseState, getState, parseHopes2) wher
 import qualified Lexer as L
 import Syntax
 import qualified Operator as Operators
-import Pos 
 
 import Text.Parsec hiding (runParser)
 import Text.Parsec.Expr
-import Text.Parsec.Pos (updatePosString)
+import Text.Parsec.Pos
 import Data.Monoid (mappend)
 import Control.Monad (when)
 
 import Control.Monad.IO.Class
+import Loc
+
 
 -- type OperatorTable s u m a = [[Operator s u m a]]
 
@@ -47,7 +48,7 @@ import Control.Monad.IO.Class
 -- cached operator table as Text.Parsec.Expr demands it
 data ParseState s m = 
     ParseSt { operatorTable :: Operators.OperatorTable
-            , cachedTable   :: [(Int, [Operator s (ParseState s m) m ( SExpr PosSpan )])]
+            , cachedTable   :: [(Int, [Operator s (ParseState s m) m ( SExpr LocSpan )])]
             } 
 
 -- The empty parser state
@@ -57,21 +58,25 @@ emptyParseState = ParseSt [] []
 type ParserT s m a = ParsecT s (ParseState s m) m a
 
 
+
+instance HasLocation SourcePos where
+    loc pos = Loc (sourceName pos) (sourceLine pos) (sourceColumn pos)
+
 {- 
  - Utility parsing functions
  -}
 
 -- Takes a functor and a list of argument lists with positions,
 -- and makes a compatible nested application
-nestedApp :: SExpr PosSpan                  -- Functor
-          -> [([SExpr PosSpan], SourcePos)] -- Argument lists with their positions
-          -> SExpr PosSpan                  -- A nested application compatible with input
+nestedApp :: SExpr LocSpan                  -- Functor
+          -> [([SExpr LocSpan], SourcePos)] -- Argument lists with their positions
+          -> SExpr LocSpan                  -- A nested application compatible with input
 nestedApp = 
-    foldl (\fun (args, pos) -> SExpr_app (mkSpan (spanBegin $ posSpan fun) pos) fun args)
+    foldl (\fun (args, pos) -> SExpr_app (mkSpan (spanBegin $ locSpan fun) pos) fun args)
 
 -- Utility function which parses comma- separated arguments in parentheses
 -- Returns args, along with their ENDING position (after last ")")
-args :: Stream s m Char => ParserT s m ([SExpr PosSpan] , SourcePos )
+args :: Stream s m Char => ParserT s m ([SExpr LocSpan] , SourcePos )
 args = do symbol "("
           argsSet <- commaSep1 (try argExpr <|> (allExpr False) ) -- False disallows ',' in lambda
           pos2 <- getPosition  
@@ -109,9 +114,9 @@ mkLam vars bd p1 p2 = SExpr_lam (mkSpan p1 p2) vars bd
 
 -- Operator expression
 mkOpExpr fixity op [arg] = SExpr_op span op fixity False [arg] 
-    where span = posSpan op `mappend` posSpan arg
+    where span = locSpan op `mappend` locSpan arg
 mkOpExpr fixity op args@([arg1, arg2]) = SExpr_op span op fixity False args
-    where span = posSpan arg1 `mappend` posSpan arg2
+    where span = locSpan arg1 `mappend` locSpan arg2
 
 -- Inverse follows symbol
 mkGets :: String -> SGets
@@ -204,7 +209,7 @@ failTK = L.reserved L.hopes "fail"
 
 -- Basic structures
 
-variable :: Stream s m Char => ParserT s m (SExpr PosSpan)
+variable :: Stream s m Char => ParserT s m (SExpr LocSpan)
 variable = try ( do { pos1 <- getPosition
                     ; s    <- varIdent
                     ; return $ mkVarEx s pos1 (updatePosString pos1 s)
@@ -212,7 +217,7 @@ variable = try ( do { pos1 <- getPosition
                )
 
 
-constant :: Stream s m Char => ParserT s m (SExpr PosSpan)
+constant :: Stream s m Char => ParserT s m (SExpr LocSpan)
 constant = try ( do { pos1 <- getPosition
                     ; c    <- atom 
                     ; pos2 <- getPosition
@@ -220,7 +225,7 @@ constant = try ( do { pos1 <- getPosition
                     } -- <?> ("constant")
                )
 
-predConst :: Stream s m Char => ParserT s m (SExpr PosSpan)
+predConst :: Stream s m Char => ParserT s m (SExpr LocSpan)
 predConst = try ( do  { pos1 <- getPosition
                       ; predTK
                       ; pos2 <- getPosition
@@ -235,7 +240,7 @@ predConst = try ( do  { pos1 <- getPosition
                       } -- <?> ("predicate constant")
                 )
 
-numberExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
+numberExpr :: Stream s m Char => ParserT s m (SExpr LocSpan)
 numberExpr = try $ do { pos1 <- getPosition
                       ; n <- try ( do n <- float -- float is longer so try first
                                       return $ Right n 
@@ -251,7 +256,7 @@ numberExpr = try $ do { pos1 <- getPosition
                       }
 
 
-cut :: Stream s m Char => ParserT s m (SExpr PosSpan)
+cut :: Stream s m Char => ParserT s m (SExpr LocSpan)
 cut = do { pos1 <- getPosition
          ; symbol "!"
          ; return $ mkConstEx "!" Nothing pos1 (incSourceColumn pos1 1)
@@ -259,7 +264,7 @@ cut = do { pos1 <- getPosition
 
 -- More complex structures
 
-list :: Stream s m Char => ParserT s m (SExpr PosSpan)
+list :: Stream s m Char => ParserT s m (SExpr LocSpan)
 list = (try listEmpty) <|> (try listNonEmpty) -- <?> ("list")  
     where listEmpty = do { pos1 <- getPosition
                          ; symbol "[]"
@@ -286,7 +291,7 @@ list = (try listEmpty) <|> (try listNonEmpty) -- <?> ("list")
                          }
         
 -- Parameter true -> ',' is allowed in body (we are not in an argument)
-lambda :: Stream s m Char => Bool -> ParserT s m (SExpr PosSpan)
+lambda :: Stream s m Char => Bool -> ParserT s m (SExpr LocSpan)
 lambda isFull = try ( do 
     { pos1 <- getPosition
     ; symbol "\\~" 
@@ -294,7 +299,7 @@ lambda isFull = try ( do
     ; symbol "=>"
     ; ex   <- try (if isFull then fullExpr else argExpr) <|> 
               (allExpr isFull) 
-    ; return $ mkLam vars ex pos1 (spanEnd $ posSpan ex)
+    ; return $ mkLam vars ex pos1 (spanEnd $ locSpan ex)
     } ) --  <?> "lambda"
     where varLit = do { pos1 <- getPosition
                       ; var  <- varIdent 
@@ -308,10 +313,10 @@ lambda isFull = try ( do
 -- parsed.
 -- This along with "lambda" and expressions with operators
 -- describe all expressions.
-application :: Stream s m Char => ParserT s m (SExpr PosSpan)
+application :: Stream s m Char => ParserT s m (SExpr LocSpan)
 application  = try ( do 
     { s    <- atomicExpr
-    ; as   <- many args -- as :: [[SExpr PosSpan]]  
+    ; as   <- many args -- as :: [[SExpr LocSpan]]  
     ; case as of 
         [] -> return s
         _  -> return $ nestedApp s as
@@ -319,14 +324,14 @@ application  = try ( do
     )
                   
 
-inParens :: Stream s m Char => ParserT s m (SExpr PosSpan)
+inParens :: Stream s m Char => ParserT s m (SExpr LocSpan)
 inParens = try $ do
     ex <- parens $ fullExpr <|> (allExpr True)
     return $ SExpr_paren (getInfo ex) ex
     
 -- Everything except application or lambda. Functions as head
 -- of application
-atomicExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
+atomicExpr :: Stream s m Char => ParserT s m (SExpr LocSpan)
 atomicExpr = choice [ predConst
                     , list
                     , constant
@@ -338,7 +343,7 @@ atomicExpr = choice [ predConst
 
 -- Used as an argument to expr to create expr. parser
 -- Boolean parameter says if fullExpr is allowed in lambda body
-allExpr :: Stream s m Char => Bool -> ParserT s m (SExpr PosSpan)
+allExpr :: Stream s m Char => Bool -> ParserT s m (SExpr LocSpan)
 allExpr fullLam = try (lambda fullLam) <|> application
 
 
@@ -347,7 +352,7 @@ allExpr fullLam = try (lambda fullLam) <|> application
 -- TODO: better error messages when failing to parse operator
 
 -- Expression for arguments (no ',' operator allowed)
-argExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
+argExpr :: Stream s m Char => ParserT s m (SExpr LocSpan)
 argExpr = do { st <- getState
              ; let opTbl = map snd $ cachedTable st
              ; buildExpressionParser opTbl (allExpr False)
@@ -357,7 +362,7 @@ argExpr = do { st <- getState
 commaPrec = 1000
 
 -- General expressions (',' operator allowed)
-fullExpr :: Stream s m Char => ParserT s m (SExpr PosSpan)
+fullExpr :: Stream s m Char => ParserT s m (SExpr LocSpan)
 fullExpr = do { -- Grab state and add ',' operator
                 st <- getState
               ; let opTbl = map snd cachedTable''
@@ -383,7 +388,7 @@ fullExpr = do { -- Grab state and add ',' operator
 
 -- Head of a clause 
 -- Constant with arity (for polymorphic <-) or Prolog-style head
-headCl :: Stream s m Char => ParserT s m (SExpr PosSpan)
+headCl :: Stream s m Char => ParserT s m (SExpr LocSpan)
 headCl = ( try $ do pos1 <- getPosition
                     c    <- atom
                     symbol "/"
@@ -401,7 +406,7 @@ headCl = ( try $ do pos1 <- getPosition
          )
 
 -- Clause
-clause :: Stream s m Char => ParserT s m (SSent PosSpan)
+clause :: Stream s m Char => ParserT s m (SSent LocSpan)
 clause = do pos1 <- getPosition
             h <- headCl
             b <- optionMaybe $ do 
@@ -422,7 +427,7 @@ clause = do pos1 <- getPosition
  -}
 
 -- Directives
-command :: Stream s m Char => ParserT s m (SSent PosSpan)
+command :: Stream s m Char => ParserT s m (SSent LocSpan)
 command = do { pos1 <- getPosition 
              ; symbol ":-"
              ; ex <- try fullExpr <|> (allExpr True)
@@ -433,7 +438,7 @@ command = do { pos1 <- getPosition
              }
 
 -- Goals
-goal :: Stream s m Char => ParserT s m (SSent PosSpan)
+goal :: Stream s m Char => ParserT s m (SSent LocSpan)
 goal = do { pos1 <- getPosition
           ; symbol "?-"
           ; ex <- try fullExpr <|> (allExpr True)
@@ -444,7 +449,7 @@ goal = do { pos1 <- getPosition
           }
 
 -- Sentence
-sentence :: Stream s m Char => ParserT s m (SSent PosSpan)
+sentence :: Stream s m Char => ParserT s m (SSent LocSpan)
 sentence = choice [ try goal
                   , try command
                   , clause
@@ -472,7 +477,7 @@ opDirective _ = return ()
 
 
 -- Build operator table, save it in monadic state
-buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator s (ParseState s m) m (SExpr PosSpan)])]
+buildOpTable :: Stream s m Char => ParsecT s (ParseState s m) m [(Int, [Operator s (ParseState s m) m (SExpr LocSpan)])]
 buildOpTable = do { st <- getState
                   ; return $ mkOpTable (operatorTable st)
                   }
@@ -508,7 +513,7 @@ runParser :: Stream s m t =>
      ParsecT s u m a -> u -> SourceName -> s -> m (Either ParseError a)
 runParser = runPT
 
-parseSrc :: Stream s m Char => ParserT s m [SSent PosSpan]
+parseSrc :: Stream s m Char => ParserT s m [SSent LocSpan]
 parseSrc = do 
     L.whiteSpace L.hopes
     sents <- many sentence'

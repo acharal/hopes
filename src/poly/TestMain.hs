@@ -31,7 +31,7 @@ import Types
 import TcUtils
 import TypeCheck
 import Prepr (progToGroupDag)
-import Pos (bogusSpan, PosSpan)
+import Loc (bogusSpan, LocSpan)
 import Pretty (ppr, render)
 import Parser (parseHopes2)
 import Frontend (loadSource, printDef, printType)
@@ -140,12 +140,12 @@ subst = substAlpha (Alpha "a1") (Rho_var $ Alpha "subst")
 --testFresh tp = let Right r = runIdentity $ runErrorT $ evalStateT (runReaderT (freshen tp) emptyTcEnv) emptyTcState in r
 
 --- TESTING TC MONAD ---
-testGenReader :: Show a => Tc Identity PosSpan a -> IO ()
+testGenReader :: Show a => Tc Identity LocSpan a -> IO ()
 testGenReader testReader = 
     putStrLn $ show output
         where (Right output) = runIdentity $ runErrorT $ evalStateT ( runReaderT testReader emptyTcEnv) emptyTcState  
 
-testArity :: Tc Identity PosSpan [PiType]
+testArity :: Tc Identity LocSpan [PiType]
 
 testArity  = do
     pi1 <- typeOfArity 2
@@ -153,7 +153,7 @@ testArity  = do
     pi3 <- typeOfArity 12
     return [pi1, pi2, pi3]
 
-testVars :: Tc Identity PosSpan [Either Alpha Phi]
+testVars :: Tc Identity LocSpan [Either Alpha Phi]
 testVars = do
     al1 <- newAlpha
     al2 <- newAlpha
@@ -170,7 +170,7 @@ testVars = do
 --              testFreshen 
 --              testConstraint
 --              testEnvVars
-testEmptySt :: Show a => Tc Identity PosSpan a -> Tc Identity PosSpan a
+testEmptySt :: Show a => Tc Identity LocSpan a -> Tc Identity LocSpan a
 testEmptySt m = do
     addExist ("NOTSEEN1") (Rho_i)
     addExist ("NOTSEEN2") (Rho_var (Alpha "notSeen2"))
@@ -187,14 +187,14 @@ testEmptySt m = do
 
 
 
-testNoEnvVars :: Show a => Tc Identity PosSpan a -> Tc Identity PosSpan a
+testNoEnvVars :: Show a => Tc Identity LocSpan a -> Tc Identity LocSpan a
 testNoEnvVars m = do
     addExist "NOTEXIST1"  Rho_i 
     out <- withEnvVars [("NOTSEENENV", Rho_i)] $ withNoEnvVars m
     return out
 
 
-testEnvVars :: Tc Identity PosSpan [RhoSig Symbol]
+testEnvVars :: Tc Identity LocSpan [RhoSig Symbol]
 testEnvVars = do
     vars <- asks rhoSigs
     return vars
@@ -210,14 +210,14 @@ toFreshen = Poly_gen [Alpha "s", Alpha "s2"] [Phi "phi"] $
                    Pi_o
 
 
-testExist :: Tc Identity PosSpan [RhoSig Symbol]
+testExist :: Tc Identity LocSpan [RhoSig Symbol]
 testExist = do
     addExist ("hello") (Rho_i)
     addExist ("world") (Rho_var (Alpha "a"))
     ex <- gets exists
     return ex
 
-testConstraint :: Tc Identity PosSpan [Constraint PosSpan]
+testConstraint :: Tc Identity LocSpan [Constraint LocSpan]
 testConstraint = do
     addConstraint Rho_i (Rho_var $ Alpha "a") bogusExp
     addConstraint Rho_i (Rho_var $ Alpha "b") bogusExp

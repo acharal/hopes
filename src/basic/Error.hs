@@ -22,7 +22,6 @@ module Error (
 
 import Loc
 import Pretty
-import BasicPretty
 import Control.Monad.Error
 
 {- this is a comment -}
@@ -31,14 +30,14 @@ type ErrDesc = Doc
 
 data Message =
    Msg { 
-        errloc  :: Loc,
+        errloc  :: LocSpan,
         errtyp  :: ErrType,
         level   :: ErrLevel,
         desc    :: ErrDesc
     }
 
 instance HasLocation Message where
-    loc (Msg l _ _ _) = l
+    locSpan (Msg l _ _ _) = l
 
 type Messages = ([Message], [Message])
 
@@ -61,8 +60,8 @@ instance Error Messages where
 
 instance Pretty Message where
     ppr err
-       | errloc err == bogusLoc = desc err
-       | otherwise              = hang (ppr (errloc err) <>colon) 4 (desc err)
+       | errloc err == bogusSpan = desc err
+       | otherwise               = hang (ppr (errloc err) <>colon) 4 (desc err)
 
 
 {-
@@ -75,9 +74,9 @@ class Monad m => MonadWarn m w where
 isWarn msg = level msg == Warning
 isFail = not . isWarn
 
-mkErr typ lev msg = Msg bogusLoc typ lev msg
+mkErr typ lev msg = Msg bogusSpan typ lev msg
 
-mkErrWithLoc l typ lev msg = Msg l typ lev msg
+mkErrWithLoc l typ lev msg = Msg (locSpan l) typ lev msg
 
 internalErr msg = mkErr Internal Fatal msg
 
