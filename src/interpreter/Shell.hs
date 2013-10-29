@@ -26,7 +26,7 @@ import Data.Char(isSpace)
 import Control.Monad.Error (catchError)
 import Control.Monad.State (lift, liftIO, gets, modify)
 
-import System.Console.Haskeline (getInputLine, setComplete, defaultSettings, completeWord, simpleCompletion, InputT, runInputT)
+import System.Console.Haskeline (getInputLine, setComplete, defaultSettings, completeWord, completeFilename, simpleCompletion, InputT, runInputT)
 import System.Exit(exitWith, ExitCode(..))
 import System.Console.GetOpt
 
@@ -51,7 +51,7 @@ readline  = getInputLine
 type ShellT = InputT
 
 runShell m = runInputT defaultShellSettings (initializeShell >> m)
-        where defaultShellSettings = setComplete completePredicates defaultSettings
+        where defaultShellSettings = setComplete completeFilename defaultSettings
 
 prompt = readline promptStr
     where promptStr = "-? "
@@ -75,7 +75,7 @@ runInteractiveM commands = runShell runLoopM
 runInteractive commands = runDriverM $ runInteractiveM commands
 
 -- completion
-
+{-
 completePredicates = -- completeQuotedWord Nothing "\'" listPredicates $
                         completeWord Nothing "" listPredicates
 
@@ -84,7 +84,7 @@ listPredicates s =
         in do
              k <- gets kb
              return $ map simpleCompletion $ filter (isPrefixOf s) $ predicates k
-
+-}
 
 data Command =
       CRefute    String
@@ -120,7 +120,7 @@ dispatch (CRefute s) = refute s
 dispatch command = dispatch' command
     where dispatch' (CConsult f)  = consultFile f
           dispatch' (CShowType p) = showType p
-          dispatch' (CShowDef  p) = showDef p
+          dispatch' (CShowDef  p) = fail "showDef"-- showDef p
           dispatch' (CDebugOnOff s) = debugOnOff s
           dispatch' (CHalt) = halt
 
@@ -139,6 +139,7 @@ printDebug = let
 
 debugOnOff i = toggleDebug i >> printDebug
 
+{-
 showDef Nothing = do
     src <- gets kb
     liftIO $ pprint src
@@ -146,6 +147,7 @@ showDef (Just p) = do
     src <- gets kb
     let cl = filter (\c -> clauseHead c == liftSym p) (clauses src)
     liftIO $ pprint $ vcat (map ppr cl)
+-}
 
 showType p = do
     env <- gets currentEnv 
