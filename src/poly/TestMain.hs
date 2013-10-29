@@ -43,6 +43,9 @@ import System.Environment(getArgs)
 import System.Exit
 import Control.Monad.Identity
 
+import Frontend
+
+
 -- Calling main' inputfile verbose from interactive:
 --     Parses operator file
 --     Parses and typeChecks builtins file
@@ -50,35 +53,11 @@ import Control.Monad.Identity
 --     If verbose, prints syntax tree with annotations
 --     Prints either error or typechecked predicates
 main' verbose inputFile = do
-    -- Parse operators 
-    Right (_, opTable) <- runHopesParser2 emptyParseState "../../pl/op.pl"
-    -- Parse builtins
-    Right (buis, buisST) <- runHopesParser2 opTable "../../pl/builtins.pl"
-    -- TypeCheck builtins
-    let Right buis' = runTc' initTcEnv buis
-    -- Parce input
-    maybeParsed <- runHopesParser2 buisST inputFile   
-    case maybeParsed of 
-        Left err -> do
-            putStr "Parse error at "
-            print err
-        -- Successful parse: typeCheck
-        Right (parsed, _) -> do
-            let env = addPredsToEnv initTcEnv (tcOutPreds buis')
-                typeChecked = runTc' env parsed
-            case typeChecked of
-                -- Type error
-                Left (errs, warns) ->
-                    mapM_ (putStrLn . render . ppr) errs
-                -- TypeCheck successful
-                Right dag -> do
-                    when verbose $ mapM_ (mapM_ (putStrLn . show . ppr . desugarDef))
-                                         (tcOutSyntax dag)
-                    mapM_ (\(sig, tp) -> do { putStr   $ show (ppr sig)
-                                            ; putStrLn $ " :: " ++ show tp 
-                                            }
-                          ) 
-                          (tcOutPreds dag)
+    (src, tyenv) <- loadSource inputFile
+
+    when verbose $ mapM_ printDef src
+
+    mapM_ printType tyenv
 
 
 -- Invoking polyhopes program:
@@ -98,7 +77,7 @@ main = do
     main' True (head args)
 
 -- Wrapper for runTc
-runTc' env prog = runIdentity $ runTc env (progToGroupDag prog)
+-- runTc' env prog = runIdentity $ runTc env (progToGroupDag prog)
 
 simple   = "../../pl/examples/simple.pl"
 aleph    = "../../pl/examples/aleph.pl"

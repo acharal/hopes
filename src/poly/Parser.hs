@@ -26,18 +26,20 @@
  -  prefix operator used as atom fails
  -}
 
-module Parser where
+module Parser (runParser, parseSrc, emptyParseState, getState, parseHopes2) where
 
 import qualified Lexer as L
 import Syntax
 import qualified Operator as Operators
 import Pos 
 
-import Text.Parsec
+import Text.Parsec hiding (runParser)
 import Text.Parsec.Expr
 import Text.Parsec.Pos (updatePosString)
 import Data.Monoid (mappend)
 import Control.Monad (when)
+
+import Control.Monad.IO.Class
 
 -- type OperatorTable s u m a = [[Operator s u m a]]
 
@@ -502,6 +504,21 @@ buildOpTable = do { st <- getState
 -- TODO: Parse module directives
 -- TODO: Parse include Directives
 
+runParser :: Stream s m t =>
+     ParsecT s u m a -> u -> SourceName -> s -> m (Either ParseError a)
+runParser = runPT
+
+parseSrc :: Stream s m Char => ParserT s m [SSent PosSpan]
+parseSrc = do 
+    L.whiteSpace L.hopes
+    sents <- many sentence'
+    eof
+    return sents
+    where sentence' = do
+              s <- sentence
+              when (isCommand s) (opDirective1 s)  
+              return s
+
 -- Wrapper function for runP. Returns both parsed program and final state
 runHopesParser p st sourcename input = runP p' st sourcename input
     where p' = do 
@@ -510,21 +527,6 @@ runHopesParser p st sourcename input = runP p' st sourcename input
             st' <- getState
             return (res, st')
 
--- Wrapper function for runP. Returns both parsed program and final state
--- Parameters : initial state, input file.
-runHopesParser2 st inputFile = do
-    input <- readFile inputFile
-    return $ runP p' st inputFile input
-    where p' = do 
-              L.whiteSpace L.hopes
-              sents <- many sentence'
-              eof
-              st' <- getState
-              return (sents, st')
-          sentence' = do
-              s <- sentence
-              when (isCommand s) (opDirective1 s)  
-              return s
 
 
 -- Parse after reading operators
