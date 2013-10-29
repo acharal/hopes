@@ -27,11 +27,9 @@ import Language.Hopl (KnowledgeBase(..))
 import CoreLang (kbtoProgram, hopltoCoreGoal)
 
 import Control.Monad.IO.Class (liftIO)
-import System.IO (hGetContents, openFile, IOMode(..))
 
 parseFromFile fname parser = do
-    file     <- liftIO $ openFile fname ReadMode
-    content  <- liftIO $ hGetContents file
+    content  <- liftIO $ readFile fname
     parsed   <- runParser $ fromFile fname $ withInput content $ parser
     case parsed of
         Right (ast,s) -> return ast
