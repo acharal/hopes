@@ -23,27 +23,24 @@
  -}
 
 
-module Main where
+module TestMain where
 
 import Basic
-import Error
-import Pretty
 import Syntax
-import Parser
-import Prepr
+import Types
 import TcUtils
 import TypeCheck
-import Types
-import Pos
-import Core
-import Desugar
+import Prepr (progToGroupDag)
+import Pos (bogusSpan, PosSpan)
+import Pretty (ppr, render)
+import Parser (parseHopes2)
+import Frontend (loadSource, printDef, printType)
 
 import Data.Maybe(fromJust)
 import System.Environment(getArgs)
-import System.Exit
-import Control.Monad.Identity
+import System.Exit (exitFailure)
+import Control.Monad.Identity (runIdentity, Identity)
 
-import Frontend
 
 
 -- Calling main' inputfile verbose from interactive:
