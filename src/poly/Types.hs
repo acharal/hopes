@@ -22,6 +22,8 @@ module Types where
 import Basic
 import Pos(HasPosition(..))
 
+import Pretty
+
 -- Argument variables
 newtype Alpha = Alpha Symbol
   deriving Eq
@@ -40,11 +42,13 @@ data RhoType = Rho_i
              | Rho_var Alpha
     deriving Eq
 -- Functional with a no. of arguments
-data FunType = Fun Int
+--data FunType = Fun Int
 -- Polymorphic
 data PolyType = Poly_gen [Alpha] [Phi] PiType
 --    deriving Eq -- FIXME: modulo alpha-conversion
 
+tyBool = Poly_gen [] [] Pi_o
+tyFun t1 t2 = Poly_gen [] [] (Pi_fun [t1] t2)
 
 -- Pretty printing for types
 
@@ -54,10 +58,12 @@ instance Show Alpha where
 instance Show Phi where
     showsPrec p (Phi phi) = ( phi ++ )
 
+{-
 instance Show FunType where
     showsPrec p (Fun n) = ("(" ++). walk n . (") -> i" ++)
         where walk 1 = ("i" ++)
               walk n = ("i, " ++) . walk (n-1)
+-}
 
 instance Show RhoType where
     showsPrec p Rho_i = ("i" ++)
@@ -84,6 +90,17 @@ instance Show PolyType where
       walk alphas . walk phis . showsPrec p pi
       where walk [] = id
             walk (x : xs) = ("∀" ++) . showsPrec p x . (". " ++) . walk xs
+
+-- Types
+instance Pretty RhoType where
+    ppr rho = text $ show rho
+
+instance Pretty PiType where
+    ppr pi = text $ show pi
+
+instance Pretty PolyType where
+    ppr poly = text $ show poly
+
 
 -- Type transformations, from mono- to poly
 piToPoly = Poly_gen [] []
