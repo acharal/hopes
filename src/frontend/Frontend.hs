@@ -24,7 +24,7 @@ import Desugar (runDesugarT, desugarGoal, desugarSrc)
 import Parser (runParser, withInput, parseSrc, parseGoal, fromFile)
 import Pretty
 import Language.Hopl (KnowledgeBase(..))
-import CoreLang (kbtoProgram, hopltoCoreGoal)
+import HoplToCore (kbtoProgram, hopltoCoreGoal)
 
 import Control.Monad.IO.Class (liftIO)
 

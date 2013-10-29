@@ -19,7 +19,6 @@
 module Driver where
 
 import Infer
-import CoreLang (kbtoProgram, hopltoCoreGoal)
 import Pretty
 
 import Frontend

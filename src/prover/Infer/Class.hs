@@ -28,14 +28,14 @@ module Infer.Class (
 
 import Logic.Class
 
-import Lang
-import Types
-import CoreLang
+import Lang (Symbol)
+import Types (Type, HasType)
+import CoreLang (Expr)
 
 
 class (Symbol a, HasType a) => MonadFreeVarProvider a m where
     freshVarOfType :: Type -> m a
 
 
-class Monad m => MonadClauseProvider a m where
+class MonadClauseProvider a m where
     clausesOf :: a -> m [Expr a]
