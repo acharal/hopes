@@ -1,9 +1,9 @@
 {-# LANGUAGE Rank2Types #-}
 
--- Direct-style implementation of LogicT, using first-class delimited 
+-- Direct-style implementation of LogicT, using first-class delimited
 -- continuations
 
-{- Copyright (c) 2005, Amr Sabry, Chung-chieh Shan, Oleg Kiselyov, 
+{- Copyright (c) 2005, Amr Sabry, Chung-chieh Shan, Oleg Kiselyov,
 	and Daniel P. Friedman
 -}
 
@@ -17,6 +17,7 @@ module Logic.SRReifT (
 
 import Control.Monad
 import Control.Monad.Trans
+import Control.Applicative (Applicative(..), Alternative(..))
 import Logic.Class
 -- import LogicT
 
@@ -36,20 +37,20 @@ import Control.Monad.CC.CCCxe
 data Tree m a = HZero | HOne a | HChoice a (TreeM m a)
 type TreeM m a = CC (PS (Tree m a)) m (Tree m a)
 
--- Like function composition but has the benefit of rotating the 
+-- Like function composition but has the benefit of rotating the
 -- tree as it proceeds
 
 compose_trees :: Monad m => Tree m a -> TreeM m a -> TreeM m a
 compose_trees HZero r = r
 compose_trees (HOne a) r = return $ HChoice a r
-compose_trees (HChoice a r') r = return $ 
+compose_trees (HChoice a r') r = return $
 				 HChoice a $ r' >>= (\v -> compose_trees v r)
 
 {-
 treefold :: (a -> b -> b) -> (a -> b) -> b -> Tree a -> b
 treefold kons kone knil HZero = knil
 treefold kons kone knil (HOne a) = kone a
-treefold kons kone knil (HChoice a r) = 
+treefold kons kone knil (HChoice a r) =
     kons a (treefold kons kone knil r)
 -}
 -- -------------------------------------------------------------
@@ -57,10 +58,20 @@ type LogicT m = SR m
 
 newtype SR m a = SR{unSR:: forall ans. CC (PS (Tree m ans)) m a}
 
+instance Monad m => Functor (LogicT m) where
+    fmap = liftM
+
+instance Monad m => Applicative (LogicT m) where
+    pure e = SR $ return e
+    (<*>) = ap
+
+instance Monad m => Alternative (LogicT m) where
+    empty = mzero
+    (<|>) = mplus
 
 -- Since SR is the newtype, the SR monad is just as efficient as CC
 instance Monad m => Monad (SR m) where
-  return x = SR $ return x
+  return x = pure x
   m >>= f  = SR $ unSR m >>= (unSR . f)
   fail s = SR $ abortP ps (return HZero)
 
@@ -68,7 +79,7 @@ instance Monad m => MonadPlus (SR m) where
   mzero = SR $ abortP ps (return HZero)
   -- Do not write the second argument of mplus as (SR m2)
   -- That forces the evaluation of m2, unnecessarily!
-  m1 `mplus` m2 = SR $ (id =<<) . shift0P ps $ \sk -> 
+  m1 `mplus` m2 = SR $ (id =<<) . shift0P ps $ \sk ->
                          do f1    <- sk (unSR m1)
                             let f2 = sk (unSR m2)
 			    compose_trees f1 f2
@@ -101,7 +112,7 @@ reify m = pushPrompt ps (unSR m >>= (return . HOne))
 
 runLogicT :: Monad m => Maybe Int -> SR m a -> m [a]
 runLogicT n m = runCC (reify m >>= flatten n)
-  where 
+  where
   flatten _ HZero = return []
   flatten (Just n) _ | n <= 0 = return []
   flatten _ (HOne a) = return [a]
@@ -116,4 +127,3 @@ observe m = runCC (reify m) >>= pick1
   where pick1 HZero         = fail "no answers"
 	pick1 (HOne a)      = return a
 	pick1 (HChoice a _) = return a
-

@@ -25,6 +25,8 @@ import Types (hasType, HasType)
 import Subst (restrict, combine, success)
 import ComputedAnswer
 import Lang
+import Control.Applicative (Applicative(..), Alternative(..))
+import Control.Monad (liftM, ap)
 
 import CoreLang (Expr(..), Program, fv, splitExist)
 
@@ -81,12 +83,12 @@ refute''' g = ifte (derive g) cont failed
             trace (g, s)
             (g', s') <- refute''' g
             return (g', s `combine` s')
-          failed = if isSuccessful g 
+          failed = if isSuccessful g
                    then return (g, success)
                    else fail "not successful goal"
           isSuccessful CTrue = True
           isSuccessful (And e1 e2) = isSuccessful e1 && isSuccessful e2
-          isSuccessful (Not e) = 
+          isSuccessful (Not e) =
             let (v, e') = splitExist e
             in case e' of
                   Eq e1 e2 -> True
@@ -94,13 +96,24 @@ refute''' g = ifte (derive g) cont failed
           isSuccessful _ = False
 
 
+instance Monad m => Functor (InferT a m) where
+    fmap = liftM
+
+instance Monad m => Applicative (InferT a m) where
+    pure a = InferT $ return a
+    (<*>) = ap
+
 instance Monad m => Monad (InferT a m) where
-    return a = InferT $ return a
+    return = pure
     m >>= f = InferT $ (unInferT m >>= \a -> unInferT (f a))
     fail a = InferT $ fail a
 
 instance MonadTrans (InferT a) where
     lift = InferT . lift . lift . lift
+
+instance Monad m => Alternative (InferT a m) where
+    (<|>) = mplus
+    empty = mzero
 
 instance Monad m => MonadPlus (InferT a m) where
     mzero = InferT mzero
@@ -108,7 +121,7 @@ instance Monad m => MonadPlus (InferT a m) where
 
 instance Monad m => MonadLogic (InferT a m) where
     msplit m = InferT $ do
-        r <- msplit (unInferT m) 
+        r <- msplit (unInferT m)
         case r of
             Nothing -> return Nothing
             Just (a, s) -> return (Just (a, InferT s))
@@ -128,4 +141,3 @@ instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (InferT a m) w
 
 instance (Symbol a, Eq a, Monad m) => MonadClauseProvider a (InferT a m) where
     clausesOf r = InferT $ asks (CoreLang.clausesOf r)
-

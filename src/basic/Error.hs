@@ -22,14 +22,14 @@ module Error (
 
 import Loc
 import Pretty
-import Control.Monad.Error
+import Control.Monad.Error -- deprecated
 
 {- this is a comment -}
 
 type ErrDesc = Doc
 
 data Message =
-   Msg { 
+   Msg {
         errloc  :: Loc,
         errtyp  :: ErrType,
         level   :: ErrLevel,
@@ -41,13 +41,13 @@ instance HasLocation Message where
 
 type Messages = ([Message], [Message])
 
-data ErrLevel = 
+data ErrLevel =
       Fatal
     | Failure
     | Warning
   deriving Eq
 
-data ErrType = 
+data ErrType =
       ParseError
     | TypeError
     | Internal

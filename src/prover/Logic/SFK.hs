@@ -28,6 +28,7 @@ module Logic.SFK(
 
 import Control.Monad
 import Control.Monad.Trans
+import Control.Applicative (Applicative(..), Alternative(..))
 import Logic.Class
 
 
@@ -40,8 +41,19 @@ type SK ans a = a -> FK ans -> ans
 instance MonadTrans LogicT where
     lift m = SFKT (\sk fk -> m >>= (\a -> sk a fk))
 
+instance Monad m => Functor (LogicT m) where
+    fmap = liftM
+
+instance Monad m => Applicative (LogicT m) where
+    pure e = SFKT (\sk fk -> sk e fk)
+    (<*>) = ap
+
+instance Monad m => Alternative (LogicT m) where
+    empty = mzero
+    (<|>) = mplus
+
 instance Monad m => Monad (LogicT m) where
-    return e = SFKT (\sk fk -> sk e fk)
+    return e = pure e
     m >>= f  =
       SFKT (\sk fk ->
            unSFKT m (\a fk' -> unSFKT (f a) sk fk')
