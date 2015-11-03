@@ -31,14 +31,14 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.CC
 
-data Tree r m a = 
+data Tree r m a =
       HZero
     | HOne a
     | HChoice a (CCT r m (Tree r m a))
 
 compose_trees HZero r = r
 compose_trees (HOne a) r = return $ HChoice a r
-compose_trees (HChoice a r') r = 
+compose_trees (HChoice a r') r =
     return $ HChoice a $ r' >>= \v -> compose_trees v r
 
 
@@ -81,11 +81,10 @@ observe m = runCCT (reify m >>= pick)
           pick (HOne a) = return a
           pick (HChoice a _) = return a
 
-runLogicT :: Monad m => Maybe Int -> (forall ans. SR ans m a) -> m [a]   
+runLogicT :: Monad m => Maybe Int -> (forall ans. SR ans m a) -> m [a]
 runLogicT n m = observe (bagofN n m)
 
 hasBranch m = SR $ lift (reify m >>= check)
     where check (HZero ) = return False
           check (HOne _) = return False
           check (HChoice _ _) = return True
-

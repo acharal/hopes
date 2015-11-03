@@ -7,6 +7,7 @@ module Trace (
 
 import Control.Monad
 import Control.Monad.State
+import Control.Applicative (Applicative(..), Alternative(..))
 
 
 import Logic.Class
@@ -17,8 +18,15 @@ import Trace.Coroutine
 
 newtype DebugT s i m a = DebugT { unDebugT :: TraceT i (StateT s m) a }
 
+instance Monad m => Functor (DebugT s i m) where
+    fmap = liftM
+
+instance Monad m => Applicative (DebugT s i m) where
+    pure a = DebugT $ return a
+    (<*>) = ap
+
 instance Monad m => Monad (DebugT s i m) where
-    return a = DebugT $ return a
+    return a = pure a
     m >>= f  = DebugT $ (unDebugT m) >>= \a -> unDebugT (f a)
     fail  = lift . fail
 
@@ -28,14 +36,18 @@ instance MonadTrans (DebugT s i) where
 instance Monad m => MonadTrace a (DebugT s a m)  where
     trace a = DebugT $ trace a
 
+instance MonadPlus m => Alternative (DebugT s a m) where
+    empty = mzero
+    (<|>) = mplus
+
 instance MonadPlus m => MonadPlus (DebugT s a m) where
     mzero = DebugT $ mzero
     m1 `mplus` m2 = DebugT $ (unDebugT m1) `mplus` (unDebugT m2)
 
 instance MonadLogic m => MonadLogic (DebugT s a m) where
-    msplit m = DebugT $ 
-        msplit (unDebugT m) >>= \r -> 
-            case r of 
+    msplit m = DebugT $
+        msplit (unDebugT m) >>= \r ->
+            case r of
                 Nothing -> return Nothing
                 Just (a, s) -> return $ Just (a, DebugT s)
 
