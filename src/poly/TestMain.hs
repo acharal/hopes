@@ -23,7 +23,7 @@
  -}
 
 
-module TestMain where
+module Main where
 
 import Basic
 import Syntax
