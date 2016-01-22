@@ -31,7 +31,7 @@ import Text.Parsec.Language
 
 -- A general language definition for a hopes-like higher order language
 hopesStyle :: Stream s m Char => GenLanguageDef s u m
-hopesStyle = emptyDef 
+hopesStyle = emptyDef
                { commentStart    = "/*"
                , commentEnd      = "*/"
                , commentLine     = "%"
@@ -57,29 +57,23 @@ hopes  = makeTokenParser hopesDef
 
 -- Variable token ( _ or alphanumeric starting with capital)
 varIdent :: Stream s m Char => GenTokenParser s u m -> ParsecT s u m String
-varIdent lexer = lexeme lexer $ try $
+varIdent lexer = lexeme lexer $
     do { c  <- underscore <|> upper
-       ; cs <- many (underscore <|> alphaNum) 
+       ; cs <- many (underscore <|> alphaNum)
        ; return (c:cs)
        }
     where underscore = char '_'
 
 -- Constant. Either alphanumeric starting with small letter, or graphic token string
 conIdent :: Stream s m Char => GenTokenParser s u m -> ParsecT s u m String
-conIdent lexer = lexeme lexer $ try $ 
-          choice [ graphicTokenString
-                 , letterIdent 
-                 ]
-    where graphicTokenString = do { tk  <- graphicToken
-                                  ; tks <- many (graphicToken <|> char '.')
-                                  ; return (tk:tks)
-                                  }
+conIdent lexer = lexeme lexer $ choice [ letterIdent , graphicTokenString ]
+    where graphicTokenString = many1 graphicToken
           letterIdent  = do { c  <- identStart
                             ; cs <- many identLetter
                             ; if (c:cs) == "pred" -- TODO: make this more general
-                                  then fail "pred" 
+                                  then fail "pred"
                                   else return (c:cs)
-                            } 
+                            }
           identStart   = lower
           identLetter  = alphaNum <|> underscore
           underscore   = char '_'
@@ -128,4 +122,3 @@ charEsc :: Stream s m Char => ParsecT s u m Char
 charEsc = choice (map parseEsc escMap)
     where parseEsc (c,code) = do{ char c; return code }
           escMap = zip ("abfnrtv\\\"\'") ("\a\b\f\n\r\t\v\\\"\'")
-
