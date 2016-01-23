@@ -17,14 +17,17 @@
 
 module Error (
     module Error,
-    module Control.Monad.Error
+    module Control.Monad.Except
 ) where
 
 import Loc
 import Pretty
-import Control.Monad.Error -- deprecated
+import Control.Monad.Except -- deprecated
 
 {- this is a comment -}
+
+type ErrorT = ExceptT
+runErrorT = runExceptT
 
 type ErrDesc = Doc
 
@@ -52,11 +55,13 @@ data ErrType =
     | TypeError
     | Internal
 
+{-
 instance Error Message where
     strMsg str = internalErr (text str)
 
 instance Error Messages where
     strMsg str = mkMsgs $ strMsg str
+-}
 
 instance Pretty Message where
     ppr err
