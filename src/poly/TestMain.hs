@@ -34,6 +34,7 @@ import Prepr (progToGroupDag)
 import Loc (bogusSpan, LocSpan)
 import Pretty (ppr, render)
 import Parser (parseHopes2)
+import ParserRoutine
 import Frontend (loadSource, printDef, printType)
 
 import Data.Maybe(fromJust)
@@ -68,7 +69,7 @@ main = do
     when (null args) $ do
         putStrLn $ "Error: no file given"
         exitFailure
-    when (length args > 1) $ do 
+    when (length args > 1) $ do
         putStrLn $ "Error: Only one file allowed"
         exitFailure
     main' True (head args)
@@ -90,7 +91,7 @@ prelude  = "../../pl/examples/mini-prelude.pl"
 
 -- Old typeCheck tester
 testTc verbose file = do
-    bui <- content "../../pl/builtins.pl" 
+    bui <- content "../../pl/builtins.pl"
     let Right buis = runIdentity $ runTc initTcEnv $ progToGroupDag bui
     fl <- content file
     case (runIdentity $ runTc ( addPredsToEnv initTcEnv (tcOutPreds buis) ) $ progToGroupDag fl) of
@@ -107,12 +108,12 @@ testTc verbose file = do
 content file = do
     (a,b) <- parseHopes2 file
     return a
- 
-testParse = testGen id 
+
+testParse = testGen id
 
 testPretty = testGen ( map (render . ppr) )
 
-testPre = testGen progToGroupDag 
+testPre = testGen progToGroupDag
 
 testGen test file  = do
     snt <- content file
@@ -120,9 +121,9 @@ testGen test file  = do
 
 
 --- TESTING GENERAL FUNCTIONS ---
-testFlatten = testGen $ 
+testFlatten = testGen $
     concatMap ( flatten . snd . fromJust . clBody .
-                (\(SSent_clause  cl) -> cl) 
+                (\(SSent_clause  cl) -> cl)
               )
 
 testFree1 rho = freeAlphas rho
@@ -141,9 +142,9 @@ subst = substAlpha (Alpha "a1") (Rho_var $ Alpha "subst")
 
 --- TESTING TC MONAD ---
 testGenReader :: Show a => Tc Identity LocSpan a -> IO ()
-testGenReader testReader = 
+testGenReader testReader =
     putStrLn $ show output
-        where (Right output) = runIdentity $ runErrorT $ evalStateT ( runReaderT testReader emptyTcEnv) emptyTcState  
+        where (Right output) = runIdentity $ runErrorT $ evalStateT ( runReaderT testReader emptyTcEnv) emptyTcState
 
 testArity :: Tc Identity LocSpan [PiType]
 
@@ -167,29 +168,29 @@ testVars = do
 
 
 -- tested with: testExist
---              testFreshen 
+--              testFreshen
 --              testConstraint
 --              testEnvVars
 testEmptySt :: Show a => Tc Identity LocSpan a -> Tc Identity LocSpan a
 testEmptySt m = do
     addExist ("NOTSEEN1") (Rho_i)
     addExist ("NOTSEEN2") (Rho_var (Alpha "notSeen2"))
-    
+
     newAlpha
     newPhi
 
     addConstraint Rho_i (Rho_var $ Alpha "NOTSEENCON") bogusExp
-    
+
     out <-  withEnvVars [("NOTSEENENV", Rho_i)] $ withEmptyState m
-    
-    
+
+
     return out
 
 
 
 testNoEnvVars :: Show a => Tc Identity LocSpan a -> Tc Identity LocSpan a
 testNoEnvVars m = do
-    addExist "NOTEXIST1"  Rho_i 
+    addExist "NOTEXIST1"  Rho_i
     out <- withEnvVars [("NOTSEENENV", Rho_i)] $ withNoEnvVars m
     return out
 
@@ -201,12 +202,12 @@ testEnvVars = do
 
 
 testFresh tp = do
-    tp' <- freshen tp 
+    tp' <- freshen tp
     return tp'
 
 toFreshen = Poly_gen [Alpha "s", Alpha "s2"] [Phi "phi"] $
     Pi_fun  [Rho_pi $ Pi_fun [Rho_var $ Alpha "s", Rho_var $ Alpha "s2"] Pi_o] $
-            Pi_fun [Rho_var $ Alpha "s", Rho_pi $ Pi_var $ Phi "phi"] 
+            Pi_fun [Rho_var $ Alpha "s", Rho_pi $ Pi_var $ Phi "phi"]
                    Pi_o
 
 
@@ -229,6 +230,3 @@ testConstraint = do
 
 bogusInfo = typed Rho_i bogusSpan
 bogusExp = SExpr_number (typed Rho_i bogusSpan) (Left 0)
-
-
-

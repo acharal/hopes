@@ -26,7 +26,8 @@
  -  prefix operator used as atom fails
  -}
 
-module Parser (runParser, parseSrc, emptyParseState, getState, parseHopes2) where
+--module Parser (runParser, parseSrc, emptyParseState, getState, parseHopes2) where
+module Parser (module Parser, module Text.Parsec) where
 
 import qualified Lexer as L
 import Syntax
@@ -49,13 +50,6 @@ import qualified Prelude (getContents, putStrLn, readFile)
 import qualified Data.ByteString as ByteString (getContents, putStrLn, readFile)
 
 import Text.Parsec.ByteString
-
-{-
-import Control.Monad
-import Control.Monad.Trans
-import Control.Monad.Coroutine
-import Control.Monad.Coroutine.SuspensionFunctors
--}
 
 -- type OperatorTable s u m a = [[Operator s u m a]]
 
@@ -330,7 +324,7 @@ lambda isFull = do
 application :: Stream s m Char => ParserT s m (SExpr LocSpan)
 application  =  do
     { s    <- atomicExpr
-    ; as   <- many args -- as :: [[SExpr PosSpan]]
+    ; as   <- many args -- as :: [[SExpr LocSpan]]
     ; case as of
         [] -> return s
         _  -> return $ nestedApp s as
@@ -522,42 +516,8 @@ buildOpTable = do { st <- getState
                                          --return (f $ mkConst name pos1 pos2)
                                          }
 
-{-}
-instance Functor s => MonadTrans (Coroutine s) where
-  lift = Coroutine . liftM Right
-
-parseAndYield :: Stream s m Char => ParsecT s (ParseState s m) m (Maybe a) -> Coroutine (Yield a) (ParsecT s (ParseState s m) m) ()
-parseAndYield p = do
-  r <- lift p;
-  case r of
-    Just r' -> yield r'
-    Nothing -> return ()
-
-parseAndYieldMany :: Stream s m Char => Coroutine (Yield (SSent PosSpan)) (ParsecT s (ParseState s m) m) ()
-parseAndYieldMany = do
-    parseAndYield (try maybeEof <|> maybeSentence)
-  where
-        maybeSentence :: Stream s m Char => ParserT s m (Maybe (SSent PosSpan))
-        maybeSentence = do
-            s <- sentence
-            return (Just s)
-        maybeEof :: Stream s m Char => ParserT s m (Maybe (SSent PosSpan))
-        maybeEof = do
-            eof
-            return Nothing
-
-parse2 p st inputFile = do
-  input <- ByteString.readFile inputFile
-  return $ runPT p st inputFile input
 
 
-runHopesParser3 st inputFile  = do
-  parse2 (pogoStick f parseAndYieldMany) st inputFile
-  where f (Yield s c) = do
-            when (isCommand s) (lift $ opDirective1 s)
-            liftIO $ putStrLn "w"
-            c
--}
 
 -- top-level parsing
 -- TODO: Parse operators in head

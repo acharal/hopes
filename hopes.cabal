@@ -1,4 +1,4 @@
-Cabal-Version:  >= 1.6 
+Cabal-Version:  >= 1.6
 Build-Type:	Simple
 Name:           hopes
 Version:        0.1.0
@@ -39,15 +39,20 @@ Flag poly
   Default: False
 
 Executable      hopes
-  Main-Is:	  Main.hs
+  if flag(poly)
+    Main-Is: TestMain.hs
+  else
+    Main-Is: Main.hs
+
   Build-Depends:  mtl==2.2.1, transformers==0.4.2.0, haskeline, monad-coroutine
+
   if flag(split-base)
     Build-Depends: base >= 3.0 && < 5, array, pretty
   else
     Build-Depends: haskell98, base < 3.0
 
   if flag(poly)
-    Build-Depends: parsec >= 3.0, containers >= 0.5
+    Build-Depends: parsec >= 3.0, containers >= 0.5, bytestring
 
   if flag(dc-impl)
     Build-Depends: CC-delcont-cxe
@@ -56,17 +61,18 @@ Executable      hopes
   if os(windows)
     CPP-Options: -DBUILD_WINDOWS
 
-  Hs-Source-Dirs: src/basic
-                  src/prover
-                  src/interpreter
   if flag(poly)
     Hs-Source-Dirs: src/poly
+                    src/basic
   else
     Hs-Source-Dirs: src/frontend
+                    src/basic
+                    src/prover
+                    src/interpreter
 
   if !flag(poly)
-    Other-Modules: Parser 
- 
+    Other-Modules: Parser
+
   Extensions:     RankNTypes
                   MultiParamTypeClasses
                   FlexibleInstances
