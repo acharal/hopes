@@ -23,7 +23,7 @@ import Lang (liftSym)
 
 import Data.List(find,nub,isPrefixOf)
 import Data.Char(isSpace)
-import Control.Monad.Error (catchError)
+import Error (catchError)
 import Control.Monad.State (lift, liftIO, gets, modify)
 
 import System.Console.Haskeline (getInputLine, setComplete, defaultSettings, completeWord, completeFilename, simpleCompletion, InputT, runInputT)
@@ -109,7 +109,7 @@ mkCom c s =
 
 userCommands =
  [ Command ['c','l'] (ReqArg CConsult "FILE")
- , Command ['t']     (ReqArg CShowType "SYMBOL") 
+ , Command ['t']     (ReqArg CShowType "SYMBOL")
  , Command ['q']     (NoArg  CHalt)
  , Command ['p']     (OptArg CShowDef "PREDICATE")
  , Command ['d']     (OptArg CDebugOnOff "on/off")
@@ -130,9 +130,9 @@ toggleDebug (Just "on")  = modify (\s -> s{debugFlag = True})
 toggleDebug (Just "off") = modify (\s -> s{debugFlag = False})
 toggleDebug (Just _) = toggleDebug Nothing
 
-printDebug = let 
+printDebug = let
        onoff True  = "on"
-       onoff False = "off"   
+       onoff False = "off"
     in do
         d <- gets debugFlag
         writeInfo ("debug is " ++ onoff d)
@@ -150,7 +150,7 @@ showDef (Just p) = do
 -}
 
 showType p = do
-    env <- gets currentEnv 
+    env <- gets currentEnv
     case findTySig (liftSym p) env of
         Nothing -> fail "undefined symbol"
         Just tysig -> liftIO $ pprint tysig
@@ -158,9 +158,8 @@ showType p = do
 halt = bye "halting ..."
 
 bye s = do
-    writeInfo s 
+    writeInfo s
     liftIO $ exitWith ExitSuccess
 
 writeInfo s = liftIO $ comm s
     where comm s = putStr "% "  >> putStrLn s
-
