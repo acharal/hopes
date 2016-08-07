@@ -1,13 +1,20 @@
 # HOPES: Higher-Order PROLOG with Extensional Semantics
 
+[![GitHub license](https://img.shields.io/badge/license-GPLv2-blue.svg)](https://raw.githubusercontent.com/acharal/hopes/master/COPYING)
+[![Build Status](https://travis-ci.org/acharal/hopes.svg?branch=master)](https://travis-ci.org/acharal/hopes)
+
 HOPES is a prototype interpreter for a higher-order PROLOG-like
-language. The syntax of the language extends that of PROLOG by
+language. 
+
+The syntax of the language extends that of PROLOG by
 supporting higher-order constructs (such as higher-order predicate
 variables, partial application and lambda terms). In particular,
 the syntax allows clauses (and queries) that contain uninstantiated
 predicate variables. The interpreter implements a higher-order
 top-down SLD-resolution proof procedure described in [CKRW13] together
-with the semantics of the language. HOPES has all the advantages of a 
+with the semantics of the language. 
+
+HOPES has all the advantages of a 
 higher-order system but continues to keep  the flavor of classical 
 PROLOG programming.
 
@@ -65,12 +72,16 @@ G = { (a,X1), (X1,X2), (X2,b) };
 
 In order to build HOPES you must have installed the GHC compiler
 version 6 or higher and the cabal system. You can download GHC from
-http://www.haskell.org/ghc/
+http://www.haskell.org/ghc/. The following sequence of cabal commands
+will install any depedencies and build the project.
+```bash
+$ cabal update
+$ cabal install --only-dependencies
+$ cabal configure && cabal build
+```
 
-There is a Makefile for convenience, and you can type `make` to
-the console to compile the program.
-
-Microsoft Windows compilations are not yet supported but this should
+#### Note for Windows
+Microsoft Windows compilations are not yet tested but there should
 be no problem as far as GHC and cabal are installed in the system.
 
 ### Running some examples
