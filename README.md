@@ -1,41 +1,84 @@
-# HOPES: Higher-Order Prolog with Extensional Semantics
+# HOPES: Higher-Order PROLOG with Extensional Semantics
 
-June 1, 2011
-
-## Introduction
-
-Hopes is a prototype interpreter for a higher-order PROLOG-like
+HOPES is a prototype interpreter for a higher-order PROLOG-like
 language. The syntax of the language extends that of PROLOG by
 supporting higher-order constructs (such as higher-order predicate
 variables, partial application and lambda terms). In particular,
 the syntax allows clauses (and queries) that contain uninstantiated
 predicate variables. The interpreter implements a higher-order
-top-down SLD-resolution proof procedure described in [1]. In the
-case of uninstantiated predicate variables, the proof procedure
-will systematically (and in a sophisticated way) investigate all
-finite instantiations of these variables. In other words, Hopes
-has all the advantages of a higher-order system but continues
-to keep the flavor of classical Prolog programming.
+top-down SLD-resolution proof procedure described in [CKRW13] together
+with the semantics of the language. HOPES has all the advantages of a 
+higher-order system but continues to keep  the flavor of classical 
+PROLOG programming.
 
-## Compilation
 
-In order to compile hopes you must have installed the GHC compiler
+## Introduction 
+
+In HOPES one can express popular functional operators
+such as `map`:
+```prolog
+map(R,[],[]).
+map(R,[X|Xs],[Y|Ys]) :- R(X,Y), map(R,Xs,Ys).
+```
+Apart from using functional operators in a logic programming context,
+we can also express naturally relational operators and graph operators:
+```prolog
+join(R,Q)(X) :- R(X), Q(X).
+union(R,Q)(X) :- R(X).
+union(R,Q)(X) :- Q(X).
+singleton(Y)(X) :- X = Y.
+diff(R,Q)(X) :- R(X), not(Q(X)). 
+tc(G)(X,Y) :- G(X,Y).
+tc(G)(X,Y) :- G(X,Z), tc(G)(Z,Y).
+```
+
+The definition of higher-order predicates together with the use of partial
+applications can lead to a different programming style that blends  the 
+functional and the logic programming. The following HOPES snipset shows how
+we can define `except` (i.e. the predicate that succeeds for all elements of `R` except `Y`) 
+by reusing (possibly) partially applied operators.
+```prolog
+except(R,Y)(X) :- diff(R, singleton(Y)).
+```
+
+As in classical PROLOG it is not required to use in a query some variables
+as input and some variables as output. Along that lines, HOPES also support
+queries that may have unbound predicate variables. For example, one can query
+```
+?- tc(G)(a, b).
+```
+to ask for potential graphs `G` whose transitive closure contains `(a,b)`.
+In that case the interpreter will systematically (and in a sophisticated way) 
+investigate all finite instantiations of these variables. The answers will be
+sets that represent the **extension** of `G` even if no such predicate is currently
+defined in the program. For example, potential answers of the aforementioned query 
+will be:
+```
+G = { (a,b) } ;
+G = { (a,X1), (X1,b) } ;
+G = { (a,X1), (X1,X2), (X2,b) };
+```
+
+## Getting Started
+
+### Building HOPES
+
+In order to build HOPES you must have installed the GHC compiler
 version 6 or higher and the cabal system. You can download GHC from
 http://www.haskell.org/ghc/
 
-There is a Makefile for convenience, and you can type "make" to
+There is a Makefile for convenience, and you can type `make` to
 the console to compile the program.
 
 Microsoft Windows compilations are not yet supported but this should
 be no problem as far as GHC and cabal are installed in the system.
 
-
-## Getting Started
+### Running some examples
 
 In pl/examples directory there are some hopes examples to getting
 started. To load an example you must type
+```
+-? :l pl/examples/file.pl
+```
 
-    -? :l pl/examples/file.pl
-
-
-[1]: http://www.springerlink.com/content/f127ru366p77vux3/ "Extensional Higher-Order Logic Programming, Angelos Charalambidis, Konstantinos Handjopoulos, Panos Rondogiannis, William W. Wadge, Logics in Artificial Intelligence, Lecture Notes in Computer Science 2010"
+[CKRW13]: http://dx.doi.org/10.1145/2499937.2499942 "Extensional Higher-Order Logic Programming, Angelos Charalambidis, Konstantinos Handjopoulos, Panos Rondogiannis, William W. Wadge, ACM Transactions on Computational Logic (TOCL), Volume 14 Issue 3, August 2013  Article No. 21"
