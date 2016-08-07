@@ -6,11 +6,15 @@ supporting higher-order constructs (such as higher-order predicate
 variables, partial application and lambda terms). In particular,
 the syntax allows clauses (and queries) that contain uninstantiated
 predicate variables. The interpreter implements a higher-order
-top-down SLD-resolution proof procedure described in [1].
+top-down SLD-resolution proof procedure described in [CKRW13] together
+with the semantics of the language. HOPES has all the advantages of a 
+higher-order system but continues to keep  the flavor of classical 
+PROLOG programming.
+
 
 ## Introduction 
 
-For example, in HOPES one can express popular functional operators
+In HOPES one can express popular functional operators
 such as `map`:
 ```prolog
 map(R,[],[]).
@@ -27,6 +31,7 @@ diff(R,Q)(X) :- R(X), not(Q(X)).
 tc(G)(X,Y) :- G(X,Y).
 tc(G)(X,Y) :- G(X,Z), tc(G)(Z,Y).
 ```
+
 The definition of higher-order predicates together with the use of partial
 applications can lead to a different programming style that blends  the 
 functional and the logic programming. The following HOPES snipset shows how
@@ -36,11 +41,23 @@ by reusing (possibly) partially applied operators.
 except(R,Y)(X) :- diff(R, singleton(Y)).
 ```
 
-In the case of uninstantiated predicate variables, the proof procedure
-will systematically (and in a sophisticated way) investigate all
-finite instantiations of these variables. In other words, HOPES
-has all the advantages of a higher-order system but continues
-to keep the flavor of classical Prolog programming.
+As in classical PROLOG it is not required to use in a query some variables
+as input and some variables as output. Along that lines, HOPES also support
+queries that may have unbound predicate variables. For example, one can query
+```
+?- tc(G)(a, b).
+```
+to ask for potential graphs `G` whose transitive closure contains `(a,b)`.
+In that case the interpreter will systematically (and in a sophisticated way) 
+investigate all finite instantiations of these variables. The answers will be
+sets that represent the **extension** of `G` even if no such predicate is currently
+defined in the program. For example, potential answers of the aforementioned query 
+will be:
+```
+G = { (a,b) } ;
+G = { (a,X1), (X1,b) } ;
+G = { (a,X1), (X1,X2), (X2,b) };
+```
 
 ## Getting Started
 
@@ -64,4 +81,4 @@ started. To load an example you must type
 -? :l pl/examples/file.pl
 ```
 
-[1]: http://dx.doi.org/10.1145/2499937.2499942 "Extensional Higher-Order Logic Programming, Angelos Charalambidis, Konstantinos Handjopoulos, Panos Rondogiannis, William W. Wadge, ACM Transactions on Computational Logic (TOCL), Volume 14 Issue 3, August 2013  Article No. 21"
+[CKRW13]: http://dx.doi.org/10.1145/2499937.2499942 "Extensional Higher-Order Logic Programming, Angelos Charalambidis, Konstantinos Handjopoulos, Panos Rondogiannis, William W. Wadge, ACM Transactions on Computational Logic (TOCL), Volume 14 Issue 3, August 2013  Article No. 21"
