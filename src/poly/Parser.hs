@@ -66,7 +66,7 @@ data ParseState s m =
 emptyParseState = ParseSt [] [] [] []
 
 -- A ParsecT type with user state as defined above
-type ParserT s m a = ParsecT s (ParseState s m) m a
+type ParserT s m  = ParsecT s (ParseState s m) m
 
 
 instance HasLocation SourcePos where
@@ -471,7 +471,6 @@ opDirective ( SExpr_app _ (SExpr_const _ (Const _ "op") _ _ _ )
           mkOp (p, a, n) = (p, Operators.Operator n a)
 
 opDirective _ = return ()
-
 
 opTblWithComma cachedTable' = cachedTable''
           where -- Find the right spot to put ','

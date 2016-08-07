@@ -16,31 +16,30 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{- 
+{-
  - Basic definitions for polyHOPES compiler
  -}
 
 module Basic where
 
--- Symbol is an alias for the string type 
+-- Symbol is an alias for the string type
 type Symbol = String
 
--- A class describing a data structure that can be 
+-- A class describing a data structure that can be
 -- "flattened" into a list
-class Flatable a where 
+class Flatable a where
     flatten :: a -> [a]
 
 
 -- Class for types with arity, defined as a partial function
-class HasArity a where 
+class HasArity a where
     arity :: a -> Maybe Int
 
 -- Types with a descriptive name
 class HasName a where
     nameOf :: a -> Symbol
-    
+
 
 -- The reverse application/forward pipe operator. Thanks F#!
 infixl 0 |>
 x |> f = f x
-

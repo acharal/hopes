@@ -1,6 +1,6 @@
 --  Copyright (C) 2013 Angelos Charalambidis  <a.charalambidis@di.uoa.gr>
 --                     Emmanouil Koukoutos    <manoskouk@softlab.ntua.gr>
---                     Nikolaos S. Papaspyrou <nickie@softlab.ntua.gr> 
+--                     Nikolaos S. Papaspyrou <nickie@softlab.ntua.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -39,11 +39,11 @@ import Data.List(group, sort)
  -}
 
 -- A data type for all relevant information the type checking outputs
-data TcOutput a = 
-    TcOutput { -- annotated program 
-               tcOutSyntax   :: SDepGroupDag (Typed a)  
+data TcOutput a =
+    TcOutput { -- annotated program
+               tcOutSyntax   :: SDepGroupDag (Typed a)
                -- new environment predicates
-             , tcOutPreds    :: [PolySig PredSig]            
+             , tcOutPreds    :: [PolySig PredSig]
                -- Warnings
              , tcOutWarnings :: Messages
              }
@@ -51,7 +51,7 @@ data TcOutput a =
 
 -- run the typeCheck monad with a starting environment
 runTc :: (Show a, HasLocation a, Monad m) => TcEnv -> SDepGroupDag a -> m (Either Messages (TcOutput a))
-runTc env dag = runErrorT $ evalStateT (runReaderT (tcDag dag) env) emptyTcState 
+runTc env dag = runErrorT $ evalStateT (runReaderT (tcDag dag) env) emptyTcState
 
 
 
@@ -62,7 +62,7 @@ tcDag dag = do
     (dag', preds) <- walk dag []
     warnings      <- gets msgs
     return $ TcOutput dag' preds warnings
-    
+
     where -- reached the end of the dag, so return all preds. you found
           walk [] preds = return ([], preds)
           walk (grp:grps) preds = do
@@ -78,7 +78,7 @@ tcDag dag = do
 -- typeCheck a dependency group
 tcGroup group = do
     -- Find predicates to be defined in this group
-    let preds = [(predDefName pr, predDefArity pr) | pr <- group ] 
+    let preds = [(predDefName pr, predDefArity pr) | pr <- group ]
     -- Make the most general types
     types <- mapM (typeOfArity.snd) preds
     let polys = map piToPoly types
@@ -94,7 +94,7 @@ tcGroup group = do
         typesSub = map (substInPi subst) types
     -- Return annotated group along with new predicate signatures
     return (groupSub, zip preds $ map generalize typesSub)
-    where substInTyped subst typed = 
+    where substInTyped subst typed =
               let newType = typed |> typeOf |> subst in
               hasType newType typed
           substInPi subst pi = pi'
@@ -107,25 +107,25 @@ tcPredDef predDef = do
     return $ predDef{predDefClauses = clauses'}
 
 -- typeCheck a clause
-tcClause (SClause a hd bd) = do 
+tcClause (SClause a hd bd) = do
     -- Make sure head contains no illegal expressions
     restrictHead hd
     -- Find all variables in the head and group them
-    let vars = allNamedVars hd |> sort |> group  
+    let vars = allNamedVars hd |> sort |> group
     alphas <- newAlphas (length vars)
-    --let varTypes = map Rho_var alphas 
+    --let varTypes = map Rho_var alphas
     -- More than 1 appearances of a variable means it has type i
-    let varsWithTypes = 
+    let varsWithTypes =
             [ if length var > 1 then (head var, Rho_i) else (head var, tp)
             | (var, tp) <- zip vars (map Rho_var alphas)
-            ]     
+            ]
 
     hd' <- withEnvVars varsWithTypes (tcExpr hd)
     let rho_o = Rho_pi Pi_o
-    case bd of 
+    case bd of
         Just (gets, expr) -> do
             expr' <- withEnvVars varsWithTypes (tcExpr expr)
-            case gets of 
+            case gets of
                 SGets_mono -> do
                     -- Both head and body are booleans
                     addConstraint (typeOf hd') rho_o hd'
@@ -140,22 +140,22 @@ tcClause (SClause a hd bd) = do
             -- so type is o
             addConstraint (typeOf hd') rho_o hd'
             return $ SClause (typed rho_o a) hd' Nothing
- 
 
 
--- typeCheck an expression. 
+
+-- typeCheck an expression.
 --   Also mark ex. quantified variables the first time you see them
 tcExpr :: Monad m => SExpr a
                   -> Tc m a ( SExpr (Typed a) )
 
 -- 1) Individuals
 -- Number
-tcExpr (SExpr_number a num) = 
+tcExpr (SExpr_number a num) =
     return $ SExpr_number (typed Rho_i a) num
 
 -- Individual constant
 tcExpr ex@(SExpr_const _ _ False _ _) =
-    return $ fmap (typed Rho_i) ex 
+    return $ fmap (typed Rho_i) ex
     -- fmap conveniently maps content to a typed content
 
 
@@ -167,9 +167,9 @@ tcExpr ex@(SExpr_const _ c True _ _) = do
     return $ fmap (typed tp) ex
 
 -- Predicate constant, second case
-tcExpr ex@(SExpr_predCon _ c _ _) = do 
+tcExpr ex@(SExpr_predCon _ c _ _) = do
     let ar = fromJust $ arity ex
-    tp <- findPoly (nameOf c) ar 
+    tp <- findPoly (nameOf c) ar
     return $ fmap (typed tp) ex
 
 
@@ -187,7 +187,7 @@ tcExpr ex@(SExpr_var a var@(Var _ _) isEx) = do
             return $ lookup (nameOf var) exBound
     case tp of
         -- Found var in env+state
-        Just tp' -> return $ SExpr_var (typed tp' a) 
+        Just tp' -> return $ SExpr_var (typed tp' a)
                                       (fmap (typed tp') var)
                                       False
         -- Did not find, so add it to the state
@@ -195,8 +195,8 @@ tcExpr ex@(SExpr_var a var@(Var _ _) isEx) = do
             al <- newAlpha
             let newRho = Rho_var al
             addExist (nameOf var) newRho
-            return $ SExpr_var (typed newRho a) 
-                               (fmap (typed newRho) var) 
+            return $ SExpr_var (typed newRho a)
+                               (fmap (typed newRho) var)
                                True -- Mark as exist. quantified
 
 -- Anonymous variable
@@ -218,7 +218,7 @@ tcExpr ex@(SExpr_app a fun@(SExpr_const _ _ False _ _) args) = do
 
 
 -- Operator, functional
-tcExpr (SExpr_op a c prec False args) = do    
+tcExpr (SExpr_op a c prec False args) = do
     let c' = fmap (typed Rho_i) c -- TODO: UGLY, using i type as sigma
     -- typecheck args
     args' <- mapM tcExpr args
@@ -231,20 +231,20 @@ tcExpr (SExpr_list a hds tl) = do
     hds' <- mapM tcExpr hds
     -- initial elements are of type i
     mapM_ (\ex -> addConstraint (typeOf ex) Rho_i ex) hds'
-    case tl of 
+    case tl of
         Just tl'' -> do
             -- Tail is also of type i
             tl' <- tcExpr tl''
             addConstraint (typeOf tl') Rho_i tl'
             return $ SExpr_list (typed Rho_i a) hds' (Just tl')
-        Nothing -> 
+        Nothing ->
             return $ SExpr_list (typed Rho_i a) hds' Nothing
-    
+
 
 -- 5) Predicate application
 -- Application, predicate
 tcExpr (SExpr_app a func args) = do
-    func' <- tcExpr func       
+    func' <- tcExpr func
     args' <- mapM tcExpr args
     phi   <- newPhi
     let tp = Rho_pi $ Pi_fun (map typeOf args') (Pi_var phi)
@@ -253,20 +253,20 @@ tcExpr (SExpr_app a func args) = do
     return $ SExpr_app (typed (Rho_pi $ Pi_var phi) a) func' args'
 
 -- Operator, predicate
-tcExpr (SExpr_op a c@(Const cinf cnm) prec True args) = do   
+tcExpr (SExpr_op a c@(Const cinf cnm) prec True args) = do
     headTp <- findPoly cnm (length args)
     args'  <- mapM tcExpr args
     phi    <- newPhi
     let tp = Rho_pi $ Pi_fun (map typeOf args') (Pi_var phi)
         c' = fmap (typed headTp) c
-        a' = typed (Rho_pi $ Pi_var phi) a 
+        a' = typed (Rho_pi $ Pi_var phi) a
         cinf' = typed headTp cinf
     -- To add constraint, create a 'ghost' constant expression
     -- with the correct information of the operator
-    addConstraint headTp tp ( SExpr_const cinf' (Const cinf' cnm) True Nothing (length args) ) 
+    addConstraint headTp tp ( SExpr_const cinf' (Const cinf' cnm) True Nothing (length args) )
     return $ SExpr_op a' c' prec True args'
 
--- 6) Rest 
+-- 6) Rest
 -- Lambda abstraction
 tcExpr (SExpr_lam a vars bd) = do
     alphas <- newAlphas (length vars)
@@ -277,18 +277,18 @@ tcExpr (SExpr_lam a vars bd) = do
     let varNames = map nameOf vars
     -- Bindings to pass down to body as extra env. Only named
     -- vars are needed
-    let bindings = zip varNames argTypes |> filter(\x -> fst x /= "_") 
+    let bindings = zip varNames argTypes |> filter(\x -> fst x /= "_")
     -- Put variables in the environment with fresh types
     -- and typeCheck body
     bd' <- withEnvVars bindings (tcExpr bd)
     let bdType = typeOf bd'
     addConstraint bdType (Rho_pi $ Pi_var phi) bd'
-    let -- Type of the whole expression 
+    let -- Type of the whole expression
         lamType = Rho_pi $ Pi_fun argTypes (Pi_var phi)
         -- Variables with their types
         vars'   = [ fmap (typed tp) var
-                  | (var,tp) <- zip vars argTypes 
-                  ] 
+                  | (var,tp) <- zip vars argTypes
+                  ]
     return $ SExpr_lam (typed lamType a) vars' bd'
 
 -- Type annotated
@@ -303,7 +303,7 @@ tcExpr (SExpr_paren a ex) = do
 findPoly :: Monad m => Symbol -> Int -> Tc m a RhoType
 findPoly cnm ar = do
     envTp <- asks $ lookupPoly (cnm,ar)
-    tp <- case envTp of 
+    tp <- case envTp of
         Nothing -> do -- Type is left free
             pi <- typeOfArity ar
             return $ Rho_pi pi
@@ -319,60 +319,60 @@ unify [] = return id
 -- Equal types
 unify ( (rho1, rho2, _) : tl) | rho1 == rho2 = unify tl
 -- Argument variable
-unify ( (Rho_var alpha, rho2, _) : tl) 
+unify ( (Rho_var alpha, rho2, _) : tl)
     | not $ alpha `elem` freeAlphas rho2 = do
         let subst = substAlpha alpha rho2
-        subst' <- unify (substCnts subst tl)  
+        subst' <- unify (substCnts subst tl)
         return $ subst' . subst
-unify ( (rho1, Rho_var alpha, _) : tl) 
+unify ( (rho1, Rho_var alpha, _) : tl)
     | not $ alpha `elem` freeAlphas rho1 = do
-        let subst = substAlpha alpha rho1 
-        subst' <- unify (substCnts subst tl)  
+        let subst = substAlpha alpha rho1
+        subst' <- unify (substCnts subst tl)
         return $ subst' . subst
 -- Predicate variable
-unify ( (Rho_pi (Pi_var phi), rho2@(Rho_pi pi), _) : tl ) 
+unify ( (Rho_pi (Pi_var phi), rho2@(Rho_pi pi), _) : tl )
     | not $ phi `elem` freePhis rho2 = do
         let subst = substPhi phi pi
         subst' <- unify (substCnts subst tl)
         return $ subst' . subst
-unify ( (rho1@(Rho_pi pi), Rho_pi (Pi_var phi), _) : tl ) 
+unify ( (rho1@(Rho_pi pi), Rho_pi (Pi_var phi), _) : tl )
     | not $ phi `elem` freePhis rho1 = do
         let subst = substPhi phi pi
         subst' <- unify (substCnts subst tl)
-        return $ subst' . subst 
+        return $ subst' . subst
 -- Predicate function
-unify ( ( f1@(Rho_pi (Pi_fun rhos1 pi1)), f2@(Rho_pi (Pi_fun rhos2 pi2)), ex ) : tl) 
+unify ( ( f1@(Rho_pi (Pi_fun rhos1 pi1)), f2@(Rho_pi (Pi_fun rhos2 pi2)), ex ) : tl)
     | length rhos1 == length rhos2 = do
 
-        -- Try to unify subtypes of these types 
-        partial <- unify ( (Rho_pi pi1, Rho_pi pi2, ex) : 
-                           zip3 rhos1 rhos2 (replicate (length rhos1) ex) 
+        -- Try to unify subtypes of these types
+        partial <- unify ( (Rho_pi pi1, Rho_pi pi2, ex) :
+                           zip3 rhos1 rhos2 (replicate (length rhos1) ex)
                          )
-                   -- if you catch something, throw a better message 
+                   -- if you catch something, throw a better message
                    -- for the whole type
                    `catchError` (\_ -> throwError $ unificationError f1 f2 ex)
         subst' <- unify (substCnts partial tl)
         return $ subst' . partial
-       
+
         {- Something simpler that is more likely to work -}{-
-        unify $ ( zip3 rhos1 rhos2 (replicate (length rhos1) ex) ) ++ 
+        unify $ ( zip3 rhos1 rhos2 (replicate (length rhos1) ex) ) ++
                 [( Rho_pi pi1, Rho_pi pi2, ex )] ++
                 tl  -}
-              
+
 -- Everything else is unification error
-unify ((rho1, rho2, ex) : _ ) = 
+unify ((rho1, rho2, ex) : _ ) =
     throwError $ unificationError rho1 rho2 ex
 
-unificationError :: (Show a, HasLocation a) 
+unificationError :: (Show a, HasLocation a)
                  => RhoType -> RhoType -> SExpr a -> Messages
-unificationError rho1 rho2 ex = 
+unificationError rho1 rho2 ex =
     mkMsgs $ mkErrWithLoc (locSpan ex) TypeError Fatal $
               (text "Type Error: Could not match expected type" <+> (quotes $ ppr rho2) ) $$
               (text "with actual type" <+> (quotes $ ppr rho1) ) $$
               (text "in expression" <+> (doubleQuotes $ ppr ex) )
 
 {- another version
-             (nest 4 $ text "type error: expression" <+> ppr ex) $$ 
+             (nest 4 $ text "type error: expression" <+> ppr ex) $$
              (nest 4 $ text "has type:" <+> ppr rho1) $$
              (nest 4 $ text "but was exprected with type:" <+> ppr rho2)
 -}

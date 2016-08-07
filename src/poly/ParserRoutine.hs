@@ -3,6 +3,7 @@ module ParserRoutine where
 import Syntax
 import Loc
 import Parser
+import qualified Lexer as L
 
 import Control.Monad
 import Control.Monad.Trans
@@ -18,9 +19,9 @@ import qualified Data.ByteString as ByteString (getContents, putStrLn, readFile)
 
 parseAndYield :: Stream s m Char => Coroutine (Yield (SSent LocSpan)) (ParsecT s (ParseState s m) m) ()
 parseAndYield = do
-    r <- lift (try maybeEof <|> maybeSentence);
+    r <- lift (L.whiteSpace L.hopes >> (try maybeEof <|> maybeSentence));
     case r of
-      Just r' -> yield r'
+      Just r' -> yield r' >> parseAndYield
       Nothing -> return ()
   where
         maybeSentence :: Stream s m Char => ParserT s m (Maybe (SSent LocSpan))

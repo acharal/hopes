@@ -17,7 +17,7 @@
 --  Boston, MA 02110-1301, USA.
 
 
--- Operator and operator table implementation 
+-- Operator and operator table implementation
 
 module Operator where
 
@@ -40,7 +40,7 @@ keyGroup lst = map aux $ group lst
 
 groupByPrec :: OperatorTable -> [(Int, [Operator])]
 groupByPrec table = map toCompact $
-                        groupBy (\x y-> precOp x == precOp y) $ 
+                        groupBy (\x y-> precOp x == precOp y) $
                         sortBy precComp table
    where precComp op1 op2  = compare (precOp op1) (precOp op2)
          toCompact x = (fst $ head x, map snd x)
@@ -57,3 +57,6 @@ isAssocLeft  op@(Operator _ s) = isInfixOp op && not (isAssocRight op) && head s
 isAssocNone  op@(Operator _ s) = not (isAssocRight op) && not (isAssocLeft op)
 
 
+class MonadOperatorProvider m where
+  getOperators :: m OperatorTable
+  updateOperators :: Operator -> m ()

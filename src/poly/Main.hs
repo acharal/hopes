@@ -21,21 +21,21 @@ import Data.ByteString (ByteString)
 import qualified Prelude (getContents, putStrLn, readFile)
 import qualified Data.ByteString as ByteString (getContents, putStrLn, readFile)
 
+import Control.Monad.Error.Class
+
 main = do
   args <- getArgs
-  shell $= goalParser $$ driver
+  repl $= goalParser $$ driver
   return ()
 
 
-shell :: MonadIO m => Producing String String m ()
-shell = loop
+repl :: MonadIO m => Producing String String m ()
+repl = loop
   where loop = do
           line   <- getInputLine "? "
           result <- request line
           liftIO $ putStrLn result
           loop
-
-
 
 getInputLine prompt = liftIO $ do
   putStr prompt
@@ -53,7 +53,25 @@ collect p = collect' [] p
   where collect' lst p  =  resume p >>= either (f lst) (\_ -> return lst)
         f l (Request x g) = collect' (x:l) (g ())
 
--- collectProxy :: Monad m => Proxy () m () (Either [SClause LocSpan] (SCommand LocSpan)) ()
+
+collect1 p h m1 m2 = collect' [] p
+  where collect' lst p  =  resume p >>= either (f lst) (\_ -> m2 lst)
+        f l (Request x g) = if (h x)
+                            then m1 x l
+                            else collect' [] (g ())
+
+{-
+collectProxy x collected = do
+  case x of
+    SSent_comm command -> do
+      respond (Right collected)
+      respond (Left command)
+      x' <- request ()
+      collectProxy x' []
+    SSent_clause clause -> do
+      x' <- request ()
+      collectProxy x' (clause:collected)
+-}
 
 type Sentence = SSent LocSpan
 type DesugaredSentence = SSent LocSpan
@@ -61,12 +79,14 @@ type Module = [DesugaredSentence]
 type TyEnv = [(String,String)]
 type TypedModule = (TyEnv, Module)
 
+convertError :: MonadError e m =>  m (Either e a) -> m a
+convertError m = m >>= either throwError return
+
 loadModuleFromFile filename = do
   let parseState = ParseSt [] [] [] []
   input <- liftIO $ ByteString.readFile filename
-  case runP (parseSentences filename $= preProcessSentences |> collect) parseState filename input of
-    Left errs  -> liftIO $ putStrLn (show errs)
-    Right prog -> liftIO $ mapM_ pprint prog
+  prog  <- convertError $ runPT (parseSentences filename $= preProcessSentences |> collect) parseState filename input
+  liftIO $ mapM_ pprint prog
 
   -- parseSentences filename $= desugarer $$ executeOrReturn
   -- typeCheck $$ assert
@@ -75,15 +95,20 @@ loadModuleFromFile filename = do
         parseSentences filename = mapSuspension (\(Yield i c) -> Request i (\()-> c)) parseAndYield
 
         -- consumes sentences and produces fixed sentences
-        preProcessSentences :: Monad m => Proxy () m Sentence a Sentence a
-        preProcessSentences = foreverK (\s -> lift (request (fixSentence s)) >>= request)
+        -- preProcessSentences :: Monad m => Proxy () m Sentence a Sentence a
+        preProcessSentences = pipe fixSentence -- foreverK (\s -> respond (fixSentence s) >>= request)
 
         -- not working
         parseMultiple :: (Monad m, Stream s m Char) => Proxy () (ParserT s m) String () Sentence ()
         parseMultiple = foreverK (\f -> lift (parseSentences f) >>= request)
 
+        -- parseFile filename = convertError (runPT  parseState filename input)
+
         -- desugar every parsed sentence
         x |> f = f x
+
+
+
         {-
         -- execute a directive and return a set of clauses at the end
         executeOrReturn :: Consuming Module m DesugaredSentence ()
@@ -188,9 +213,19 @@ echo = foreverK request
 
 type Proxy r m i1 o1 i2 o2 =  Consuming r (Producing i2 o2 m) i1 o1
 
-idProxy :: Monad m => Proxy r m a b a b
-idProxy = \a -> foreverK (\x -> do { y <- lift (request x); request y }) a
+type Pipe r m a b = Proxy r m a () b ()
 
+pipe :: Monad m => (a -> b) -> Pipe r m a b
+pipe f = foreverK $ \x -> respond (f x) >> request ()
+
+idPipe :: Monad m => Pipe r m a a
+idPipe = pipe id
+
+--respond :: a -> Proxy a m a b a b
+respond x = lift (request x)
+
+idProxy :: Monad m => Proxy r m a b a b
+idProxy = foreverK (\x -> respond x >>= request)
 
 insert0 :: (Monad m, Functor s) => m a -> Coroutine s m a
 insert0 = lift
