@@ -1,9 +1,36 @@
-# HOPES: Higher-Order Prolog with Extensional Semantics
+# HOPES: Higher-Order PROLOG with Extensional Semantics
 
 HOPES is a prototype interpreter for a higher-order PROLOG-like
 language. The syntax of the language extends that of PROLOG by
 supporting higher-order constructs (such as higher-order predicate
-variables, partial application and lambda terms). In particular,
+variables, partial application and lambda terms).
+For example, in HOPES one can express popular functional operators
+such as ``map``:
+```prolog
+map(R,[],[]).
+map(R,[X|Xs],[Y|Ys]) :- R(X,Y), map(R,Xs,Ys).
+```
+Apart from using functional operators in a logic programming context,
+we can also express naturally relational operators and graph operators:
+```prolog
+join(R,Q)(X) :- R(X), Q(X).
+union(R,Q)(X) :- R(X).
+union(R,Q)(X) :- Q(X).
+singleton(Y)(X) :- X = Y.
+diff(R,Q)(X) :- R(X), not(Q(X)). 
+tc(G)(X,Y) :- G(X,Y).
+tc(G)(X,Y) :- G(X,Z), tc(G)(Z,Y).
+```
+The definition of higher-order predicates together with the use of partial
+applications can lead to a different programming style that blends  the 
+functional and the logic programming. The following HOPES snipset shows how
+we can define ``except`` (i.e. the predicate that succeeds for all elements of ``R`` except ``Y``) 
+by reusing (possibly) partially applied operators.
+```prolog
+except(R,Y)(X) :- diff(R, singleton(Y)).
+```
+
+In particular,
 the syntax allows clauses (and queries) that contain uninstantiated
 predicate variables. 
 
