@@ -1,25 +1,25 @@
 # HOPES: Higher-Order Prolog with Extensional Semantics
 
-June 1, 2011
-
-## Introduction
-
-Hopes is a prototype interpreter for a higher-order PROLOG-like
+HOPES is a prototype interpreter for a higher-order PROLOG-like
 language. The syntax of the language extends that of PROLOG by
 supporting higher-order constructs (such as higher-order predicate
 variables, partial application and lambda terms). In particular,
 the syntax allows clauses (and queries) that contain uninstantiated
-predicate variables. The interpreter implements a higher-order
+predicate variables. 
+
+The interpreter implements a higher-order
 top-down SLD-resolution proof procedure described in [1]. In the
 case of uninstantiated predicate variables, the proof procedure
 will systematically (and in a sophisticated way) investigate all
-finite instantiations of these variables. In other words, Hopes
+finite instantiations of these variables. In other words, HOPES
 has all the advantages of a higher-order system but continues
 to keep the flavor of classical Prolog programming.
 
-## Compilation
+## Getting Started
 
-In order to compile hopes you must have installed the GHC compiler
+### Building HOPES
+
+In order to build HOPES you must have installed the GHC compiler
 version 6 or higher and the cabal system. You can download GHC from
 http://www.haskell.org/ghc/
 
@@ -29,8 +29,7 @@ the console to compile the program.
 Microsoft Windows compilations are not yet supported but this should
 be no problem as far as GHC and cabal are installed in the system.
 
-
-## Getting Started
+### Running some examples
 
 In pl/examples directory there are some hopes examples to getting
 started. To load an example you must type
