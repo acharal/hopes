@@ -30,7 +30,7 @@ import CoreLang (kbtoProgram, hopltoCoreGoal)
 import Pretty
 
 import Control.Monad.State (gets, modify)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans (liftIO)
 import Control.Monad (when)
 
 import System.IO
@@ -77,8 +77,8 @@ loadGoal inp env = do
 
 consultFile f = do
     (src, env) <- loadSource f
-    modify (\s -> s{ kb = KB src, 
-                     p = (kbtoProgram (KB src)), 
+    modify (\s -> s{ kb = KB src,
+                     p = (kbtoProgram (KB src)),
                      currentEnv = env})
     liftIO $ putStrLn ("% consulted " ++ show f ++ "")
 
@@ -97,13 +97,12 @@ consumeSolutions i = do
     result <- infer src i
 --    case runIdentity (infer src i) of
     case result of
-        Nothing -> 
+        Nothing ->
             liftIO $ sayNo
         Just (a, rest) -> do
             liftIO $ sayYes
             liftIO $ print $ ppr a
             c <- liftIO $ getChar
             when (c == ';') $ do
-                liftIO $ putChar '\n';    
+                liftIO $ putChar '\n';
                 consumeSolutions rest
-
