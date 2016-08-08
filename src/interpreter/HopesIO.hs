@@ -6,7 +6,7 @@ module HopesIO where
 --import Language.Hopl
 --import Language.Hopl.Syntax (HpSymbol)
 
-import Control.Monad.Trans.State.Strict (StateT, evalStateT)
+import Control.Monad.State.Strict (StateT, evalStateT)
 
 import Data.Monoid
 
@@ -23,7 +23,7 @@ data (Monoid e, Monoid a) => HopeEnv e a =
 -- we like for HopesIO to be MonadIO and MonadState HopeEnv
 
 runDriverM m = evalStateT m tabulaRasa
-    where tabulaRasa = HEnv { currentEnv = mempty 
-                            , p  = mempty 
+    where tabulaRasa = HEnv { currentEnv = mempty
+                            , p  = mempty
                             , debugFlag = False
                             }

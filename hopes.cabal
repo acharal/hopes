@@ -40,7 +40,7 @@ Flag poly
 
 Executable      hopes
   Main-Is:	  Main.hs
-  Build-Depends:  mtl >= 2.2.1, transformers >= 0.4.2.0, haskeline, monad-coroutine
+  Build-Depends:  mtl >= 2.2.1, haskeline, monad-coroutine
   if flag(split-base)
     Build-Depends: base >= 3.0 && < 5, array, pretty
   else
@@ -70,6 +70,7 @@ Executable      hopes
   Extensions:     RankNTypes
                   MultiParamTypeClasses
                   FlexibleInstances
+                  FlexibleContexts
                   TypeSynonymInstances
                   FlexibleContexts
                   FunctionalDependencies

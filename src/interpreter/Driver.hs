@@ -22,11 +22,12 @@ import Infer
 import Pretty
 
 import Frontend
+
 import Debugger
 import HopesIO
 
 import Control.Monad.State (gets, modify)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans (liftIO)
 import Control.Monad (when)
 import System.IO (stdin, hSetBuffering, BufferMode(..))
 
@@ -50,7 +51,7 @@ consumeSolutions i = do
     result <- infer src i
 
     case result of
-        Nothing -> 
+        Nothing ->
             liftIO $ sayNo
         Just (a, rest) -> do
             liftIO $ sayYes
@@ -58,6 +59,5 @@ consumeSolutions i = do
             liftIO $ hSetBuffering stdin NoBuffering
             c <- liftIO $ getChar
             when (c == ';') $ do
-                liftIO $ putChar '\n';    
+                liftIO $ putChar '\n';
                 consumeSolutions rest
-
