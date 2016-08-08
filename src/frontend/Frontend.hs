@@ -26,7 +26,7 @@ import Pretty
 import Language.Hopl (KnowledgeBase(..))
 import HoplToCore (kbtoProgram, hopltoCoreGoal)
 
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans (liftIO)
 
 parseFromFile fname parser = do
     content  <- liftIO $ readFile fname

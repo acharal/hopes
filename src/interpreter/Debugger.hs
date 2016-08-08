@@ -3,7 +3,6 @@ module Debugger (attachDebugger) where
 
 import Control.Monad
 import Control.Monad.Trans
-import Control.Monad.IO.Class ()
 import Control.Monad.State.Class
 
 import Trace
