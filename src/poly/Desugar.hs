@@ -16,16 +16,16 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{- 
+{-
  - Desugarer module:
- - Transforms surface language constructs (S...) 
+ - Transforms surface language constructs (S...)
  -     to core language constructs (C...)
  -     or polyHOPES constructs to polyH constructs
  -
  - Output language is used by the prover
  -}
 
-module Desugar where 
+module Desugar where
 
 
 import Syntax
@@ -38,6 +38,12 @@ import Data.Maybe(fromJust, mapMaybe)
 import Data.List (nub, (\\))
 import Control.Monad.State
 
+desugarProg prog =
+  let defs = concatMap desugarDag (progDefs prog)
+      goals = map (\(SGoal _ e) -> desugarExpr e) (progGoals prog)
+      commands = map (\(SCommand _ e) -> desugarExpr e) (progCommands prog)
+  in (defs, commands, goals)
+
 -- Desugar the dependency group DAG
 desugarDag dag = map desugarDef dag
 
@@ -45,30 +51,30 @@ desugarDag dag = map desugarDef dag
 desugarGroup group = map desugarDef group
 
 -- Desugar a predicate definition
-desugarDef def = 
+desugarDef def =
     CPredDef { cPredName = predDefName def
              , cPredAr   = predDefArity def
-             , cPredTp   = def |> predDefClauses 
-                               |> head 
-                               |> clInfo 
-                               |> typeOf 
+             , cPredTp   = def |> predDefClauses
+                               |> head
+                               |> clInfo
+                               |> typeOf
                                |> (\(Rho_pi pi) -> generalize pi)
              , cPredIsMono = any isMonoCl (predDefClauses def)
              , cPredCls    = map desugarClause (predDefClauses def)
              }
     where isMonoCl (SClause _ _ (Just (SGets_poly, _ )) ) = False
           isMonoCl _ = True
-    
+
 -- Desugar a clause. This is the tricky part of desugaring.
 --     Make head parameters into lambda abstractions
 --     Introduce new variables in these abstractions where you find
 --         duplicate variables or functional applications
---     Whenever you do, also introduce an extra unification in the 
+--     Whenever you do, also introduce an extra unification in the
 --         body.
 --     If body is still empty, put CTrue in its place.
 --     Add existential quantifiers where necessary.
-desugarClause (SClause inf hd bd) = 
-    let findHeadArgs (SExpr_app _ func args) = 
+desugarClause (SClause inf hd bd) =
+    let findHeadArgs (SExpr_app _ func args) =
             findHeadArgs func ++ [args]
         findHeadArgs _ = []
         args = findHeadArgs hd
@@ -76,16 +82,16 @@ desugarClause (SClause inf hd bd) =
         -- Additional unifications
         finalPairs = pairs finalSt
         -- desugar body
-        bd' = case bd of 
+        bd' = case bd of
                   Nothing -> CTrue
                   Just (_, ex) -> desugarExpr ex
-        finalBd = case (finalPairs, bd') of 
+        finalBd = case (finalPairs, bd') of
             ([], _) -> bd'
 
             -- We have to add extra unifications to the body
 
             -- Don't keep unneeded CTrue
-            (_ , CTrue) -> foldedPairs 
+            (_ , CTrue) -> foldedPairs
             -- Keep body
             (_, _ ) -> case typeOf bd' of
                 Rho_pi Pi_o -> CAnd (Rho_pi Pi_o) foldedPairs bd'
@@ -97,14 +103,14 @@ desugarClause (SClause inf hd bd) =
         -- Find variables to quantify
         fromExVar (SExpr_var _ (Var a v) True) =
             Just $ Flex (typeOf a) v
-        fromExVar _ = 
+        fromExVar _ =
             Nothing
         -- In the body, variables to quantify are already marked
-        exVarsBd = case bd of 
+        exVarsBd = case bd of
                        Nothing -> []
                        Just (_, ex) -> ex |> flatten
                                           |> filter isVar
-                                          |> mapMaybe fromExVar 
+                                          |> mapMaybe fromExVar
         -- We created some extra quantifiable vars.
         exVarsArgs = concatMap allCVars finalPairs \\ concat args'
         exVars = nub $ exVarsArgs ++ exVarsBd
@@ -114,7 +120,7 @@ desugarClause (SClause inf hd bd) =
         lType args bd = Rho_pi $ Pi_fun (map typeOf args) piBd
             where (Rho_pi piBd) = typeOf bd
     in  foldr (\args bd -> CLambda (lType args bd) args bd) exBody args'
-        
+
 -- Monadic treatment of head desugaring
 
 -- The state of head desugaring
@@ -139,32 +145,32 @@ newVar = do
     return $ "__" ++ show un
 
 -- Add a variable-expression pair to be unified in the state
-addPair var expr = 
+addPair var expr =
     modify $ \st -> st{pairs = (CEq var expr) : pairs st}
 
 -- Add a variable to the list of already encountered variables
-addSeen var = 
+addSeen var =
     modify $ \st -> st{seen = var : seen st}
 
 -- Treat a clause argument
-desugarArg :: HasType a 
-           => SExpr a 
+desugarArg :: HasType a
+           => SExpr a
            -> ArgMonad (Flex RhoType)
 
 -- Arg is a named variable
-desugarArg (SExpr_var inf (Var vinf var) _) = do 
-    sn <- isSeen var 
+desugarArg (SExpr_var inf (Var vinf var) _) = do
+    sn <- isSeen var
     if sn then do -- Add a unification to the final clause
                   nv <- newVar
                   let flex = Flex (typeOf vinf) nv
                   addPair (CVar $ Flex (typeOf vinf) var) (CVar flex)
                   return flex
           else do -- Add variable to the list of encountered vars.
-                  addSeen var 
+                  addSeen var
                   return $ Flex (typeOf inf) var
 
--- Anonymous variables need nothing extra                  
-desugarArg (SExpr_var inf (AnonVar vinf) _) = 
+-- Anonymous variables need nothing extra
+desugarArg (SExpr_var inf (AnonVar vinf) _) =
     return $ AnonFlex (typeOf vinf)
 
 -- Any other expression at this point is a functional application
@@ -174,7 +180,7 @@ desugarArg expr = do
     nv <- newVar
     let flex = Flex Rho_i nv
     addPair (CVar flex) expr'
-    return flex 
+    return flex
 
 -- Run SubstMonad from an empty state
 runArgMonad m = runState m emptyArgState
@@ -188,47 +194,47 @@ desugarExpr :: HasType a => SExpr a -> CExpr RhoType
 desugarExpr ex@(SExpr_const a c False _ _) =
     if nameOf c == "[]" then CNil else CConst $ nameOf c
 -- Predicate constant, first case
-desugarExpr ex@(SExpr_const a c True _ _) = 
+desugarExpr ex@(SExpr_const a c True _ _) =
     transformPConst (typeOf a) (nameOf c) (fromJust $ arity ex)
 
 -- Variable
-desugarExpr (SExpr_var a var _) = 
-    CVar (varToFlex var) 
+desugarExpr (SExpr_var a var _) =
+    CVar (varToFlex var)
 
 -- Number
-desugarExpr (SExpr_number a num) = 
+desugarExpr (SExpr_number a num) =
     CNumber num
 
 -- Predicate constant, second case
-desugarExpr ex@(SExpr_predCon a c _ _) = 
+desugarExpr ex@(SExpr_predCon a c _ _) =
     transformPConst (typeOf a) (nameOf c) (fromJust $ arity ex)
 
 
--- Application, functional. '.' is taken into account here 
+-- Application, functional. '.' is taken into account here
 -- TODO allow '.' as a functor
-desugarExpr (SExpr_app a func args) 
-    | typeOf a == Rho_i = 
+desugarExpr (SExpr_app a func args)
+    | typeOf a == Rho_i =
         if nameOf func == "." && length args == 2
-            then CCons (desugarExpr $ head args) 
+            then CCons (desugarExpr $ head args)
                        (desugarExpr $ head $ tail args)
             else CApp ( Rho_i )
                       ( CConst (nameOf func) )
                       ( map desugarExpr args )
 -- Application, predicate
-desugarExpr (SExpr_app a func args) = 
-    transformCApp (typeOf a) 
-                  (desugarExpr func) 
-                  (map desugarExpr args) 
+desugarExpr (SExpr_app a func args) =
+    transformCApp (typeOf a)
+                  (desugarExpr func)
+                  (map desugarExpr args)
 
 -- Operator, functional
-desugarExpr (SExpr_op a c _ False args) = 
+desugarExpr (SExpr_op a c _ False args) =
     CApp ( Rho_i )
          ( CConst (nameOf c) )
          ( map desugarExpr args )
 -- Operator, predicate
 desugarExpr (SExpr_op a c _ True args) =
-    transformCApp (typeOf a) 
-                  (CPred (typeOf c) (nameOf c) (length args))  
+    transformCApp (typeOf a)
+                  (CPred (typeOf c) (nameOf c) (length args))
                   (map desugarExpr args)
 
 -- Lambda abstraction
@@ -236,9 +242,9 @@ desugarExpr (SExpr_lam a vars bd) = do
     CLambda (typeOf a) (map varToFlex vars) (desugarExpr bd)
 
 -- List
-desugarExpr (SExpr_list a hds tl) = 
-    foldr (CCons) 
-          (desugarTail tl) 
+desugarExpr (SExpr_list a hds tl) =
+    foldr (CCons)
+          (desugarTail tl)
           (map desugarExpr hds)
     where desugarTail Nothing   = CNil
           desugarTail (Just ex) = desugarExpr ex
@@ -251,11 +257,11 @@ desugarExpr (SExpr_paren _ ex) = desugarExpr ex
 
 
 -- Transform Var to Flex
-varToFlex (Var a nm)  = Flex (typeOf a) nm  
+varToFlex (Var a nm)  = Flex (typeOf a) nm
 varToFlex (AnonVar a) = AnonFlex (typeOf a)
 
 -- Transform predicate constants
---    "true", "fail" and "!" are transformed to the structures 
+--    "true", "fail" and "!" are transformed to the structures
 --        describing their special meaning
 --    ";", "," and "=" are transformed to equivalent,
 --        non-built-in predicates, to be passed as parameters
@@ -279,10 +285,10 @@ corePreds = [ ( ("true", 0) , \_  -> CTrue )
 
 
 transformCApp tp func@(CPred _ nm ar) args =
-    case lookup (nm, ar) coreApps of 
+    case lookup (nm, ar) coreApps of
         Just f  -> f tp args
         Nothing -> CApp tp func args
-transformCApp tp func args = 
+transformCApp tp func args =
     CApp tp func args
 
 coreApps = [ ( (",",2) , \tp [ex1,ex2] -> CAnd tp ex1 ex2 )

@@ -32,12 +32,15 @@ runErrorT = runExceptT
 type ErrDesc = Doc
 
 data Message =
-   Msg { 
+   Msg {
         errloc  :: LocSpan,
         errtyp  :: ErrType,
         level   :: ErrLevel,
         desc    :: ErrDesc
     }
+
+instance Show Message where
+  show = render . ppr
 
 instance HasLocation Message where
     locSpan (Msg l _ _ _) = l
@@ -68,6 +71,8 @@ instance Pretty Message where
        | errloc err == bogusSpan = desc err
        | otherwise               = hang (ppr (errloc err) <>colon) 4 (desc err)
 
+instance Pretty [Message] where
+    ppr msgs = sep (map ppr msgs)
 
 {-
 class Monad m => MonadWarn m w where

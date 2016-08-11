@@ -30,7 +30,7 @@ import Pretty
  -}
 
 -- Description of constants and variables.
-data Const a = Const a Symbol -- info and name 
+data Const a = Const a Symbol -- info and name
     deriving Functor
 
 data Var a = Var a Symbol -- named variable
@@ -38,7 +38,7 @@ data Var a = Var a Symbol -- named variable
     deriving Functor
 
 {-
- - The syntactic structures are organized recursively 
+ - The syntactic structures are organized recursively
  - in inclusion order
  -}
 
@@ -57,20 +57,20 @@ data SCommand a = SCommand a (SExpr a)
     deriving Functor
 
 -- A clause. If clBody is Just we have a rule, else a fact
-data SClause a = SClause { clInfo :: a 
-                         , clHead :: SExpr a 
+data SClause a = SClause { clInfo :: a
+                         , clHead :: SExpr a
                          , clBody :: Maybe (SGets, SExpr a)
                          }
     deriving Functor
 
 -- Monomorphic or polymorphic gets
-data SGets = SGets_mono | SGets_poly 
+data SGets = SGets_mono | SGets_poly
 
--- Expressions 
-data SExpr a = SExpr_const   a            -- constant 
+-- Expressions
+data SExpr a = SExpr_const   a            -- constant
                              (Const a)    -- id
                              Bool         -- interpreted as predicate?
-                             (Maybe Int)  -- optional GIVEN arity 
+                             (Maybe Int)  -- optional GIVEN arity
                              Int          -- INFERRED arity
              | SExpr_var     a            -- variable
                              (Var a)      -- id
@@ -84,7 +84,7 @@ data SExpr a = SExpr_const   a            -- constant
              | SExpr_app  a (SExpr a) [SExpr a]  -- application
              | SExpr_op   a          -- operator
                           (Const a)  -- id
-                          Bool       -- True for Prefix unary operator. 
+                          Bool       -- True for Prefix unary operator.
                                      -- Useful for pretty printing
                           Bool       -- interpreted as pred?
                           [SExpr a]  -- arguments
@@ -92,7 +92,7 @@ data SExpr a = SExpr_const   a            -- constant
              | SExpr_list a [SExpr a] (Maybe (SExpr a))
                           -- list: initial elements, maybe tail
              | SExpr_ann  a (SExpr a) RhoType    -- type annotated
-             | SExpr_paren a (SExpr a) -- in parens             
+             | SExpr_paren a (SExpr a) -- in parens
 
     deriving Functor
 
@@ -104,7 +104,7 @@ data SExpr a = SExpr_const   a            -- constant
 data SPredDef a = SPredDef { predDefName    :: Symbol
                            , predDefArity   :: Int
                            , predDefClauses :: [SClause a]
-                           } 
+                           }
     deriving Functor
 
 -- A dependency group
@@ -113,9 +113,13 @@ type SDepGroup a = [SPredDef a]
 -- All predicate definitions, organized into dependency groups in DAG order
 type SDepGroupDag a = [SDepGroup a]
 
+data SProg a = SProg {
+                  progDefs :: SDepGroupDag a
+                , progCommands :: [SCommand a]
+                , progGoals :: [SGoal a]
+                }
 
-
-{- 
+{-
  - Utility functions for the syntax tree of polyHOPES
  -}
 
@@ -131,23 +135,23 @@ deriving instance Show a => Show (SCommand a)
 deriving instance Show a => Show (SSent a)
 
 instance Show a => Show (SPredDef a) where
-    show (SPredDef nm ar cls) = 
+    show (SPredDef nm ar cls) =
         nm ++ "/" ++ show ar ++ "\n" ++ foldr (\cl rest -> show cl ++ "\n" ++ rest) "" cls
 
 {-
- - Simple predicates, utility functions, and class declarations 
+ - Simple predicates, utility functions, and class declarations
  - on syntax structures
  -}
 
 -- 1) constants, variables
-instance HasName (Const a) where 
+instance HasName (Const a) where
     nameOf (Const _ nm) = nm
-instance HasName (Var a ) where 
+instance HasName (Var a ) where
     nameOf (Var _ nm)  = nm
-    nameOf (AnonVar _) = "_" 
+    nameOf (AnonVar _) = "_"
 
 instance HasLocation a => HasLocation (Const a) where
-    locSpan (Const a _) = locSpan a  
+    locSpan (Const a _) = locSpan a
 instance HasLocation a => HasLocation (Var a) where
     locSpan (Var a _)   = locSpan a
     locSpan (AnonVar a) = locSpan a
@@ -155,7 +159,7 @@ instance HasLocation a => HasLocation (Var a) where
 instance HasType a => HasType (Const a) where
     typeOf (Const a _) = typeOf a
     hasType tp (Const a c) = Const (hasType tp a) c
-instance HasType a => HasType (Var a) where 
+instance HasType a => HasType (Var a) where
     typeOf (Var a _) = typeOf a
     typeOf (AnonVar a) = typeOf a
     hasType tp (Var a v) = Var (hasType tp a) v
@@ -168,14 +172,14 @@ instance Pretty (Var a) where
 
 -- Is a variable anonymous?
 isAnon (AnonVar _ ) = True
-isAnon _ = False 
+isAnon _ = False
 
 
 -- Sentences
 isGoal (SSent_goal _) = True
-isGoal _ = False 
+isGoal _ = False
 
-isClause (SSent_clause _) = True 
+isClause (SSent_clause _) = True
 isClause _ = False
 
 isCommand (SSent_comm _) = True
@@ -197,13 +201,13 @@ instance Pretty (SCommand a) where
 
 
 -- Clauses
-instance HasName (SClause a) where 
+instance HasName (SClause a) where
     nameOf = nameOf.clHead
 instance HasArity (SClause a) where
     arity = arity.clHead
 
 instance Pretty (SClause a) where
-    ppr (SClause _ hd bd) = case bd of 
+    ppr (SClause _ hd bd) = case bd of
         Nothing -> ppr hd <> dot
         Just (gets, ex) -> ppr hd <+> ppr gets <+> ppr ex <> dot
 
@@ -212,13 +216,13 @@ isFact (SClause _ _ Nothing) = True
 isFact _ = False
 
 -- Gets signs
-instance Pretty SGets where 
+instance Pretty SGets where
     ppr SGets_mono = text ":-"
     ppr SGets_poly = text "<-"
 
 -- PredDef
 
-instance HasName (SPredDef a) where 
+instance HasName (SPredDef a) where
     nameOf = predDefName
 instance HasArity (SPredDef a) where
     arity = Just . predDefArity
@@ -227,7 +231,7 @@ instance Pretty a => Pretty (SPredDef a) where
     ppr def = vcat $ map ppr (predDefClauses def)
 
 
--- EXPRESSIONS 
+-- EXPRESSIONS
 -- Filter everything that can be a predicate constant
 isPredConst (SExpr_predCon _ _ _ _) = True
 isPredConst (SExpr_const _ _ predStatus _ _) = predStatus
@@ -246,22 +250,22 @@ isVar _                 = False
 
 -- Finds arity of a constant expression.
 -- Arity given by the user takes precedance over inferred arity
-instance HasArity (SExpr a) where 
+instance HasArity (SExpr a) where
     arity (SExpr_const _ _ _ given inferred) =
-        case given of 
-            Just n  -> Just n 
+        case given of
+            Just n  -> Just n
             Nothing -> Just inferred
     arity ( SExpr_predCon _ _ given inferred) =
-        case given of 
-            Just n  -> Just n 
+        case given of
+            Just n  -> Just n
             Nothing -> Just inferred
-    arity (SExpr_op _ _ _ _ args) = Just $ length args      
+    arity (SExpr_op _ _ _ _ args) = Just $ length args
     arity (SExpr_ann _ ex _) = arity ex
     arity (SExpr_paren _ ex) = arity ex
     -- Complex structures have no arity
     arity _ = Nothing
 
-instance HasName (SExpr a) where 
+instance HasName (SExpr a) where
     nameOf (SExpr_const   _ c _ _ _  ) = nameOf c
     nameOf (SExpr_var     _ v _      ) = nameOf v
     nameOf (SExpr_predCon _ c _ _    ) = nameOf c
@@ -270,11 +274,11 @@ instance HasName (SExpr a) where
     nameOf (SExpr_number  _ n        ) = show n
     nameOf (SExpr_lam     _ _ _      ) = error "Name of lambda"
     nameOf (SExpr_list    _ _ _      ) = error "Name of list"
-    nameOf (SExpr_ann     _ ex' _    ) = nameOf ex' 
+    nameOf (SExpr_ann     _ ex' _    ) = nameOf ex'
     nameOf (SExpr_paren   _ ex'      ) = nameOf ex'
 
 -- Get a list of all subexpressions contained in an expression
--- WARNING: output includes variables bound by l-abstractions 
+-- WARNING: output includes variables bound by l-abstractions
 --          and defining lambda abstractions
 instance Flatable (SExpr a) where
     --flatten ex@(SExpr_paren a ex') = ex : flatten ex'
@@ -287,9 +291,9 @@ instance Flatable (SExpr a) where
         where varToExpr v@(Var a s)   = SExpr_var a v False
               varToExpr v@(AnonVar a) = SExpr_var a v False
     flatten ex@(SExpr_list _ initEls tl) =
-        ex : ( concatMap flatten initEls) ++ 
-            (case tl of 
-                 Nothing -> [] 
+        ex : ( concatMap flatten initEls) ++
+            (case tl of
+                 Nothing -> []
                  Just ex -> flatten ex
             )
     --flatten ex@(SExpr_eq _ ex1 ex2) =
@@ -313,17 +317,17 @@ getInfo (SExpr_ann     a _ _      ) = a
 getInfo (SExpr_paren   a _        ) = a
 
 setInfo inf (SExpr_const   _ b c d e) = SExpr_const   inf b c d e
-setInfo inf (SExpr_var     _ b c    ) = SExpr_var     inf b c  
-setInfo inf (SExpr_number  _ b      ) = SExpr_number  inf b        
-setInfo inf (SExpr_predCon _ b c d  ) = SExpr_predCon inf b c d    
-setInfo inf (SExpr_app     _ b c    ) = SExpr_app     inf b c      
+setInfo inf (SExpr_var     _ b c    ) = SExpr_var     inf b c
+setInfo inf (SExpr_number  _ b      ) = SExpr_number  inf b
+setInfo inf (SExpr_predCon _ b c d  ) = SExpr_predCon inf b c d
+setInfo inf (SExpr_app     _ b c    ) = SExpr_app     inf b c
 setInfo inf (SExpr_op      _ b c d e) = SExpr_op      inf b c d e
-setInfo inf (SExpr_lam     _ b c    ) = SExpr_lam     inf b c      
-setInfo inf (SExpr_list    _ b c    ) = SExpr_list    inf b c      
-setInfo inf (SExpr_ann     _ b c    ) = SExpr_ann     inf b c      
-setInfo inf (SExpr_paren   _ ex     ) = SExpr_paren   inf (setInfo inf ex) 
+setInfo inf (SExpr_lam     _ b c    ) = SExpr_lam     inf b c
+setInfo inf (SExpr_list    _ b c    ) = SExpr_list    inf b c
+setInfo inf (SExpr_ann     _ b c    ) = SExpr_ann     inf b c
+setInfo inf (SExpr_paren   _ ex     ) = SExpr_paren   inf (setInfo inf ex)
 
--- Syntax constructs have type/location if it exists in the 
+-- Syntax constructs have type/location if it exists in the
 -- information they carry
 
 instance HasType a => HasType (SExpr a) where
@@ -335,7 +339,7 @@ instance HasLocation a => HasLocation (SExpr a) where
     locSpan e = locSpan (getInfo e)
 
 
-{- 
+{-
  - Pretty printing for syntax
  -}
 
@@ -346,39 +350,39 @@ instance Pretty (SExpr a) where
         Nothing -> ppr c
         Just ar -> ppr c <> slash <> int ar
 
-    ppr (SExpr_var _ var _) = 
-        ppr var       
+    ppr (SExpr_var _ var _) =
+        ppr var
 
-    ppr (SExpr_number _ n ) = 
-        ppr n         
+    ppr (SExpr_number _ n ) =
+        ppr n
 
-    ppr (SExpr_predCon _ c givAr _) = 
-        text "pred" <+> ppr c <> case givAr of 
+    ppr (SExpr_predCon _ c givAr _) =
+        text "pred" <+> ppr c <> case givAr of
                                      Nothing -> empty
                                      Just ar -> slash <> int ar
 
-    ppr (SExpr_app _ func args) = 
+    ppr (SExpr_app _ func args) =
         ppr func <> parens (fcat (punctuate comma $ map ppr args))
-     
-    ppr (SExpr_op _ c isPre _ [arg]) = 
+
+    ppr (SExpr_op _ c isPre _ [arg]) =
         if isPre then ppr c <> ppr arg else ppr arg <> ppr c
     ppr (SExpr_op _ c _ _ [arg1,arg2]) =
-        ppr arg1 <> ppr c <> ppr arg2        
+        ppr arg1 <> ppr c <> ppr arg2
 
-    ppr (SExpr_lam _ vars bd ) = 
+    ppr (SExpr_lam _ vars bd ) =
         char '\\' <> char '~' <> hsep (punctuate comma $ map ppr vars) <+> text "=>" <+> ppr bd
 
-    ppr (SExpr_list _ inits tl) = 
+    ppr (SExpr_list _ inits tl) =
         brackets $ hsep (punctuate comma $ map ppr inits) <>
             case tl of Nothing  -> empty
                        Just tl' -> char '|' <> ppr tl'
 
-    ppr (SExpr_ann _ ex tp ) = 
+    ppr (SExpr_ann _ ex tp ) =
         ppr ex <> text " :: " <> ppr tp
 
-    ppr (SExpr_paren _ ex) = 
+    ppr (SExpr_paren _ ex) =
         parens $ ppr ex
-        
+
 
 
 {-
@@ -388,16 +392,16 @@ instance Pretty (SExpr a) where
 
 {-
 -- A class describing all syntactic items carrying information
-class HasInfo s where 
+class HasInfo s where
     getInfo :: s a -> a
     setInfo :: a -> s a -> s a
 
 -- Constants, variables instances
-instance HasInfo Const where 
+instance HasInfo Const where
     getInfo (Const a _ ) = a
     setInfo inf (Const _ c) = Const inf c
 
-instance HasInfo Var where 
+instance HasInfo Var where
     getInfo (Var a _ )  = a
     getInfo (AnonVar a) = a
     setInfo inf (Var _ v) = Var inf v
@@ -407,8 +411,8 @@ instance HasInfo Var where
 {-
 instance (HasInfo s, HasType a) => HasType (s a) where
     typeOf synt = typeOf $ getInfo synt
-   
-    hasType tp synt = let newInf = synt |> getInfo |> hasType tp 
+
+    hasType tp synt = let newInf = synt |> getInfo |> hasType tp
                       in  setInfo newInf synt
 
 instance (HasInfo s, HasPosition a) => HasPosition (s a) where
@@ -416,43 +420,43 @@ instance (HasInfo s, HasPosition a) => HasPosition (s a) where
 -}
 {-
 (SExpr_const   a b c d e) = SExpr_const   (hasType tp a) b c d e
-    hasType tp (SExpr_var     a b      ) = SExpr_var     (hasType tp a) b        
-    hasType tp (SExpr_number  a b      ) = SExpr_number  (hasType tp a) b        
-    hasType tp (SExpr_predCon a b c d  ) = SExpr_predCon (hasType tp a) b c d    
-    hasType tp (SExpr_app     a b c    ) = SExpr_app     (hasType tp a) b c      
-    hasType tp (SExpr_op      a b c d  ) = SExpr_op      (hasType tp a) b c d    
-    hasType tp (SExpr_lam     a b c    ) = SExpr_lam     (hasType tp a) b c      
-    hasType tp (SExpr_list    a b c    ) = SExpr_list    (hasType tp a) b c      
-    --hasType tp (SExpr_eq      a b c    ) = SExpr_eq      (hasType tp a) b c      
-    hasType tp (SExpr_ann     a b c    ) = SExpr_ann     (hasType tp a) b c      
+    hasType tp (SExpr_var     a b      ) = SExpr_var     (hasType tp a) b
+    hasType tp (SExpr_number  a b      ) = SExpr_number  (hasType tp a) b
+    hasType tp (SExpr_predCon a b c d  ) = SExpr_predCon (hasType tp a) b c d
+    hasType tp (SExpr_app     a b c    ) = SExpr_app     (hasType tp a) b c
+    hasType tp (SExpr_op      a b c d  ) = SExpr_op      (hasType tp a) b c d
+    hasType tp (SExpr_lam     a b c    ) = SExpr_lam     (hasType tp a) b c
+    hasType tp (SExpr_list    a b c    ) = SExpr_list    (hasType tp a) b c
+    --hasType tp (SExpr_eq      a b c    ) = SExpr_eq      (hasType tp a) b c
+    hasType tp (SExpr_ann     a b c    ) = SExpr_ann     (hasType tp a) b c
 -}
 
 {-
 -- true and fail constants
 
 sTrue :: a -> SExpr a
-sTrue a = SExpr_const a 
-                      (Const a "true")  
+sTrue a = SExpr_const a
+                      (Const a "true")
                       True
                       Nothing
                       (-1)
 sFail :: a -> SExpr a
-sFail a = SExpr_const a 
-                      (Const a "fail")  
+sFail a = SExpr_const a
+                      (Const a "fail")
                       True
                       Nothing
                       (-1)
 
 sCut :: a -> SExpr a
-sCut a = SExpr_const a 
-                     (Const a "!")  
+sCut a = SExpr_const a
+                     (Const a "!")
                      True
                      Nothing
                      (-1)
 
 sNil :: a -> SExpr a
-sNil a = SExpr_const a 
-                     (Const a "[]")  
+sNil a = SExpr_const a
+                     (Const a "[]")
                      False
                      Nothing
                      (-1)

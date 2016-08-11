@@ -1,6 +1,6 @@
 --  Copyright (C) 2013 Angelos Charalambidis  <a.charalambidis@di.uoa.gr>
 --                     Emmanouil Koukoutos    <manoskouk@softlab.ntua.gr>
---                     Nikolaos S. Papaspyrou <nickie@softlab.ntua.gr> 
+--                     Nikolaos S. Papaspyrou <nickie@softlab.ntua.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -29,14 +29,14 @@
 
 module Core where
 
-import Pretty 
+import Pretty
 import Basic
-import Types 
+import Types
 
 -- (unifiable) variables
 data Flex a = Flex a Symbol
             | AnonFlex a
-    deriving Functor 
+    deriving Functor
 
 instance Pretty (Flex a) where
     ppr (Flex _ nm) = ppr nm
@@ -48,7 +48,7 @@ instance Eq (Flex a) where
     _ == _ = False
 
 -- Expressions
-data CExpr a = CTrue 
+data CExpr a = CTrue
              | CFail
              | CCut
              | CAnd    a (CExpr a) (CExpr a)
@@ -59,21 +59,21 @@ data CExpr a = CTrue
              | CExists a (Flex  a) (CExpr a)
              | CVar      (Flex  a)
              | CPred   a Symbol Int -- Predicate constant
-             | CConst    Symbol     
+             | CConst    Symbol
              | CNumber   (Either Integer Double)
              | CCons     (CExpr a) (CExpr a)
-             | CNil 
-             -- lift :: forall t. o -> t      
-             -- For a predicate type t, 
-             --   lift(true) == T(t) and 
+             | CNil
+             -- lift :: forall t. o -> t
+             -- For a predicate type t,
+             --   lift(true) == T(t) and
              --   lift(fail) == _|_(t)
-             | CLift   a (CExpr a) 
+             | CLift   a (CExpr a)
 
     deriving Functor
 
 -- predicate definitions
 data CPredDef a = CPredDef { cPredName   :: Symbol    -- defined pred.
-                           , cPredAr     :: Int       -- arity 
+                           , cPredAr     :: Int       -- arity
                            , cPredTp     :: PolyType  -- type
                            , cPredIsMono :: Bool      -- mono- or polymorphic
                            , cPredCls    :: [CExpr a] -- defining clauses
@@ -94,7 +94,7 @@ deriving instance Show a => Show (CExpr a)
 --   2: ∧
 --   3: =
 
-instance Pretty (CExpr a) where 
+instance Pretty (CExpr a) where
     ppr = pprCPrec 0
 
 precQ = 0
@@ -103,68 +103,72 @@ precAnd = 2
 precEq = 3
 precAll = 4
 
-pprCPrec prec CTrue = 
+pprCPrec prec CTrue =
     text "true"
-pprCPrec prec CFail = 
+pprCPrec prec CFail =
     text "fail"
-pprCPrec prec CCut  = 
+pprCPrec prec CCut  =
     char '!'
-pprCPrec prec (CAnd _ ex1 ex2) = 
-    (if prec > precAnd then parens else id) 
-        ( pprCPrec precAnd ex1 <+> 
-          text "∧" <+> 
+pprCPrec prec (CAnd _ ex1 ex2) =
+    (if prec > precAnd then parens else id)
+        ( pprCPrec precAnd ex1 <+>
+          text "∧" <+>
           pprCPrec precAnd ex2
         )
 pprCPrec prec (COr  _ ex1 ex2) =
-    (if prec > precOr then parens else id) 
+    (if prec > precOr then parens else id)
         ( pprCPrec precOr ex1 <+>
-          text "∨" <+> 
+          text "∨" <+>
           pprCPrec precOr ex2
         )
 pprCPrec prec (CLambda _ vars bd) =
     char 'λ' <> parens ( hcat $ punctuate comma (map ppr vars) ) <>
     char '.' <+> pprCPrec precQ bd
-pprCPrec prec (CApp _ func args) = 
+pprCPrec prec (CApp _ func args) =
     pprCPrec precAll func <> parens ( hcat $ punctuate comma (map (pprCPrec 0) args) )
-pprCPrec prec (CEq ex1 ex2) = 
-    (if prec > precEq then parens else id) 
+pprCPrec prec (CEq ex1 ex2) =
+    (if prec > precEq then parens else id)
         ( pprCPrec precEq ex1 <>
-          text "=" <> 
+          text "=" <>
           pprCPrec precEq ex2
         )
 pprCPrec prec (CExists _ var expr) =
     char '∃' <> ppr var <> char '.' <+> pprCPrec precQ expr
-pprCPrec prec (CVar flex) = 
+pprCPrec prec (CVar flex) =
     ppr flex
-pprCPrec prec (CPred _ nm ar) = 
+pprCPrec prec (CPred _ nm ar) =
     text (nm ++ "/") <> int ar
-pprCPrec prec (CConst nm) = 
+pprCPrec prec (CConst nm) =
     text nm
 pprCPrec prec (CNumber n) =
-    ppr n        
+    ppr n
 pprCPrec prec lst@(CCons hd tl) =
     brackets $ pprList lst
     where pprList (CCons hd CNil) = pprCPrec 0 hd
-          pprList (CCons hd tl) = 
+          pprList (CCons hd tl) =
               pprCPrec prec hd <> comma <> pprList tl
           pprList ex = pprCPrec 0 ex
 pprCPrec prec CNil =
-    text "[]" 
+    text "[]"
 pprCPrec prec (CLift _ expr) =
     char '↑' <> parens (pprCPrec 0 expr)
-         
+
 instance Pretty (CPredDef a) where
-    ppr (CPredDef nm ar _ mono exps) = 
-        vcat $ map ppr' exps 
-        where ppr' expr = text (nm ++ "/") <> int ar <+> 
+    ppr (CPredDef nm ar _ mono exps) =
+        vcat $ map ppr' exps
+        where ppr' expr = text (nm ++ "/") <> int ar <+>
                           (if mono then ppr ":-" else ppr "<-") <+>
                           ppr expr
-        
 
+instance Pretty [CPredDef a] where
+  ppr lst = vcat $ map ppr lst
+
+instance Pretty [CExpr a] where
+  ppr lst = vcat $ map ppr lst
 
 instance HasType a => HasType (Flex a) where
     typeOf (Flex a _  ) = typeOf a
-    typeOf (AnonFlex a) = typeOf a    
+    typeOf (AnonFlex a) = typeOf a
     hasType tp (Flex a nm) = Flex (hasType tp a) nm
     hasType tp (AnonFlex a) = AnonFlex $ hasType tp a
 
@@ -184,7 +188,7 @@ instance HasType a => HasType (CExpr a) where
     typeOf (CLift a _ )    = typeOf a
     typeOf (CConst _ )     = Rho_i -- TODO: include func. type?
     typeOf _ = Rho_i
-    
+
     hasType tp (CAnd a ex1 ex2)    = CAnd (hasType tp a) ex1 ex2
     hasType tp (COr  a ex1 ex2)    = COr  (hasType tp a) ex1 ex2
     hasType tp (CLambda a ex1 ex2) = CLambda (hasType tp a) ex1 ex2
@@ -196,30 +200,29 @@ instance HasType a => HasType (CExpr a) where
 
 
 instance Flatable (CExpr a) where
-    flatten ex@(CAnd _ ex1 ex2) = 
+    flatten ex@(CAnd _ ex1 ex2) =
         ex : flatten ex1 ++ flatten ex2
-    flatten ex@(COr _ ex1 ex2) = 
+    flatten ex@(COr _ ex1 ex2) =
         ex : flatten ex1 ++ flatten ex2
-    flatten ex@(CEq ex1 ex2) = 
+    flatten ex@(CEq ex1 ex2) =
         ex : flatten ex1 ++ flatten ex2
-    flatten ex@(CCons ex1 ex2) = 
+    flatten ex@(CCons ex1 ex2) =
         ex : flatten ex1 ++ flatten ex2
-    flatten ex@(CLambda _ vars bd) = 
+    flatten ex@(CLambda _ vars bd) =
         ex : map CVar vars ++ flatten bd
-    flatten ex@(CApp _ func args) = 
+    flatten ex@(CApp _ func args) =
         ex : flatten func ++ concatMap flatten args
-    flatten ex@(CExists _ var bd) = 
+    flatten ex@(CExists _ var bd) =
         ex : CVar var : flatten bd
     flatten ex@(CLift _ ex') =
         ex : flatten ex'
-    flatten ex = 
+    flatten ex =
         [ex]
 
 allCVars ex = ex |> flatten
                  |> filter isNamedCVar
                  |> map (\(CVar f) -> f)
-                      
-                      
-isNamedCVar (CVar (Flex _ _ ) ) = True 
-isNamedCVar _ = False
 
+
+isNamedCVar (CVar (Flex _ _ ) ) = True
+isNamedCVar _ = False

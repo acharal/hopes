@@ -39,6 +39,7 @@ import Loc (HasLocation(..))
 import Data.List(nub)
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Applicative
 
 -- | Monomorphic type signature (variables)
 type RhoSig a  = (a, RhoType)
@@ -122,8 +123,35 @@ emptyTcState = TcState 1 [] [] ([],[])
 
 -- TypeCheck monad.
 -- Supports environment, state, errors
-type Tc m inf = ReaderT TcEnv (StateT (TcState inf) (ErrorT Messages m))
+newtype Tc inf m a = Tc { unTc :: ReaderT TcEnv (StateT (TcState inf) (ErrorT Messages m)) a }
 
+instance Functor m => Functor (Tc inf m) where
+  fmap f h = Tc $ fmap f (unTc h)
+
+instance (Functor m, Monad m) => Applicative (Tc inf m) where
+  pure = Tc . pure
+  f <*> g = Tc $ (unTc f) <*> (unTc g)
+
+instance Monad m => Monad (Tc inf m) where
+  return = Tc . return
+  f >>= g = Tc (unTc f >>= \a -> unTc (g a))
+
+instance Monad m => MonadState (TcState inf) (Tc inf m) where
+  state = Tc . state
+
+instance Monad m => MonadReader TcEnv (Tc inf m) where
+  reader = Tc . reader
+  local f m = Tc $ local f (unTc m)
+
+instance Monad m => MonadError Messages (Tc inf m) where
+  throwError = Tc . throwError
+  catchError m h = Tc $ catchError (unTc m) (\e -> unTc (h e))
+
+
+instance MonadTrans (Tc inf) where
+  lift = Tc . lift . lift . lift
+
+runTcT env m = runErrorT $ evalStateT (runReaderT (unTc m) env) emptyTcState
 
 {-
  - Auxiliary functions for the Tc monad
@@ -131,7 +159,7 @@ type Tc m inf = ReaderT TcEnv (StateT (TcState inf) (ErrorT Messages m))
 
 -- Restrict an expression in the Head: no lambdas or predicate
 -- constants allowed
-restrictHead :: (Monad m, HasLocation a) => SExpr a -> Tc m a ()
+restrictHead :: (Monad m, HasLocation a) => SExpr a -> Tc a m ()
 restrictHead h =  h |> flatten |> mapM_ restrict
     where restrict ex@(SExpr_predCon a _ _ _) = throwError $ restrictError ex
           restrict ex@(SExpr_lam a _ _)       = throwError $ restrictError ex
@@ -160,12 +188,12 @@ withEmptyState m = do
     local (\env -> env{rhoSigs = []}) m
 
 -- Work with new variables in the environment
-withEnvVars :: Monad m => [RhoSig Symbol] -> Tc m inf a -> Tc m inf a
+withEnvVars :: Monad m => [RhoSig Symbol] -> Tc inf m a -> Tc inf m a
 withEnvVars bindings =
     local (\env -> env{ rhoSigs = bindings ++ rhoSigs env})
 
 -- Work with NO variable bindings in the environment
-withNoEnvVars :: Monad m => Tc m inf a -> Tc m inf a
+withNoEnvVars :: Monad m => Tc inf m a -> Tc inf m a
 withNoEnvVars m = do
     modify ( \st  -> st {exists  = []} )
     local  ( \env -> env{rhoSigs = []} ) m
@@ -189,14 +217,14 @@ allNamedVars expr = expr |> flatten
 
 
 -- Fresh variable generation
-newAlpha :: Monad m => Tc m inf Alpha
+newAlpha :: Monad m => Tc inf m Alpha
 newAlpha = do
     st <- get
     let n = uniq st
     put st{uniq = n+1}
     return $ Alpha ('a' : show n)
 
-newPhi :: Monad m => Tc m inf Phi
+newPhi :: Monad m => Tc inf m Phi
 newPhi = do
     st <- get
     let n = uniq st
@@ -233,7 +261,7 @@ freePhis (Rho_pi pi) = aux pi
 freePhis _ = []
 
 -- Freshen a polymoprhic type
-freshen :: Monad m => PolyType -> Tc m inf PiType
+freshen :: Monad m => PolyType -> Tc inf m PiType
 freshen (Poly_gen alphas phis pi) = do
     alphas' <- newAlphas $ length alphas
     phis'   <- newPhis   $ length phis

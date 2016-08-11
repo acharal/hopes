@@ -41,7 +41,7 @@ import Data.List(group, sort)
 -- A data type for all relevant information the type checking outputs
 data TcOutput a =
     TcOutput { -- annotated program
-               tcOutSyntax   :: SDepGroupDag (Typed a)
+               tcOutSyntax   :: SProg (Typed a)
                -- new environment predicates
              , tcOutPreds    :: [PolySig PredSig]
                -- Warnings
@@ -51,12 +51,35 @@ data TcOutput a =
 
 -- run the typeCheck monad with a starting environment
 runTc :: (Show a, HasLocation a, Monad m) => TcEnv -> SDepGroupDag a -> m (Either Messages (TcOutput a))
-runTc env dag = runErrorT $ evalStateT (runReaderT (tcDag dag) env) emptyTcState
+runTc env dag = runTcT env (tcProg prog)
+  where prog = SProg { progDefs = dag, progCommands = [], progGoals = [] }
 
 
+tcProg :: (Show a, HasLocation a, Monad m) => SProg a -> Tc a m (TcOutput a)
+tcProg prog = do
+     (defs', preds) <- walk (progDefs prog) []
 
+     let rho_o = Rho_pi Pi_o
 
--- typeCheck program, and output all relevant information
+     commands' <- withEnvPreds preds $ withEmptyState $
+         mapM tcCommand (progCommands prog)
+
+     goals' <- withEnvPreds preds $ withEmptyState $
+         mapM tcGoal (progGoals prog)
+
+     warnings <- gets msgs
+     return $ TcOutput (SProg { progDefs = defs', progCommands = commands', progGoals = goals'}) preds warnings
+   where -- reached the end of the dag, so return all preds. you found
+         walk [] preds = return ([], preds)
+         walk (grp:grps) preds = do
+             -- TypeCheck current group with current predicates
+             (grp' , preds' ) <- withEnvPreds preds $ withEmptyState (tcGroup grp)
+             -- Continue with the extra you found in this group
+             (grps', preds'') <- walk grps (preds' ++ preds)
+             -- return all groups and all predicates
+             return (grp':grps', preds'')
+
+{- typeCheck program, and output all relevant information
 tcDag :: (Show a, HasLocation a, Monad m) => SDepGroupDag a -> Tc m a (TcOutput a)
 tcDag dag = do
     (dag', preds) <- walk dag []
@@ -72,7 +95,7 @@ tcDag dag = do
               (grps', preds'') <- walk grps (preds' ++ preds)
               -- return all groups and all predicates
               return (grp':grps', preds'')
-
+-}
 
 
 -- typeCheck a dependency group
@@ -105,6 +128,20 @@ tcPredDef predDef = do
     -- Begin with new variable bindings for each clause
     clauses' <- mapM (withNoEnvVars.tcClause) (predDefClauses predDef)
     return $ predDef{predDefClauses = clauses'}
+
+tcGoal (SGoal a e) =
+  let rho_o = Rho_pi Pi_o
+  in do
+    e' <- tcExpr e
+    addConstraint (typeOf e') rho_o e'
+    return $ SGoal (typed rho_o a) e'
+
+tcCommand (SCommand a e) =
+  let rho_o = Rho_pi Pi_o
+  in do
+    e' <- tcExpr e
+    addConstraint (typeOf e') rho_o e'
+    return $ SCommand (typed rho_o a) e'
 
 -- typeCheck a clause
 tcClause (SClause a hd bd) = do
@@ -146,7 +183,7 @@ tcClause (SClause a hd bd) = do
 -- typeCheck an expression.
 --   Also mark ex. quantified variables the first time you see them
 tcExpr :: Monad m => SExpr a
-                  -> Tc m a ( SExpr (Typed a) )
+                  -> Tc a m ( SExpr (Typed a) )
 
 -- 1) Individuals
 -- Number
@@ -300,7 +337,7 @@ tcExpr (SExpr_paren a ex) = do
     return $ SExpr_paren (getInfo ex') ex'
 
 -- Utility function to search environment for expr.
-findPoly :: Monad m => Symbol -> Int -> Tc m a RhoType
+findPoly :: Monad m => Symbol -> Int -> Tc a m RhoType
 findPoly cnm ar = do
     envTp <- asks $ lookupPoly (cnm,ar)
     tp <- case envTp of
@@ -313,7 +350,7 @@ findPoly cnm ar = do
     return tp
 
 -- Unification
-unify :: (Monad m, Show a, HasLocation a) => [Constraint a] -> Tc m a Substitution
+unify :: (Monad m, Show a, HasLocation a) => [Constraint a] -> Tc a m Substitution
 -- No constraints
 unify [] = return id
 -- Equal types

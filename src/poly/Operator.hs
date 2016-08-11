@@ -55,8 +55,3 @@ isInfixOp    (Operator _ s) = length s == 3 && head (tail s) == 'f'
 isAssocRight op@(Operator _ s) = isInfixOp op && last s == 'x'
 isAssocLeft  op@(Operator _ s) = isInfixOp op && not (isAssocRight op) && head s == 'x'
 isAssocNone  op@(Operator _ s) = not (isAssocRight op) && not (isAssocLeft op)
-
-
-class MonadOperatorProvider m where
-  getOperators :: m OperatorTable
-  updateOperators :: Operator -> m ()

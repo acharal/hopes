@@ -31,9 +31,13 @@ module Parser (module Parser, module Text.Parsec) where
 
 import qualified Lexer as L
 import Syntax
+import Error (mkErrWithLoc, ErrLevel(Fatal), ErrType(TypeError), Message, mkMsgs)
 import qualified Operator as Operators
 
-import Text.Parsec hiding (runParser)
+import Text.Parsec hiding (runParser, runPT)
+import qualified Text.Parsec as P
+import Text.Parsec.Error
+
 import Text.Parsec.Expr
 import Text.Parsec.Pos
 import Data.Monoid (mappend)
@@ -41,7 +45,7 @@ import Control.Monad (when)
 
 import Control.Monad.IO.Class
 import Loc
-
+import Pretty (ppr, vcat)
 import Control.Monad (when)
 
 import Prelude hiding (getContents, readFile)
@@ -61,6 +65,15 @@ data ParseState s m =
             , operatorTable :: ![[Operator s (ParseState s m) m ( SExpr LocSpan )]]
             , argumentOperatorTable :: ![[Operator s (ParseState s m) m ( SExpr LocSpan )]]
             }
+
+convert (Left err) = Left $ mkMsgs (mkErrWithLoc (loc (errorPos err)) TypeError Fatal ((ppr . show) err))
+convert (Right a) = Right a
+
+--runPT :: (Monad m, Stream s m t) =>
+--     ParsecT s u m a -> u -> SourceName -> s -> m (Either Error.Message a)
+runPT p st fl inp = do
+    r <- P.runPT p st fl inp
+    return $ convert r
 
 -- The empty parser state
 emptyParseState = ParseSt [] [] [] []
@@ -527,7 +540,7 @@ buildOpTable = do { st <- getState
 
 runParser :: Stream s m t =>
      ParsecT s u m a -> u -> SourceName -> s -> m (Either ParseError a)
-runParser = runPT
+runParser = P.runPT
 
 parseSrc :: Stream s m Char => ParserT s m [SSent LocSpan]
 parseSrc = do
@@ -552,7 +565,7 @@ runHopesParser p st sourcename input = runP p' st sourcename input
 -- Parameters : initial state, input file.
 runHopesParser2 st inputFile = do
     input <- ByteString.readFile inputFile
-    return $ runP p' st inputFile input
+    return $ P.runP p' st inputFile input
     where p' = do
               L.whiteSpace L.hopes
               sents <- many sentence'
@@ -586,9 +599,16 @@ parseHopes2 input = do
               s <- sentence
               when (isCommand s) (opDirective1 s)
               return s
-          buildTable = do
-              cached <- buildOpTable
-              updateState (\st -> st{ cachedTable = cached, argumentOperatorTable = map snd cached, operatorTable= map snd (opTblWithComma cached) })
+
+buildTable :: Monad m => ParsecT
+                     ByteString
+                     (ParseState ByteString m) m ()
+buildTable = do
+    cached <- buildOpTable
+    updateState (\st -> st{ cachedTable = cached
+                          , argumentOperatorTable = map snd cached
+                          , operatorTable= map snd (opTblWithComma cached)
+                          })
 
 -- Parse without reading operators
 parseHopes p input =
