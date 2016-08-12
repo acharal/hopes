@@ -1,12 +1,10 @@
 module Main where
 
-import System.Environment (getArgs)
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans
+import           Control.Monad.Error.Class
+import           Data.Monoid               (mappend)
 
-import Control.Monad.IO.Class
-import Control.Monad.Trans
-
-import Parser hiding (operators, parse)
-import qualified Parser as Parser (operators)
 -- import ParserRoutine
 import Syntax
 import Core
@@ -19,30 +17,31 @@ import Types
 import Pretty (Pretty, text, (<+>), render, ppr)
 import Operator
 
-import Prelude hiding (getContents, readFile)
-import Data.ByteString (ByteString)
-import Data.Monoid (mappend)
-import qualified Prelude (getContents, putStrLn, readFile)
-import qualified Data.ByteString as ByteString (getContents, putStrLn, readFile)
+import           Parser                    hiding (operators, parse)
+import qualified Parser                    (operators)
+import           Prelude                   hiding (getContents, readFile)
+import qualified Prelude                   (getContents, readFile, putStrLn, putStr)
+import           Data.ByteString           (ByteString)
+import qualified Data.ByteString           as ByteString (getContents, putStrLn, readFile)
 
-import Control.Monad.Error.Class
 
 
-import Pipes
-import Pipes.Core
-import qualified Pipes.Prelude as P
+import           Pipes
+import           Pipes.Core
+import qualified Pipes.Prelude             as P
 
-import qualified Lexer as L
+import qualified Lexer                     as L
 
-import System.Directory
-import System.FilePath
+import           System.Directory          (canonicalizePath, getCurrentDirectory)
+import           System.FilePath
+import           System.Environment        (getArgs)
 
 main = do
   args <- getArgs
   runHopes $ do
-    mapM_ loadModuleFromFile args
+    mapM_ loadFile args
     prog <- gets assertions
-    liftIO $ putStrLn $ "Loaded Clauses: " ++ show (length prog)
+    liftIO $ Prelude.putStrLn $ "Loaded Clauses: " ++ show (length prog)
     return ()
 
 
@@ -129,9 +128,9 @@ withFilename filename m =
 
 logMsg msg = do
   d <- asks depth
-  liftIO $ putStr "%"
-  liftIO $ putStr $ concat $ take d $ repeat "  "
-  liftIO $ putStrLn $ msg
+  liftIO $ Prelude.putStr "%"
+  liftIO $ Prelude.putStr $ concat $ take d $ repeat "  "
+  liftIO $ Prelude.putStrLn $ msg
 
 loadFile :: FilePath -> HopesIO (Either Messages ())
 loadFile filename = do
@@ -209,31 +208,31 @@ repl = loop
           result <- respond line
  --        liftIO $ putStrLn result
           loop
-{-
-goalDriver :: Consuming () m Goal ComputedAnswer
-goalDriver = parse $= desugarer $= typeCheckGoal $$ execute
--}
 
-{-
-data HopesModule {
-  name    :: String,
-  fileName :: FilePath,
-  clauses :: [Clauses],
-  typeEnv :: TyEnv,
-  exports :: [Predicates],
-  operators :: OperatorTable
-}
-
-loadModule :: FilePath -> HopesIO ()
-
-
-loadModule :: FilePath -> HopesIO ()
-loadModule inputFile =
-    parseFile inputFile (\sentence ->
-      compile sentence;
-      assert sentence;
-      if (directive) executeDirective(sentence))
-
-executeDirective(Consult file) = loadModule file
-executeDirective(Op x y z) = addOperator x y z
--}
+--goalDriver :: String -> HopesIO ()
+goalDriver goalString = do
+    e <- parse goalString
+    e' <- typeCheck e
+    let e'' = desugarGoal e'
+    liftIO $ Prelude.putStrLn $ render $ ppr e''
+    return ()
+    where parse input = exceptT $ do
+              op <- gets operators
+              runPT gp (parseState op) "stdin" input
+          typeCheck e = exceptT $ do
+              let rho_o = Rho_pi Pi_o
+              tyenv <- gets types
+              tye <- runTcT initTcEnv $ withEnvPreds tyenv $ tcGoal e
+              return tye
+          parseState op = ParseSt op [] [] []
+          gp = do   { pos1 <- getPosition
+                    ; ex <- try fullExpr <|> (allExpr True)
+                    ; pos2 <- getPosition
+                    ; symbol "."
+                    ; let pos2' = incSourceColumn pos2 1
+                    ; return $ SGoal (mkSpan pos1 pos2') ex
+                    }
+          exceptT m = (lift m) >>= \r ->
+            case r of
+              Left e -> throwError e
+              Right a -> return a

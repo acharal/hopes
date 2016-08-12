@@ -33,7 +33,7 @@ newtype Phi = Phi Symbol
   deriving Eq
 
 -- Non generalized predicate
-data PiType = Pi_o 
+data PiType = Pi_o
             | Pi_fun [RhoType] PiType
             | Pi_var Phi
     deriving Eq
@@ -74,7 +74,7 @@ instance Show RhoType where
 instance Show PiType where
     showsPrec p Pi_o = ("o" ++)
     {- Add this? -}
-    showsPrec p (Pi_fun [rho] pi) | isSimple rho = 
+    showsPrec p (Pi_fun [rho] pi) | isSimple rho =
         showsPrec p rho . (" -> " ++) . showsPrec p pi
         where isSimple (Rho_pi (Pi_fun _ _)) = False
               isSimple _ = True
@@ -83,7 +83,7 @@ instance Show PiType where
         ("(" ++) . walk rhos . (") -> " ++) . showsPrec p pi
         where walk [rho] = showsPrec p rho
               walk (rho : rhos) = showsPrec p rho . (", " ++) . walk rhos
-              
+
     showsPrec p (Pi_var phi) = showsPrec p phi
 
 instance Show PolyType where
@@ -123,8 +123,8 @@ unTyp (T a _) = a
 class HasType a where
     typeOf :: a -> RhoType
     hasType :: RhoType -> a -> a
-    
-    
+
+
 instance HasType RhoType where
     typeOf = id
     hasType t _ = t
@@ -138,24 +138,22 @@ instance HasType (Typed a) where
 
 
 -- Combine type with location
-instance HasLocation a => HasLocation (Typed a) where 
+instance HasLocation a => HasLocation (Typed a) where
     locSpan (T a _) = locSpan a
 
 
 order :: HasType a => a -> Int
 order a =
     case typeOf a of
-        (Rho_pi (Pi_fun rhos pi)) -> 
+        (Rho_pi (Pi_fun rhos pi)) ->
             max (1 + maximum(map order rhos)) (order $ Rho_pi pi)
-        
+
         (Rho_pi Pi_o) -> 0
         (Rho_i) -> 0
         _  -> error ("no fixed order when type is variable")
 
-instance HasArity RhoType where 
+instance HasArity RhoType where
     arity (Rho_pi (Pi_fun rhos pi)) = Just $ length rhos
     arity (Rho_pi Pi_o)             = Just 0
     arity (Rho_i)                   = Just 0
     arity r = Nothing
-
-

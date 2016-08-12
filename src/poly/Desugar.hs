@@ -44,6 +44,8 @@ desugarProg prog =
       commands = map (\(SCommand _ e) -> desugarExpr e) (progCommands prog)
   in (defs, commands, goals)
 
+desugarGoal (SGoal inf goal) = desugarExpr goal
+
 -- Desugar the dependency group DAG
 desugarDag dag = map desugarDef dag
 
