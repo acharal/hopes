@@ -16,22 +16,19 @@
 --  Boston, MA 02110-1301, USA.
 
 -- | Proof procedure of Hopl
-module Infer (runInfer, infer, prove) where
+module Infer (InferT,runInfer, infer, prove, module ComputedAnswer) where
 
 
 import Logic (runLogicT, observe)
 import Logic (LogicT)
 import Types (hasType, HasType)
-import Subst (restrict, combine, success)
+import Subst (Subst, restrict, combine, success)
 import ComputedAnswer
-import Lang
 import Control.Applicative (Applicative(..), Alternative(..))
 import Control.Monad (liftM, ap)
 
-import CoreLang (Expr(..), Program, fv, splitExist)
-
-import qualified CoreLang
-
+import Core (CExpr(..), fv, splitExist, KnowledgeBase, Flex(..))
+import qualified Core (clausesOf)
 
 -- import Control.Monad (msum, mplus, replicateM)
 import Control.Monad.Reader
@@ -42,13 +39,14 @@ import Trace.Class
 
 import Derive (derive)
 
+(>>-) :: Monad m => m a -> (a -> m b) -> m b
 (>>-) = (>>=)
 
-newtype InferT a m b = InferT { unInferT :: ReaderT (Program a) (StateT Int (LogicT m)) b }
+newtype InferT m a = InferT { unInferT :: ReaderT (KnowledgeBase) (StateT Int (LogicT m)) a }
 
 runInfer p m = runLogicT Nothing $ evalStateT (runReaderT (unInferT m) p) 0
 
-infer :: Monad m => Program a -> InferT a m b -> m (Maybe (b, InferT a m b))
+infer :: Monad m => KnowledgeBase -> InferT m a -> m (Maybe (a, InferT m a))
 infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
 
 
@@ -63,81 +61,90 @@ infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
 -- ifte' m th el = call (m >>= \s -> cut >> th s `mplus` el) --call $ (m >>= \s -> cut >> th s) `mplus` el
 
 -- try prove a formula by refutation
--- prove  :: Goal a -> Infer a (Subst a)
+prove  :: (MonadTrace (CExpr, Subst) m,
+           Monad m) => CExpr -> InferT m (ComputedAnswer)
 prove g =  do
     ans <- refute g
     answer (fv g) ans
 
 answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
-    where splitAnd (And e1 e2) = splitAnd e1 ++ splitAnd e2
+    where splitAnd (CAnd _ e1 e2) = splitAnd e1 ++ splitAnd e2
           splitAnd CTrue = []
           splitAnd e = [e]
 
 -- do a refutation
--- refute :: Goal a -> Infer a (Subst a)
+refute :: (Monad m,
+           MonadTrace (CExpr, Subst) m) => CExpr -> InferT m (CExpr, Subst)
 refute =  refute''' --' 50
 
+refute''' :: (Monad m,
+              MonadTrace (CExpr, Subst) m) => CExpr -> InferT m (CExpr, Subst)
 refute''' CTrue = return (CTrue, success)
 refute''' g = ifte (derive g) cont failed
     where cont (g,s) = do
-            trace (g, s)
+            lift $ trace (g, s)
             (g', s') <- refute''' g
             return (g', s `combine` s')
           failed = if isSuccessful g
                    then return (g, success)
                    else fail "not successful goal"
           isSuccessful CTrue = True
-          isSuccessful (And e1 e2) = isSuccessful e1 && isSuccessful e2
-          isSuccessful (Not e) =
+          isSuccessful (CAnd _ e1 e2) = isSuccessful e1 && isSuccessful e2
+          isSuccessful (CNot e) =
             let (v, e') = splitExist e
             in case e' of
-                  Eq e1 e2 -> True
+                  CEq e1 e2 -> True
                   _ -> False
           isSuccessful _ = False
 
 
-instance Monad m => Functor (InferT a m) where
+instance Monad m => Functor (InferT m) where
     fmap = liftM
 
-instance Monad m => Applicative (InferT a m) where
+instance Monad m => Applicative (InferT m) where
     pure a = InferT $ return a
     (<*>) = ap
 
-instance Monad m => Monad (InferT a m) where
+instance Monad m => Monad (InferT m) where
     return = pure
     m >>= f = InferT $ (unInferT m >>= \a -> unInferT (f a))
     fail a = InferT $ fail a
 
-instance MonadTrans (InferT a) where
+instance MonadTrans (InferT) where
     lift = InferT . lift . lift . lift
 
-instance Monad m => Alternative (InferT a m) where
+instance Monad m => Alternative (InferT m) where
     (<|>) = mplus
     empty = mzero
 
-instance Monad m => MonadPlus (InferT a m) where
+instance Monad m => MonadPlus (InferT m) where
     mzero = InferT mzero
     mplus m1 m2 = InferT (mplus (unInferT m1) (unInferT m2))
 
-instance Monad m => MonadLogic (InferT a m) where
+instance Monad m => MonadLogic (InferT m) where
     msplit m = InferT $ do
         r <- msplit (unInferT m)
         case r of
             Nothing -> return Nothing
             Just (a, s) -> return (Just (a, InferT s))
 
-instance MonadIO m => MonadIO (InferT a m) where
+instance MonadIO m => MonadIO (InferT m) where
     liftIO = InferT .  liftIO
 
-instance MonadState s m => MonadState s (InferT a m) where
+instance MonadState s m => MonadState s (InferT m) where
     get = lift $ get
     put = lift . put
 
-instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (InferT a m) where
+instance Monad m => MonadFreeVarProvider (InferT m) where
     freshVarOfType ty = InferT $ do
         a' <- get
         modify (+1)
-        return $ hasType ty $ liftSym ("V" ++ show a')
+        return $ Flex ty ("V" ++ show a')
+    freshVarFrom v@(Flex ty x) = InferT $ do
+        a' <- get
+        modify (+1)
+        return $ Flex ty ("V" ++ show a')
+    freshVarFrom (AnonFlex ty) = InferT (return (AnonFlex ty))
 
-instance (Symbol a, Eq a, Monad m) => MonadClauseProvider a (InferT a m) where
-    clausesOf r = InferT $ asks (CoreLang.clausesOf r)
+instance Monad m => MonadClauseProvider (InferT m) where
+    clausesOf r = InferT $ asks (\b -> Core.clausesOf b r)

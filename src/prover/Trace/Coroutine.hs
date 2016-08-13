@@ -37,10 +37,11 @@ instance (Functor s, MonadLogic m) => MonadLogic (Coroutine s m) where
               apply (Just (Left a, s))  = return $ Left  $
                 fmap (\x -> x >>= \y -> return (Just (y, Coroutine s))) a
 
-instance (Monad m, Functor s, MonadFreeVarProvider a m) => MonadFreeVarProvider a (Coroutine s m) where
+instance (Monad m, Functor s, MonadFreeVarProvider m) => MonadFreeVarProvider (Coroutine s m) where
     freshVarOfType = lift . freshVarOfType
+    freshVarFrom = lift . freshVarFrom
 
-instance (Monad m, Functor s, MonadClauseProvider a m) => MonadClauseProvider a (Coroutine s m) where
+instance (Monad m, Functor s, MonadClauseProvider m) => MonadClauseProvider (Coroutine s m) where
     clausesOf = lift . clausesOf
 
 instance (Functor ss, MonadState s m) => MonadState s (Coroutine ss m) where

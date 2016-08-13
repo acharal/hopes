@@ -1,12 +1,12 @@
 
 module HoplToCore where
 
-import CoreLang
+import Core
 import Lang (ceq, cand, cor, ctop, cbot)
 import qualified Language.Hopl as H
 import Data.List ((\\))
 
-hoplToCoreExpr e@(H.App (H.App op e1) e2) 
+hoplToCoreExpr e@(H.App (H.App op e1) e2)
     | op == ceq  = Eq  c1 c2
     | op == cand = And c1 c2
     | op == cor  = Or  c2 c2
@@ -27,7 +27,7 @@ hoplToCoreExpr' c@(H.Rigid a)  | c == ctop = CTrue
                                | otherwise = Rigid a
 
 hoplToCoreClause c@(H.C a e) = (a, closed e)
-   where  closed' (Lambda x e) vs = Lambda x (closed' e (x:vs)) 
+   where  closed' (Lambda x e) vs = Lambda x (closed' e (x:vs))
           closed' e vs = foldr exists e (fv e \\ vs)
           closed e   = closed' (hoplToCoreExpr e) []
           exists v e = Exists v e

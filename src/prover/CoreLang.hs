@@ -1,17 +1,17 @@
-module CoreLang where
+module Core where
 
 import Types (HasType(..), hasType, tyBool, MonoTypeV(TyFun))
 import Data.Monoid
 import Data.List (union)
 
-data Expr a = 
+data Expr a =
       CTrue
     | CFalse
     | And (Expr a) (Expr a)	-- Expr :/\: Expr
     | Or  (Expr a) (Expr a)	-- Expr :\/: Expr
     | Lambda a (Expr a)
     | App (Expr a) (Expr a)
-    | Eq  (Expr a) (Expr a)	-- Expr :=: Expr 
+    | Eq  (Expr a) (Expr a)	-- Expr :=: Expr
     | Not (Expr a)		    -- :~: Expr
     | Exists a (Expr a)
     | Var  a			-- variable
@@ -33,7 +33,7 @@ instance HasType a => HasType (Expr a) where
 --    typeOf (Forall _ _) = tyBool
     typeOf (Rigid p) = typeOf p
     typeOf (Var   v) = typeOf v
-    typeOf (App e e') = case typeOf e of 
+    typeOf (App e e') = case typeOf e of
                             TyFun _ ty_res -> ty_res
                             t -> error ("not expected type " ++ show t)
     typeOf (Lambda v e) = TyFun (typeOf v) (typeOf e)
@@ -85,4 +85,3 @@ lambda vs e = foldr Lambda e vs
 
 isVar (Var _) = True
 isVar _ = False
-

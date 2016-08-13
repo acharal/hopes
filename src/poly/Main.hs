@@ -14,7 +14,7 @@ import Prepr
 import TypeCheck
 import TcUtils
 import Types
-import Pretty (Pretty, text, (<+>), render, ppr)
+import Pretty (Pretty, text, (<+>), render, ppr, pprint)
 import Operator
 
 import           Parser                    hiding (operators, parse)
@@ -35,15 +35,25 @@ import qualified Lexer                     as L
 import           System.Directory          (canonicalizePath, getCurrentDirectory)
 import           System.FilePath
 import           System.Environment        (getArgs)
+import           System.IO
+
+import qualified Infer
+import           ComputedAnswer
+import Subst
+import           Trace.Coroutine
 
 main = do
   args <- getArgs
   runHopes $ do
     mapM_ loadFile args
     prog <- gets assertions
-    liftIO $ Prelude.putStrLn $ "Loaded Clauses: " ++ show (length prog)
+    runEffect (console >\\ repl)
     return ()
 
+console prompt = do
+  liftIO $ hSetBuffering stdout NoBuffering
+  liftIO $ putStr prompt
+  liftIO $ getLine
 
 --groupUntil :: Monad m => (a -> Bool) -> Producer' a m r -> Producer' [a] m r
 groupUntil predicate p = go id p
@@ -67,7 +77,7 @@ groupUntil predicate p = go id p
 data HopesState = HopesState
   { operators  :: OperatorTable
   , types      :: [PolySig PredSig]
-  , assertions :: KnowledgeBase RhoType
+  , assertions :: KnowledgeBase
   }
 
 data HopesContext = HopesContext
@@ -86,9 +96,9 @@ runHopes h = do
           defaultModule = "_top"
 
 data Command =
-    Assert  [CPredDef RhoType] [PolySig PredSig]
-  | Query   (CExpr RhoType)
-  | Command (CExpr RhoType)
+    Assert  [CPredDef] [PolySig PredSig]
+  | Query   CExpr
+  | Command CExpr
 
 c =[ ("consult", 1)   -- interfers with the loadModule
    , ("type", 1)      -- interfers with the type environment
@@ -118,9 +128,9 @@ executeCommand (Query query)  = return ()
 type Loader m = Tc LocSpan (ParsecT ByteString (ParseState ByteString m) m)
 type Sentence = SSent LocSpan
 type SourceProgram = SProg (Typed LocSpan)
-type PredDefs = [CPredDef RhoType]
-type Goals = [CExpr RhoType]
-type Commands = [CExpr RhoType]
+type PredDefs = [CPredDef]
+type Goals = [CExpr]
+type Commands = [CExpr]
 
 withFilename filename m =
   let dir = takeDirectory filename
@@ -200,22 +210,39 @@ parseAndYield = do
             eof
             return Nothing
 
-
-repl :: MonadIO m => Proxy String y t y m ()
+repl :: Proxy String String y0 x0 HopesIO ()
 repl = loop
   where loop = do
           line <- request "?- "
-          result <- respond line
- --        liftIO $ putStrLn result
+          e <- lift $ runExceptT $ runEffect $ (goalDriver />/ printResultAndWait) (line :: String)
+          case e of
+            Left (msgs,errors) -> do
+              liftIO $ pprint msgs
+              liftIO $ pprint errors
+            Right hasResults -> do
+              if (hasResults)
+              then liftIO $ putStrLn "Yes"
+              else liftIO $ putStrLn "No"
           loop
 
---goalDriver :: String -> HopesIO ()
+
+printResultAndWait :: (Pretty a, MonadIO m) => a -> m Bool
+printResultAndWait result = do
+  liftIO $ pprint result
+  liftIO $ hSetBuffering stdin NoBuffering
+  c <- liftIO $ getChar
+  return (c == ';')
+
+-- goalDriver :: (Monad m, MonadError Messages m) =>  String -> Proxy X () Bool ComputedAnswer m ()
 goalDriver goalString = do
+  g <- lift $ compileGoal goalString
+  infer g
+
+--goalDriver :: String -> HopesIO ()
+compileGoal goalString = do
     e <- parse goalString
     e' <- typeCheck e
-    let e'' = desugarGoal e'
-    liftIO $ Prelude.putStrLn $ render $ ppr e''
-    return ()
+    return (desugarGoal e')
     where parse input = exceptT $ do
               op <- gets operators
               runPT gp (parseState op) "stdin" input
@@ -230,9 +257,33 @@ goalDriver goalString = do
                     ; pos2 <- getPosition
                     ; symbol "."
                     ; let pos2' = incSourceColumn pos2 1
-                    ; return $ SGoal (mkSpan pos1 pos2') ex
+                    ; return $ SGoal (mkSpan pos1 pos2')  (fixExpr True 0 ex)
                     }
           exceptT m = (lift m) >>= \r ->
             case r of
               Left e -> throwError e
               Right a -> return a
+
+
+--infer :: (Monad m,
+--          MonadState HopesState m) => CExpr -> Proxy x' x Bool ComputedAnswer m ()
+infer e = do
+    src <- lift $ gets assertions
+    go src (Infer.prove e)
+  where aux :: (Monad m, MonadIO m) => KnowledgeBase -> Infer.InferT (TraceT (CExpr,Subst) m) ComputedAnswer -> m (Maybe (ComputedAnswer, Infer.InferT (TraceT (CExpr,Subst) m) ComputedAnswer))
+        aux src i =  traceT (Infer.infer src i)
+        go src i = do
+            result <- lift $ aux src i
+            case result of
+              Nothing -> return False
+              Just (a, cont) -> do
+                continue <- respond a
+                if (continue)
+                then go src cont
+                else return True
+
+traceT :: (Monad m, MonadIO m) => TraceT (CExpr,Subst) m b -> m b
+traceT m = runTraceT m h
+  where h (e,s) cont = do
+          liftIO $ pprint e
+          cont

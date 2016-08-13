@@ -46,16 +46,6 @@ instance Pretty a => Pretty (Maybe a) where
     ppr (Just a) = ppr a
     ppr Nothing  = empty
 
-instance (Pretty a, Pretty b) => Pretty (Either a b) where
-    ppr (Left  a) = ppr a
-    ppr (Right b) = ppr b
-
-instance (Pretty a, Pretty b) => Pretty (a,b) where
-    ppr (a,b) = parens $ sep [ ppr a, ppr b ]
-
-
-instance (Pretty a, Pretty b, Pretty c) => Pretty (a,b,c) where
-    ppr (a,b,c) = parens $ sep [ ppr a, ppr b, ppr c]
 
 dcolon  = text "::"
 arrow   = text "->"

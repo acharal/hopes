@@ -30,7 +30,7 @@ module Desugar where
 
 import Syntax
 import Types
-import Core
+import Core hiding (isVar)
 import Basic
 import TcUtils (generalize)
 
@@ -128,18 +128,18 @@ desugarClause (SClause inf hd bd) =
 -- The state of head desugaring
 data ArgState = ArgState { uniq  :: Int      -- fresh variable no.
                          , seen  :: [Symbol] -- vars. we have already seen ALONE in an argument
-                         , pairs :: [CExpr RhoType] -- Additional unifications
+                         , pairs :: [CExpr]  -- Additional unifications
                          }
 type ArgMonad = State ArgState
 
 -- Returns true if we have already encountered nm
-isSeen :: Symbol -> ArgMonad Bool
+isSeen :: VarSym -> ArgMonad Bool
 isSeen nm = do
     sn <- gets seen
     return $ nm `elem` sn
 
 -- Return a fresh variable name
-newVar :: ArgMonad Symbol
+newVar :: ArgMonad VarSym
 newVar = do
     st <- get
     let un = uniq st
@@ -157,7 +157,7 @@ addSeen var =
 -- Treat a clause argument
 desugarArg :: HasType a
            => SExpr a
-           -> ArgMonad (Flex RhoType)
+           -> ArgMonad (Flex)
 
 -- Arg is a named variable
 desugarArg (SExpr_var inf (Var vinf var) _) = do
@@ -190,7 +190,7 @@ runArgMonad m = runState m emptyArgState
 
 
 -- Desugar an expression
-desugarExpr :: HasType a => SExpr a -> CExpr RhoType
+desugarExpr :: HasType a => SExpr a -> CExpr
 
 -- Individual constant, [] is taken into account here
 desugarExpr ex@(SExpr_const a c False _ _) =

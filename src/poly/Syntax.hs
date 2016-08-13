@@ -354,7 +354,9 @@ instance Pretty (SExpr a) where
         ppr var
 
     ppr (SExpr_number _ n ) =
-        ppr n
+      case n of
+        Left n' -> ppr n'
+        Right n' -> ppr n'
 
     ppr (SExpr_predCon _ c givAr _) =
         text "pred" <+> ppr c <> case givAr of

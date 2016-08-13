@@ -19,52 +19,53 @@ module Subst where
 
 -- import Language.Hopl (Expr(..), Clause(..))
 -- import Data.Monoid (mconcat)
-import CoreLang
+import Core (VarSym, CExpr(..), Flex(..), isVar, fv, namedVars, isNamedCVar)
+import Types
+import Loc
 import Data.List (union)
 
-type Subst a = [ (a, Expr a) ]
+type Subst = [ (Flex, CExpr) ]
 
-success :: Subst a
+success :: Subst
 success = []
 
-bind :: a -> Expr a -> Subst a
+bind :: Flex -> CExpr -> Subst
 bind v e = [(v, e)]
 
 
-isTaut :: Eq a => (a, Expr a) -> Bool
-isTaut (v, Var v') = v == v'
+-- isTaut :: Eq a => (a, CExpr a) -> Bool
+isTaut (v, CVar v') = v == v'
 isTaut _ = False
 
-class (Substitutable a b) | a -> b where
-	subst :: Substitutable a b => (Subst b) -> a -> a
+class Substitutable a where
+	subst :: Substitutable a => Subst -> a -> a
 
-instance Eq a => (Substitutable (Expr a) a) where
-        subst theta (App e1 e2)  = App (subst theta e1) (subst theta e2)
-        subst theta (And e1 e2)  = And (subst theta e1) (subst theta e2)
-        subst theta (Or  e1 e2)  = Or  (subst theta e1) (subst theta e2)
-        subst theta (Eq  e1 e2)  = Eq  (subst theta e1) (subst theta e2)
-        subst theta (Lambda x e) = maybe (Lambda x (subst theta e)) aux $ lookup x theta
-            where aux (Var y) = Lambda y (subst theta e)
-                  aux _ = error "Cannot substitute lambda bounds vars with expr"
-        subst theta (Exists x e) = maybe (Exists x (subst theta e)) aux $ lookup x theta
-            where aux (Var y) = Exists y (subst theta e)
-                  aux _ = error "Cannot substitute exist bounds vars with expr"
---        subst theta (Forall x e) = maybe (Forall x (subst theta e)) aux $ lookup x theta
---            where aux (Var y) = Forall y (subst theta e)
---                  aux _ = error "Cannot substitute lambda bounds vars with expr"
-        subst theta e@(Var x) = maybe e id $ lookup x theta
-        subst theta (Not e) = Not (subst theta e)
-        subst theta (ListCons e1 e2) = ListCons (subst theta e1) (subst theta e2)
+instance Substitutable CExpr where
+        subst theta (CApp i e1 es)   = CApp i (subst theta e1) (map (subst theta) es)
+        subst theta (CAnd i e1 e2)   = CAnd i (subst theta e1) (subst theta e2)
+        subst theta (COr  i e1 e2)   = COr  i (subst theta e1) (subst theta e2)
+        subst theta (CEq  e1 e2)     = CEq  (subst theta e1) (subst theta e2)
+        subst theta (CLambda i xs e)  = CLambda i xs (subst theta' e)
+						where theta' = theta `except` xs
+        subst theta (CExists i x e) = CExists i x (subst theta' e)
+						where theta' = theta `except` [x]
+        subst theta e@(CVar v) = maybe e id $ lookup v theta
+        subst theta (CNot e) = CNot (subst theta e)
+        subst theta (CCons e1 e2) = CCons (subst theta e1) (subst theta e2)
         subst theta e = e
 
-instance Eq a => (Substitutable (Subst a) a) where
+
+instance Substitutable Subst where
 	subst theta zeta = [ (v, e') | (v, e) <- theta, let e' = subst zeta e, not (isTaut (v, e')) ]
 
 
-restrict :: Eq a => [a] -> Subst a -> Subst a
+restrict :: [Flex] -> Subst -> Subst
 restrict ss xs = [ (v, e) | (v, e) <- xs, v `elem` ss ]
 
-combine theta zeta  = 
+except :: Subst -> [Flex] -> Subst
+except s xs = [ (v, e) | (v, e) <- s, v `notElem` xs ]
+
+combine theta zeta  =
     let ss    = map fst theta
         zeta' = [ (v, e) | (v, e) <- zeta, v `notElem` ss ]
     in  subst theta zeta ++ zeta'
@@ -76,4 +77,3 @@ vars theta  = dom theta `union` range theta
 
 
 isRenamingSubst s = all (\(_, x) -> isVar x) s
-

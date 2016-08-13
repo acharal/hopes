@@ -29,7 +29,7 @@ import Pretty
 
 import Data.Maybe(fromJust)
 import Data.List(group, sort)
-
+import qualified Debug.Trace as D
 {-
  - Type check a program
    - Create constraints
@@ -134,7 +134,14 @@ tcGoal (SGoal a e) =
   in do
     e' <- tcExpr e
     addConstraint (typeOf e') rho_o e'
-    return $ SGoal (typed rho_o a) e'
+    stCons <- gets cnts
+    subst  <- unify stCons
+    return $ SGoal (typed rho_o a) (fmap (substInTyped subst) e')
+  where substInTyped subst typed =
+              let newType = typed |> typeOf |> subst in
+              hasType newType typed
+        substInPi subst pi = pi'
+              where Rho_pi pi' = subst $ Rho_pi pi
 
 tcCommand (SCommand a e) =
   let rho_o = Rho_pi Pi_o

@@ -27,15 +27,13 @@ module Infer.Class (
 
 
 import Logic.Class
-
-import Lang (Symbol)
-import Types (Type, HasType)
-import CoreLang (Expr)
+import Types
+import Core
 
 
-class (Symbol a, HasType a) => MonadFreeVarProvider a m where
-    freshVarOfType :: Type -> m a
+class MonadFreeVarProvider m where
+    freshVarOfType :: RhoType -> m Flex
+    freshVarFrom   :: Flex -> m Flex
 
-
-class MonadClauseProvider a m where
-    clausesOf :: a -> m [Expr a]
+class MonadClauseProvider m where
+    clausesOf :: PredSym -> m [CExpr]

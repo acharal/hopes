@@ -32,61 +32,130 @@ module Core where
 import Pretty
 import Basic
 import Types
+import Loc (LocSpan)
+import Data.List (union)
+import Data.Maybe (catMaybes)
+
+type VarSym   = Symbol
+type ConstSym = Symbol
+type TyVarSym = Symbol
+type PredSym  = (Symbol, Int)
+
+--type Info = Typed LocSpan -- Info { type :: Type , loc :: LocSpan }
+type Info = RhoType
 
 -- (unifiable) variables
-data Flex a = Flex a Symbol
-            | AnonFlex a
-    deriving Functor
+data Flex = Flex Info VarSym
+          | AnonFlex Info
 
-instance Pretty (Flex a) where
+instance Pretty Flex where
     ppr (Flex _ nm) = ppr nm
     ppr (AnonFlex _) = ppr "_"
 
 -- AnonFlex are never equal
-instance Eq (Flex a) where
+instance Eq Flex where
     (Flex _ s1) == (Flex _ s2) = s1 == s2
     _ == _ = False
 
 -- Expressions
-data CExpr a = CTrue
+data CExpr   = CTrue
              | CFail
              | CCut
-             | CAnd    a (CExpr a) (CExpr a)
-             | COr     a (CExpr a) (CExpr a)
-             | CLambda a [Flex  a] (CExpr a)
-             | CApp    a (CExpr a) [CExpr a]
-             | CEq       (CExpr a) (CExpr a)
-             | CExists a (Flex  a) (CExpr a)
-             | CVar      (Flex  a)
-             | CPred   a Symbol Int -- Predicate constant
-             | CConst    Symbol
-             | CNumber   (Either Integer Double)
-             | CCons     (CExpr a) (CExpr a)
+             | CAnd    Info CExpr CExpr
+             | COr     Info CExpr CExpr
+             | CLambda Info [Flex] CExpr
+             | CApp    Info CExpr [CExpr]
+             | CEq          CExpr CExpr
+             | CExists Info Flex CExpr
+             | CVar         Flex
+             | CPred   Info Symbol Int -- Predicate constant
+             | CConst       ConstSym
+             | CNumber      (Either Integer Double)
+             | CCons        CExpr CExpr
              | CNil
+             | CNot         CExpr
              -- lift :: forall t. o -> t
              -- For a predicate type t,
              --   lift(true) == T(t) and
              --   lift(fail) == _|_(t)
-             | CLift   a (CExpr a)
+             | CLift   Info CExpr
+             deriving Eq
 
-    deriving Functor
+isVar :: CExpr -> Bool
+isVar (CVar _) = True
+isVar _ = False
+
+elemVar :: VarSym -> [Flex] -> Bool
+elemVar sym vs = sym `elem` (namedVars vs)
+
+maybeNamedVar (Flex _ a) = Just a
+maybeNamedVar (AnonFlex _) = Nothing
+namedVars as = catMaybes $ map maybeNamedVar as
+
+allCVars ex = ex |> flatten
+                 |> filter isNamedCVar
+                 |> map (\(CVar f) -> f)
+
+
+isNamedCVar (CVar (Flex _ _ ) ) = True
+isNamedCVar _ = False
+
+fv :: CExpr -> [Flex]
+fv (CVar a@(Flex _ _)) = [a]
+fv (CVar _)     = []
+fv (CPred _ _ _)= []
+fv (CTrue)      = []
+fv (CFail)      = []
+fv (CCut)       = []
+fv (CNumber _)  = []
+fv (CConst _)   = []
+fv (CNot e)      = fv e
+fv (CApp _ e1 es)  = foldl union [] $ map fv (e1:es)
+fv (CAnd _ e1 e2)  = fv e1 `union` fv e2
+fv (COr  _ e1 e2)  = fv e1 `union` fv e2
+fv (CEq  e1 e2)  = fv e1 `union` fv e2
+fv (CLambda _ as e) = filter (`elem` as) $ fv e
+fv (CExists _ a e) = filter (/= a) $ fv e
+fv (CCons e1 e2) = fv e1 `union` fv e2
+fv (CNil) = []
+
+functor (CApp _ e es) = functor e
+functor e = e
+
+args (CApp _ e es) = args e ++ [es]
+args _ = []
+
+splitExist (CExists _ v e1) = ((v:vs), e')
+    where (vs, e') = splitExist e1
+splitExist e = ([], e)
+
+splitLambda (CLambda _ v e1) = ((v:vs), e')
+    where (vs, e') = splitLambda e1
+splitLambda e = ([], e)
+
+exists vs e = foldr (CExists (typeOf e)) e vs
+-- lambda vs e = foldr CLambda e vs
 
 -- predicate definitions
-data CPredDef a = CPredDef { cPredName   :: Symbol    -- defined pred.
+data CPredDef   = CPredDef { cPredName   :: Symbol    -- defined pred.
                            , cPredAr     :: Int       -- arity
                            , cPredTp     :: PolyType  -- type
                            , cPredIsMono :: Bool      -- mono- or polymorphic
-                           , cPredCls    :: [CExpr a] -- defining clauses
+                           , cPredCls    :: [CExpr]   -- defining clauses
                            }
 
 -- Knowledge base is a list of predicate definitions
-type KnowledgeBase a = [CPredDef a]
+type KnowledgeBase = [CPredDef]
+
+clausesOf :: KnowledgeBase -> PredSym -> [CExpr]
+clausesOf base (p,n) =
+  concatMap (\def -> cPredCls def) $ filter (\def -> cPredName def == p && cPredAr def == n) base
 
 -- goals are simply expressions
-type CGoal a = CExpr a
+type CGoal = CExpr
 
-deriving instance Show a => Show (Flex a)
-deriving instance Show a => Show (CExpr a)
+deriving instance Show Flex
+deriving instance Show CExpr
 
 -- Priorities:
 --   0: λ,∃
@@ -94,7 +163,7 @@ deriving instance Show a => Show (CExpr a)
 --   2: ∧
 --   3: =
 
-instance Pretty (CExpr a) where
+instance Pretty CExpr where
     ppr = pprCPrec 0
 
 precQ = 0
@@ -141,7 +210,9 @@ pprCPrec prec (CPred _ nm ar) =
 pprCPrec prec (CConst nm) =
     text nm
 pprCPrec prec (CNumber n) =
-    ppr n
+  case n of
+    Left n' -> ppr n'
+    Right n' -> ppr n'
 pprCPrec prec lst@(CCons hd tl) =
     brackets $ pprList lst
     where pprList (CCons hd CNil) = pprCPrec 0 hd
@@ -153,27 +224,27 @@ pprCPrec prec CNil =
 pprCPrec prec (CLift _ expr) =
     char '↑' <> parens (pprCPrec 0 expr)
 
-instance Pretty (CPredDef a) where
+instance Pretty (CPredDef) where
     ppr (CPredDef nm ar _ mono exps) =
         vcat $ map ppr' exps
         where ppr' expr = text (nm ++ "/") <> int ar <+>
                           (if mono then ppr ":-" else ppr "<-") <+>
                           ppr expr
 
-instance Pretty [CPredDef a] where
+instance Pretty [CPredDef] where
   ppr lst = vcat $ map ppr lst
 
-instance Pretty [CExpr a] where
+instance Pretty [CExpr] where
   ppr lst = vcat $ map ppr lst
 
-instance HasType a => HasType (Flex a) where
+instance HasType Flex where
     typeOf (Flex a _  ) = typeOf a
     typeOf (AnonFlex a) = typeOf a
     hasType tp (Flex a nm) = Flex (hasType tp a) nm
     hasType tp (AnonFlex a) = AnonFlex $ hasType tp a
 
 
-instance HasType a => HasType (CExpr a) where
+instance HasType CExpr where
     typeOf CTrue = Rho_pi Pi_o
     typeOf CFail = Rho_pi Pi_o
     typeOf CCut  = Rho_pi Pi_o
@@ -199,7 +270,7 @@ instance HasType a => HasType (CExpr a) where
     hasType _ ex = ex
 
 
-instance Flatable (CExpr a) where
+instance Flatable CExpr where
     flatten ex@(CAnd _ ex1 ex2) =
         ex : flatten ex1 ++ flatten ex2
     flatten ex@(COr _ ex1 ex2) =
@@ -218,11 +289,3 @@ instance Flatable (CExpr a) where
         ex : flatten ex'
     flatten ex =
         [ex]
-
-allCVars ex = ex |> flatten
-                 |> filter isNamedCVar
-                 |> map (\(CVar f) -> f)
-
-
-isNamedCVar (CVar (Flex _ _ ) ) = True
-isNamedCVar _ = False

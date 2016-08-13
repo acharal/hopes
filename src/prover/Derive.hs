@@ -19,111 +19,117 @@
 module Derive (derive) where
 
 import Unify (unify)
-import Subst (subst, bind, success, dom)
+import Subst (subst, bind, success, dom, Subst)
 
-import CoreLang (Expr(..), fv, functor, args, isVar, splitExist, exists)
-import Types (MonoTypeV(..), tyBool, tyAll, typeOf)
+import Core (CExpr(..), fv, functor, args, isVar, splitExist, exists, Flex(..), isNamedCVar, elemVar)
+import Types hiding (tyBool, tyAll)-- (MonoTypeV(..), tyBool, tyAll, typeOf)
 
 import Control.Monad (msum, mplus, replicateM)
 import Data.List (partition)
+import Data.Maybe (catMaybes)
 
 import Infer.Class
+import Pretty
+
+tyBool = Rho_pi Pi_o
+tyAll  = Rho_i
 
 -- utils
 
-splitAnd (And e1 e2) = splitAnd e1 ++ splitAnd e2
+splitAnd (CAnd _ e1 e2) = splitAnd e1 ++ splitAnd e2
 splitAnd e = [e]
 
 foldAnd [] = CTrue
-foldAnd es = foldr1 And es
-foldOr  es = foldr1 Or es
+foldAnd es = foldr1 (CAnd (Rho_pi Pi_o)) es
+foldOr  es = foldr1 (COr  (Rho_pi Pi_o)) es
 
+isUnsatisf :: [Flex] -> Subst -> Bool
 isUnsatisf vs theta = not satisf
     where satisf = norenames && not (null onlyfree)
           onlyfree = filter (\(v,_) -> v `notElem` vs) theta
-          norenames = all (\(v,Var x) -> x `notElem` vs) $ filter (\(v,t) -> isVar t) onlyfree
+          norenames = all (\(v,CVar x) -> x `notElem` vs) $ filter (\(v,t) -> isVar t) onlyfree
 
-notExists vs [] = CFalse
-notExists vs es  = Not $ exists vs $ foldAnd es
+notExists vs [] = CFail
+notExists vs es  = CNot $ exists vs $ foldAnd es
 
-notEq vs e1 e2 = notExists vs [(Eq e1 e2)]
+notEq vs e1 e2 = notExists vs [(CEq e1 e2)]
 
-isDisEq (Not e) = isEq e'
+isDisEq (CNot e) = isEq e'
     where (_, e') = splitExist e
 isDisEq _ = False
 
-isEq (Eq _ _) = True
+isEq (CEq _ _) = True
 isEq _ = False
 
-isPrimDisEq (Not e) = isPrimEq e'
+isPrimDisEq (CNot e) = isPrimEq e'
     where (_, e') = splitExist e
-          isPrimEq (Eq e1 e2) = isVar e1 || isVar e2
+          isPrimEq (CEq e1 e2) = isVar e1 || isVar e2
           isPrimEq _ = False
 isPrimDisEq _ = False
 
-renameSubst = zipWith vv
-    where vv v1 v2 = (v1, Var v2)
-
+renameSubst s1 s2 = catMaybes $ zipWith vv s1 s2
+    where vv v1@(Flex _ _) v2 = Just (v1, CVar v2)
+          vv (AnonFlex _) _ = Nothing
 renameM vs e = do
-    vs' <- mapM (freshVarOfType.typeOf) vs
+    vs' <- mapM freshVarFrom vs
     let e' = subst (renameSubst vs vs') e
     return (e', vs')
 
-negreduce (Not e) = 
+negreduce (CNot e) =
     let (u, e') = splitExist e
         (t:ts)  = splitAnd e'
 
         negreduce' CTrue  es =
-            case es of 
-                [] -> return CFalse
+            case es of
+                [] -> return CFail
                 _  -> return $ notExists u es
 
-        negreduce' CFalse es = return CTrue
+        negreduce' CFail es = return CTrue
 
-        negreduce' e@(Exists _ _) es = do
+        negreduce' e@(CExists _ _ _) es = do
                 (e2, xs') <- renameM xs e'
                 return $ notExists (u ++ xs') (e2:es)
             where (xs, e') = splitExist e
 
-        negreduce' (Or e1 e2) es = return $ And (b e1) (b e2)
+        negreduce' (COr i e1 e2) es = return $ CAnd i (b e1) (b e2)
             where b e = notExists u (e:es)
 
         {- equality -}
-        negreduce' (Eq e1 e2) es = ifte (unify e1 e2) nonvalid valid
-            where diseq = notExists u [(Eq e1 e2)]
+        negreduce' (CEq e1 e2) es = ifte (unify e1 e2) nonvalid valid
+            where diseq = notExists u [(CEq e1 e2)]
                   valid = return CTrue
-                  
-                  nonvalid theta 
-                        | isPrimDisEq diseq && 
+
+                  nonvalid theta
+                        | isPrimDisEq diseq &&
                           isUnsatisf u theta      = unsatisf theta es
-                        | isPrimDisEq diseq && 
-                          null es                 = fail "prim disequality" 
-                        | isPrimDisEq diseq       = chan u (Eq e1 e2) es
+                        | isPrimDisEq diseq &&
+                          null es                 = fail "prim disequality"
+                        | isPrimDisEq diseq       = chan u (CEq e1 e2) es
                         | otherwise               = unfold theta es
 
                   unfold theta es = return $ notExists u (x:es)
                         where x = foldAnd $ map (eq theta) $ dom theta
-                              eq theta x = Eq (Var x) (subst theta (Var x))
+                              eq theta x = CEq (CVar x) (subst theta (CVar x))
 
                   unsatisf [] es = return $ notExists u es
-                  unsatisf theta@[(x, e)] es = 
+                  unsatisf theta@[(x, e)] es =
                         return $ notExists u $ map (subst theta') es
-                    where theta' | x `elem` u  = theta
-                                 | otherwise   = case e of 
-                                                     Var y -> bind y (Var x)
-                                                     _ -> fail "not unsatisf"
-                  chan vs eq@(Eq _ _) es = 
-                        return $ Or (Not (exists vs1 eq)) 
-                                 (exists vs1 (And eq (notExists vs2 es)))
+                    where theta' | x `elem` u = theta
+                                 | otherwise     = case e of
+                                                      CVar y -> bind y (CVar x)
+                                                      _ -> fail "not unsatisf"
+                  chan vs eq@(CEq _ _) es =
+                        return $ COr (Rho_pi Pi_o) (CNot (exists vs1 eq))
+                                 (exists vs1 (CAnd (Rho_pi Pi_o) eq (notExists vs2 es)))
                      where (vs1, vs2) = partition (\v -> v `elem` (fv eq)) vs
 
 
-        negreduce' e@(Not ee) es = ifte (negreduce e) reducable rest
+        negreduce' e@(CNot ee) es = ifte (negreduce e) reducable rest
             where reducable e' = return $ notExists u (e':es)
                   rest | isVarApp e    = handleHigher u e es
                        | isPrimDisEq e = handleDisequal
                        | otherwise     = error "WTF"
-                  handleDisequal | all (`notElem` u) (fv e) = return $ Or ee (notExists u es)
+                  handleDisequal | all (`notElem` u) (fv e) = return $ COr (Rho_pi Pi_o) ee (notExists u es)
                                  | all isPrimDisEq es  = return $ notExists u es
                                  | otherwise = fail "handleDisequal"
 
@@ -137,11 +143,11 @@ negreduce (Not e) =
             where f | not (null es) = negreduceSeq (head es) (tail es) (e:d)
                     | otherwise     = fail "not reducable"
 
-        handleHigher vs e es = 
-            let args' (Not e) = args' e' 
+        handleHigher vs e es =
+            let args' (CNot e) = args' e'
                     where (_, e') = splitExist e
                 args' e = args e
-                functor' (Not e) = functor' e'
+                functor' (CNot e) = functor' e'
                     where (_, e') = splitExist e
                 functor' e = functor e
 
@@ -149,29 +155,29 @@ negreduce (Not e) =
                     | not (null es)          = aux2
                     | otherwise              = aux3 e
 
-                isIn (Var v) vs = v `elem` vs
+                isIn (CVar v) vs = v `elem` vs
 
                 aux1 = do
                     (_, s) <- resolveFlex e
                     return $ notExists u $ map (subst s) es {- must include the new var R' to "u" -}
-                aux2 = 
+                aux2 =
                     let (vs1, vs2) = partition (\v -> v `elem` (fv e)) vs
-                    in return $ Or (Not (exists vs1 e))
-                                (And (exists vs1 (And e (notExists vs2 es)))
+                    in return $ COr (Rho_pi Pi_o) (CNot (exists vs1 e))
+                                (CAnd (Rho_pi Pi_o) (exists vs1 (CAnd (Rho_pi Pi_o) e (notExists vs2 es)))
                                      (notExists vs (e:es)))
 
-                aux3 (Not e) = 
-                    let (vs, e') = splitExist e 
-                    in if null vs 
-                       then fail "not reducable" 
-                       else do 
+                aux3 (CNot e) =
+                    let (vs, e') = splitExist e
+                    in if null vs
+                       then fail "not reducable"
+                       else do
                             (e'', vs') <- renameM vs e'
-                            return $ exists vs $ notExists u $ [Not e', notExists vs' [e''] ]
+                            return $ exists vs $ notExists u $ [CNot e', notExists vs' [e''] ]
                 aux3 _ = fail "not reducable"
 
             in aux
 
-        isVarApp (Not e) = isVarApp e'
+        isVarApp (CNot e) = isVarApp e'
             where (_, e') = splitExist e
         isVarApp e = isVar $ functor e
 
@@ -179,61 +185,62 @@ negreduce (Not e) =
 
 negreduce _ = fail "not a negative expression"
 
-reduce e = 
-    case functor e of 
-        Rigid _    -> resolveRigid e
-        Lambda _ _ -> lambdaReduce e
-        And _ _    -> expandApp e
-        Or  _ _    -> expandApp e
+reduce e =
+    case functor e of
+        CPred _ _ _    -> resolveRigid e
+        CLambda _ _ _  -> lambdaReduce e
+        CAnd _ _ _     -> expandApp e
+        COr  _ _ _     -> expandApp e
         _ -> fail "cannot reduce"
 
-expandApp (App (And e1 e2) e) = return $ And (App e1 e) (App e2 e)
-expandApp (App (Or  e1 e2) e) = return $ Or  (App e1 e) (App e2 e)
-expandApp (App e1 e)          = do
+expandApp (CApp t (CAnd tAnd e1 e2) e) = return $ CAnd t (CApp t e1 e) (CApp t e2 e)
+expandApp (CApp t (COr  tOr e1 e2) e)  = return $ COr  t (CApp t e1 e) (CApp t e2 e)
+expandApp (CApp t e1 e)          = do
     e1' <- (expandApp e1)
-    expandApp (App e1' e)
+    expandApp (CApp t e1' e)
 expandApp e                   = fail ("expandApp")
 
 returnSuccess e = return (e, success)
 
-derive CFalse = fail "false"
+derive :: (MonadLogic m, MonadFreeVarProvider m, MonadClauseProvider m) => CExpr -> m (CExpr,Subst)
+derive CFail = fail "false"
 
 derive e =
-    let deriveSingle (Eq e1 e2) = do
+    let deriveSingle (CEq e1 e2) = do
             theta <- unify e1 e2
             return (CTrue, theta)
 
-        deriveSingle (Or e1 e2) = mplus (b e1) (b e2) 
+        deriveSingle (COr _ e1 e2) = mplus (b e1) (b e2)
             where b = returnSuccess
-        
-        deriveSingle e@(Exists _ _) = do
+
+        deriveSingle e@(CExists _ _ _) = do
             (e'', _) <- renameM vs e'
             returnSuccess e''
            where (vs, e') = splitExist e
 
-        deriveSingle e@(Not _) | isVarApp' e = do 
+        deriveSingle e@(CNot _) | isVarApp' e = do
                             (e', s) <- resolveFlex e
                             return (CTrue, s)
                                | otherwise =  negreduce e >>= returnSuccess
 
-        deriveSingle e | isVarApp' e = do 
+        deriveSingle e | isVarApp' e = do
                             (e', s) <- resolveFlex e
                             return (CTrue, s)
                        | otherwise   = reduce e >>= returnSuccess
 
-        deriveSeq e es d = ifte (deriveSingle e) succ f 
-            where succ (CFalse, ss) = return (CFalse, ss)
+        deriveSeq e es d = ifte (deriveSingle e) succ f
+            where succ (CFail, ss) = return (CFail, ss)
                   succ (CTrue, ss)  = return (subst ss (foldAnd (d ++ es)),   ss)
                   succ (e', ss) = return (subst ss (foldAnd (e':(d ++ es))), ss)
                   f | null es   = fail "all disequalities"
                     | isPrimDisEq e = deriveSeq (head es) (tail es) (e:d)
                     | otherwise = fail ""
 
-        isVarApp' (Not e) = isVarApp'' e'
+        isVarApp' (CNot e) = isVarApp'' e'
             where (_, e') = splitExist e
         isVarApp' e = isVarApp'' e
 
-        isVarApp'' (Not e) = isVar (functor e)
+        isVarApp'' (CNot e) = isVar (functor e)
         isVarApp'' e = isVar (functor e)
 
         es = splitAnd e
@@ -241,136 +248,147 @@ derive e =
     in deriveSeq (head es) (tail es) []
 
 
-substFunc (App e a) b = (App (substFunc e b) a)
+substFunc (CApp t e a) b = (CApp t (substFunc e b) a)
 substFunc _ b = b
 
-resolveRigid g = 
-    let lam e (TyFun a b) = do
-            l <- lam e b
-            v <- freshVarOfType a
-            return (Lambda v l)
+resolveRigid g =
+    let lam e ty@(Rho_pi (Pi_fun as b)) = do
+            l <- lam e (Rho_pi b)
+            vs <- mapM freshVarOfType as
+            return (CLambda ty vs l)
         lam e ty = return e
-        body [] = lam CFalse (typeOf (functor g))
-        body bs = return $ foldl1 Or bs
-        clauses (Rigid r) = clausesOf r
+        body ty [] = lam CFail (typeOf (functor g))
+        body ty bs = return $ foldl1 (COr ty) bs
+        clauses (CPred ty sym ar) = clausesOf (sym,ar)
     in do
        es <- clauses (functor g)
-       e  <- body es
+       e  <- body (typeOf (functor g)) es -- FIXME
        return $ substFunc g e
 
+lambdaReduce :: (Monad m, MonadFreeVarProvider m) => CExpr -> m (CExpr)
 lambdaReduce = betaReduce
 
-alphaConvert (Lambda x e) = do
-    x' <- freshVarOfType (typeOf x)
+alphaConvert (CLambda ty xs e) = do
+    xs' <- mapM freshVarFrom xs
     e' <- alphaConvert e
-    return $ Lambda x' (subst (bind x (Var x')) e')
-alphaConvert (Exists x e) = do
-    x' <- freshVarOfType (typeOf x)
+    let bindings = zip xs xs'
+    let theta = map (\(v, y) -> (v, CVar y)) $ filter (\(x,y) -> isNamedCVar (CVar x)) bindings
+    return $ CLambda ty xs' (subst theta e')
+alphaConvert (CExists t x e) = do
+    x' <- freshVarFrom x
     e' <- alphaConvert e
-    return $ Exists x' (subst (bind x (Var x')) e')
+    let theta = case x of
+                   Flex _ v -> bind x (CVar x')
+                   AnonFlex _ -> []
+    return $ CExists t x' (subst theta e')
 alphaConvert e = return e
 
-betaReduce (App e a) = do
+betaReduce :: (Monad m, MonadFreeVarProvider m) => CExpr -> m (CExpr)
+betaReduce (CApp t e as) = do
     e' <- betaReduce e
     case e' of
-        Lambda x e'' ->
-           return $ subst (bind x a) e''
+        CLambda ty xs e'' ->
+           -- FIXME : also check that fv(e'') will remain free after substitution
+           let theta = filter (\(x,y) -> isNamedCVar (CVar x)) $ zip xs as
+           in return $ subst theta e''
         _ ->
-           return $ (App e' a)
+           return $ (CApp t e' as)
 betaReduce e = alphaConvert e
 
 
-resolveFlex (Not e) = resolveFlexNot' vs e'
+resolveFlex (CNot e) = resolveFlexNot' vs e'
     where (vs, e') = splitExist e
-          resolveFlexNot' vs (Not e) = resolveFlexPos vs e
+          resolveFlexNot' vs (CNot e) = resolveFlexPos vs e
           resolveFlexNot' vs e       = resolveFlexNeg vs e
 resolveFlex e = resolveFlexPos [] e
 
-resolveFlexNeg vs g =  
-    let neg vs (Lambda x e) = Lambda x (neg vs e)
-        neg vs e = Not (exists vs' e')
+resolveFlexNeg vs g =
+    let neg vs (CLambda t x e) = CLambda t x (neg vs e)
+        neg vs e = CNot (exists vs' e')
             where vs'  = map snd vs
-                  vs'' = map (\(x,y) -> (x, Var y)) vs
+                  vs'' = map (\(x,y) -> (x, CVar y)) vs
                   e'   = subst vs'' e
     in case functor g of
-           Var x -> 
+           CVar x ->
                singleInstance (typeOf x) >>- \fi -> do
                fi' <- instantiate fi g
-               r <- freshVarOfType (typeOf x)
-               vs' <- mapM (\x -> freshVarOfType (typeOf x) >>= \v -> return (x, v)) vs
+               r <- freshVarFrom x
+               vs' <- mapM (\x -> freshVarFrom x >>= \v -> return (x, v)) vs
                let b  = neg vs' fi'
-               let s  = bind x (And b (Var r))
+               let s  = bind x (CAnd (typeOf r) b (CVar r))
                let g' = subst s (substFunc g b)
                return (g', s)
 
 resolveFlexPos vs g =
-    let pos vs (Lambda x e) = Lambda x (pos vs e)
+    let pos vs (CLambda t x e) = CLambda t x (pos vs e)
         pos vs e = (exists  vs' e')
             where vs'  = map snd vs
-                  vs'' = map (\(x,y) -> (x, Var y)) vs
+                  vs'' = map (\(x,y) -> (x, CVar y)) vs
                   e'   = subst vs'' e
     in case functor g of
-           Var x -> 
+           CVar x ->
                singleInstance (typeOf x) >>- \fi -> do
                fi' <- instantiate fi g
-               r <- freshVarOfType (typeOf x)
-               vs' <- mapM (\x -> freshVarOfType (typeOf x) >>= \v -> return (x, v)) vs
+               r <- freshVarFrom x
+               vs' <- mapM (\x -> freshVarFrom x >>= \v -> return (x, v)) vs
                let b  = pos vs' fi'
-               let s  = bind x (Or b (Var r))
+               let s  = bind x (COr (typeOf r) b (CVar r))
                let g' = subst s (substFunc g b)
                return (g', s)
            _ -> fail "resolveF: cannot resolve a non flexible"
 
 
-instantiate f g = 
-    let l (Lambda x e) = x:(l e)
+instantiate f g =
+    let l (CLambda _ x e) = x:(l e)
         l _ = []
-        sl = zip (l f) (args g)
-        s (Eq (Var v) e) =
-            case lookup v sl of
-                Just e' -> (Eq (Var v) e')
-                Nothing -> (Eq (Var v) e)
-        s (And e1 e2) = And (s e1) (s e2)
-        s (Lambda x e) = Lambda x (s e)
+        s (CEq (CVar v) e) =
+            let sl = concatMap (\(xs',ys') -> zip xs' ys') $ zip (l f) (args g)
+            in  case lookup v sl of
+                  Just e' -> (CEq (CVar v) e')
+                  Nothing -> (CEq (CVar v) e)
+        s (CAnd ty e1 e2) = CAnd ty (s e1) (s e2)
+        s (CLambda ty x e) = CLambda ty x (s e)
         s e = e
     in return (s f)
 
 
-basicInstance ty@(TyFun _ _) =
+basicInstance ty@(Rho_pi (Pi_fun _ _)) =
     msum (map return [1..])          >>- \n ->
     replicateM n (singleInstance ty) >>- \le ->
-    return $ foldl1 Or le
+    return $ foldl1 (COr ty) le
 basicInstance x = singleInstance x
 
-singleInstance (TyFun ty_arg ty_res) = 
-    let argExpr (TyFun _ _) x       = msum (map return [1..])        >>- \n -> 
-                                      replicateM n (appInst (Var x)) >>- \le ->
-                                      return $ foldl1 And le
+singleInstance ty@(Rho_pi (Pi_fun ty_args ty_res)) =
+    let argExpr (Rho_pi (Pi_fun _ _)) x
+          = msum (map return [1..])        >>- \n ->
+            replicateM n (appInst (CVar x)) >>- \le ->
+            return $ foldl1 (CAnd tyBool) le
         argExpr ty x | ty == tyAll  = do { y <- singleInstance ty
-                                         ; return $ Eq (Var x) y
+                                         ; return $ CEq (CVar x) y
                                          }
                      | ty == tyBool = do { y <- singleInstance ty
-                                         ; return $ if y == CTrue then (Var x) else y
+                                         ; return $ if y == CTrue then (CVar x) else y
                                          }
                      | otherwise    = fail ""
-        comb e' (Lambda x e) = (Lambda x (comb e' e))
-        comb e' e            = And e' e
+        comb e' (CLambda t x e) = (CLambda t x (comb e' e))
+        comb e' e            = CAnd (typeOf e') e' e
         appInst e = do
              case typeOf e of
-                 TyFun t1 _ -> do
-                      a <- freshVarOfType (typeOf t1)
-                      appInst (App e (Var a))
+                 Rho_pi (Pi_fun tyargs tyres) -> do
+                      argVars <- mapM freshVarOfType tyargs
+                      let args = map CVar argVars
+                      appInst (CApp (Rho_pi tyres) e args)
                  _ -> return e
     in do
-       x   <- freshVarOfType ty_arg
-       xe  <- argExpr ty_arg x
-
-       if (ty_res == tyBool)
-        then return (Lambda x xe)
-        else singleInstance ty_res >>- \res -> 
-             return (Lambda x (comb xe res))
+       xs   <- mapM freshVarOfType ty_args
+       xes  <- mapM (\(ty,x) -> argExpr ty x) $ zip ty_args xs
+       let xe = foldl1 (CAnd tyBool) xes
+       if ((Rho_pi ty_res) == tyBool)
+        then return (CLambda ty xs xe)
+        else singleInstance (Rho_pi ty_res) >>- \res ->
+             return (CLambda ty xs (comb xe res))
 
 singleInstance ty
-    | ty == tyBool = return CFalse `mplus` return CTrue
-    | ty == tyAll  = freshVarOfType ty >>= \x -> return (Var x)
+    | ty == tyBool = return CFail `mplus` return CTrue
+    | ty == tyAll  = freshVarOfType ty >>= \x -> return (CVar x)
     | otherwise    = fail "cannot instantiate from type"
