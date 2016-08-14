@@ -197,7 +197,7 @@ desugarExpr ex@(SExpr_const a c False _ _) =
     if nameOf c == "[]" then CNil else CConst $ nameOf c
 -- Predicate constant, first case
 desugarExpr ex@(SExpr_const a c True _ _) =
-    transformPConst (typeOf a) (nameOf c) (fromJust $ arity ex)
+    transformPConst (typeOf a) ((nameOf c),(fromJust $ arity ex))
 
 -- Variable
 desugarExpr (SExpr_var a var _) =
@@ -209,7 +209,7 @@ desugarExpr (SExpr_number a num) =
 
 -- Predicate constant, second case
 desugarExpr ex@(SExpr_predCon a c _ _) =
-    transformPConst (typeOf a) (nameOf c) (fromJust $ arity ex)
+    transformPConst (typeOf a) ((nameOf c),(fromJust $ arity ex))
 
 
 -- Application, functional. '.' is taken into account here
@@ -236,7 +236,7 @@ desugarExpr (SExpr_op a c _ False args) =
 -- Operator, predicate
 desugarExpr (SExpr_op a c _ True args) =
     transformCApp (typeOf a)
-                  (CPred (typeOf c) (nameOf c) (length args))
+                  (CPred (typeOf c) ((nameOf c),(length args)))
                   (map desugarExpr args)
 
 -- Lambda abstraction
@@ -267,16 +267,16 @@ varToFlex (AnonVar a) = AnonFlex (typeOf a)
 --        describing their special meaning
 --    ";", "," and "=" are transformed to equivalent,
 --        non-built-in predicates, to be passed as parameters
-transformPConst tp nm ar = case lookup (nm,ar) corePreds of
+transformPConst tp nm = case lookup nm corePreds of
     Just f  -> f tp
-    Nothing -> CPred tp nm ar
+    Nothing -> CPred tp nm
 
 corePreds = [ ( ("true", 0) , \_  -> CTrue )
             , ( ("fail", 0) , \_  -> CFail )
             , ( ("!"   , 0) , \_  -> CCut  )
-            , ( (","   , 2) , \tp -> CPred tp "and" 2)
-            , ( (";"   , 2) , \tp -> CPred tp "or"  2)
-            , ( ("="   , 2) , \_  -> CPred eqTp "eq"  2)
+            , ( (","   , 2) , \tp -> CPred tp   ("and",2))
+            , ( (";"   , 2) , \tp -> CPred tp   ("or",2))
+            , ( ("="   , 2) , \_  -> CPred eqTp ("eq",2))
             ]
     where eqTp = Rho_pi $ Pi_fun [Rho_i, Rho_i] Pi_o
 
@@ -286,8 +286,8 @@ corePreds = [ ( ("true", 0) , \_  -> CTrue )
 --         describing its special meaning
 
 
-transformCApp tp func@(CPred _ nm ar) args =
-    case lookup (nm, ar) coreApps of
+transformCApp tp func@(CPred _ nm) args =
+    case lookup nm coreApps of
         Just f  -> f tp args
         Nothing -> CApp tp func args
 transformCApp tp func args =

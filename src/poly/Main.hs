@@ -3,7 +3,9 @@ module Main where
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans
 import           Control.Monad.Error.Class
-import           Data.Monoid               (mappend)
+import           Control.Monad.State.Strict
+import           Control.Monad.Reader
+import           Data.Monoid               (mappend, mempty)
 
 -- import ParserRoutine
 import Syntax
@@ -12,7 +14,8 @@ import Loc
 import Desugar
 import Prepr
 import TypeCheck
-import TcUtils
+import Error
+import TcUtils (initTcEnv, withEnvPreds, Tc, PredSig, PolySig, runTcT)
 import Types
 import Pretty (Pretty, text, (<+>), render, ppr, pprint)
 import Operator
@@ -39,21 +42,30 @@ import           System.IO
 
 import qualified Infer
 import           ComputedAnswer
-import Subst
+import           Subst
 import           Trace.Coroutine
+import           System.Console.Haskeline
+import           System.Console.Haskeline.MonadException ()
+
+instance MonadState s m => MonadState s (InputT m) where
+  state = lift . state
 
 main = do
   args <- getArgs
   runHopes $ do
     mapM_ loadFile args
     prog <- gets assertions
-    runEffect (console >\\ repl)
+    runInputT defaultSettings $ runEffect (readLine +>> repl)
     return ()
 
-console prompt = do
-  liftIO $ hSetBuffering stdout NoBuffering
-  liftIO $ putStr prompt
-  liftIO $ getLine
+readLine prompt = do
+  line <- lift $ getInputLine prompt
+  case line of
+    Just l -> do
+      p <- respond l
+      readLine p
+    Nothing ->
+      return ()
 
 --groupUntil :: Monad m => (a -> Bool) -> Producer' a m r -> Producer' [a] m r
 groupUntil predicate p = go id p
@@ -92,7 +104,7 @@ runHopes h = do
       dir <- getCurrentDirectory
       let env = HopesContext dir defaultModule 0
       evalStateT (runReaderT h env) st
-    where st = (HopesState { operators= [], types=[], assertions=[]})
+    where st = (HopesState { operators= mempty, types=mempty, assertions=mempty})
           defaultModule = "_top"
 
 data Command =
@@ -109,19 +121,19 @@ c =[ ("consult", 1)   -- interfers with the loadModule
 
 executeCommand :: Command -> HopesIO ()
 executeCommand (Assert prog tyEnv)  =
-  modify (\e -> e{ assertions = (assertions e) `mappend` prog
+  modify (\e -> e{ assertions = (assertions e) `mappend` (fromList prog)
                  , types = (types e) `mappend` tyEnv
                  })
 executeCommand (Command comm) =
   case c comm of
-    Just ("op", 3, [CNumber (Left prec),CConst assoc, CConst opname]) -> do
+    Just (("op", 3), [CNumber (Left prec),CConst assoc, CConst opname]) -> do
       let op = Operator { opName = opname, opAssoc = assoc }
       modify (\e -> e{operators = (fromIntegral prec :: Int, op):(operators e)})
-    Just ("$include", 1, [CConst file]) -> do
+    Just (("$include", 1), [CConst file]) -> do
       loadFile file
       return ()
     _ -> return ()
-  where c (CApp _ (CPred _ p ar) args) = Just (p, ar, args)
+  where c (CApp _ (CPred _ p) args) = Just (p, args)
         c _ = Nothing
 executeCommand (Query query)  = return ()
 
@@ -210,11 +222,11 @@ parseAndYield = do
             eof
             return Nothing
 
-repl :: Proxy String String y0 x0 HopesIO ()
+repl :: (Monad m, MonadIO m, MonadState HopesState m) => Proxy String String y0 x0 m ()
 repl = loop
   where loop = do
           line <- request "?- "
-          e <- lift $ runExceptT $ runEffect $ (goalDriver />/ printResultAndWait) (line :: String)
+          e <- lift $ runExceptT $ runEffect $ (queryDriver />/ printResultAndWait) (line :: String)
           case e of
             Left (msgs,errors) -> do
               liftIO $ pprint msgs
@@ -234,13 +246,13 @@ printResultAndWait result = do
   return (c == ';')
 
 -- goalDriver :: (Monad m, MonadError Messages m) =>  String -> Proxy X () Bool ComputedAnswer m ()
-goalDriver goalString = do
-  g <- lift $ compileGoal goalString
+queryDriver queryString = do
+  g <- lift $ processQuery queryString
   infer g
 
 --goalDriver :: String -> HopesIO ()
-compileGoal goalString = do
-    e <- parse goalString
+processQuery queryString = do
+    e <- parse queryString
     e' <- typeCheck e
     return (desugarGoal e')
     where parse input = exceptT $ do

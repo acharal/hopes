@@ -35,6 +35,7 @@ import Types
 import Loc (LocSpan)
 import Data.List (union)
 import Data.Maybe (catMaybes)
+import qualified Data.HashMap.Strict as HashMap
 
 type VarSym   = Symbol
 type ConstSym = Symbol
@@ -68,7 +69,7 @@ data CExpr   = CTrue
              | CEq          CExpr CExpr
              | CExists Info Flex CExpr
              | CVar         Flex
-             | CPred   Info Symbol Int -- Predicate constant
+             | CPred   Info PredSym
              | CConst       ConstSym
              | CNumber      (Either Integer Double)
              | CCons        CExpr CExpr
@@ -103,7 +104,7 @@ isNamedCVar _ = False
 fv :: CExpr -> [Flex]
 fv (CVar a@(Flex _ _)) = [a]
 fv (CVar _)     = []
-fv (CPred _ _ _)= []
+fv (CPred _ _)  = []
 fv (CTrue)      = []
 fv (CFail)      = []
 fv (CCut)       = []
@@ -145,11 +146,23 @@ data CPredDef   = CPredDef { cPredName   :: Symbol    -- defined pred.
                            }
 
 -- Knowledge base is a list of predicate definitions
+{-
 type KnowledgeBase = [CPredDef]
 
 clausesOf :: KnowledgeBase -> PredSym -> [CExpr]
 clausesOf base (p,n) =
   concatMap (\def -> cPredCls def) $ filter (\def -> cPredName def == p && cPredAr def == n) base
+-}
+type KnowledgeBase = HashMap.HashMap PredSym CPredDef
+-- fromDefs =
+clausesOf :: KnowledgeBase -> PredSym -> [CExpr]
+clausesOf base sym = case HashMap.lookup sym base of
+                        Just def -> cPredCls def
+                        Nothing  -> []
+
+fromList :: [CPredDef] -> KnowledgeBase
+fromList l = HashMap.fromList $ map (\d -> (k d, d)) l
+  where k d = (cPredName d, cPredAr d)
 
 -- goals are simply expressions
 type CGoal = CExpr
@@ -205,7 +218,7 @@ pprCPrec prec (CExists _ var expr) =
     char '∃' <> ppr var <> char '.' <+> pprCPrec precQ expr
 pprCPrec prec (CVar flex) =
     ppr flex
-pprCPrec prec (CPred _ nm ar) =
+pprCPrec prec (CPred _ (nm,ar)) =
     text (nm ++ "/") <> int ar
 pprCPrec prec (CConst nm) =
     text nm
@@ -255,7 +268,7 @@ instance HasType CExpr where
     typeOf (CEq       _ _) = Rho_pi Pi_o
     typeOf (CExists a _ _) = typeOf a
     typeOf (CVar f)        = typeOf f
-    typeOf (CPred   a _ _) = typeOf a
+    typeOf (CPred   a _)   = typeOf a
     typeOf (CLift a _ )    = typeOf a
     typeOf (CConst _ )     = Rho_i -- TODO: include func. type?
     typeOf _ = Rho_i
@@ -266,7 +279,7 @@ instance HasType CExpr where
     hasType tp (CApp    a ex1 ex2) = CApp    (hasType tp a) ex1 ex2
     hasType tp (CExists a ex1 ex2) = CExists (hasType tp a) ex1 ex2
     hasType tp (CVar f)            = CVar  (hasType tp f)
-    hasType tp (CPred a ex1 ex2  ) = CPred (hasType tp a) ex1 ex2
+    hasType tp (CPred a ex1)       = CPred (hasType tp a) ex1
     hasType _ ex = ex
 
 

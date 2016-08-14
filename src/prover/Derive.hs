@@ -187,7 +187,7 @@ negreduce _ = fail "not a negative expression"
 
 reduce e =
     case functor e of
-        CPred _ _ _    -> resolveRigid e
+        CPred _ _      -> resolveRigid e
         CLambda _ _ _  -> lambdaReduce e
         CAnd _ _ _     -> expandApp e
         COr  _ _ _     -> expandApp e
@@ -259,7 +259,7 @@ resolveRigid g =
         lam e ty = return e
         body ty [] = lam CFail (typeOf (functor g))
         body ty bs = return $ foldl1 (COr ty) bs
-        clauses (CPred ty sym ar) = clausesOf (sym,ar)
+        clauses (CPred ty sym) = clausesOf sym
     in do
        es <- clauses (functor g)
        e  <- body (typeOf (functor g)) es -- FIXME

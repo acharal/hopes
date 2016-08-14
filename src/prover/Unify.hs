@@ -34,8 +34,8 @@ unify (CApp _ e1 e2) (CApp _ e1' e2') = do
 
 -- unify (Tup es) (Tup es') = listUnify es es'
 
-unify (CPred _ p ap) (CPred _ q aq)
-    | p == q && ap == aq = return success
+unify (CPred _ p) (CPred _ q)
+    | p == q    = return success
     | otherwise = fail "Unification fail"
 
 unify (CCons e1 e2) (CCons e1' e2') = do

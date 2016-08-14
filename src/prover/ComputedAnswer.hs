@@ -29,7 +29,7 @@ instance Pretty ComputedAnswer where
 ppr_expr vs (CVar (Flex _ v)) | v `elem` vs = text "*" <> ppr v
                               | otherwise   = ppr v
 ppr_expr vs (CVar (AnonFlex _)) = ppr "_"
-ppr_expr vs (CPred _ x _) = ppr x
+ppr_expr vs (CPred _ (x,n)) = ppr x
 ppr_expr vs (CConst x) = ppr x
 ppr_expr vs (CNumber (Left n))  = ppr n
 ppr_expr vs (CNumber (Right n)) = ppr n
@@ -64,7 +64,9 @@ mkgrd e = BasicGround e
 
 mkbasic e@CTrue         = mkgrd e
 mkbasic e@CFail         = mkgrd e
-mkbasic e@(CPred _ _ _) = mkgrd e
+mkbasic e@(CPred _ _)   = mkgrd e
+mkbasic e@(CConst _)    = mkgrd e
+mkbasic e@(CNumber _)   = mkgrd e
 mkbasic e@(CVar _)      = mkgrd e
 mkbasic e@(CApp _ _ _)  = mkgrd e
 mkbasic e =
