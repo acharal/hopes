@@ -80,6 +80,10 @@ class Monad m => MonadWarn m w where
     addWarning w = fail $ show w
 -}
 
+exceptT m = (lift m) >>= \r ->
+  case r of
+    Left e -> throwError e
+    Right a -> return a
 
 isWarn msg = level msg == Warning
 isFail = not . isWarn

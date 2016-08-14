@@ -17,7 +17,17 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-module TypeCheck where
+module TypeCheck (
+    runTcT
+  , initTcEnv
+  , TcOutput(..)
+  , tcProg
+  , tcGoal
+  , withEnvPreds
+  , PolySig
+  , PredSig
+  , Tc
+  ) where
 
 import Basic
 import TcUtils
@@ -29,7 +39,7 @@ import Pretty
 
 import Data.Maybe(fromJust)
 import Data.List(group, sort)
-import qualified Debug.Trace as D
+
 {-
  - Type check a program
    - Create constraints

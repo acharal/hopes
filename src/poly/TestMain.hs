@@ -34,7 +34,6 @@ import Prepr (progToGroupDag)
 import Loc (bogusSpan, LocSpan)
 import Pretty (ppr, render)
 import Parser (parseHopes2)
-import ParserRoutine
 import Frontend (loadSource, printDef, printType)
 
 import Data.Maybe(fromJust)

@@ -54,6 +54,7 @@ import qualified Prelude (getContents, putStrLn, readFile)
 import qualified Data.ByteString as ByteString (getContents, putStrLn, readFile)
 
 import Text.Parsec.ByteString
+import Prepr
 
 -- type OperatorTable s u m a = [[Operator s u m a]]
 
@@ -462,8 +463,23 @@ goal = do { pos1 <- getPosition
 
 -- Sentence
 sentence :: Stream s m Char => ParserT s m (SSent LocSpan)
-sentence = choice [ commandOrGoal, clause ] -- <?> ("sentence")
+sentence = choice [ commandOrGoal, clause ] >>= (return . fixSentence) -- <?> ("sentence")
     where commandOrGoal = choice [try command, goal]
+
+query :: Stream s m Char => ParserT s m (SGoal LocSpan)
+query = do{ pos1 <- getPosition
+          ; ex <- try fullExpr <|> (allExpr True)
+          ; pos2 <- getPosition
+          ; symbol "."
+          ; let pos2' = incSourceColumn pos2 1
+          ; return $ SGoal (mkSpan pos1 pos2') (fixExpr True 0 ex)
+          }
+
+maybeOrEof p = do
+  L.whiteSpace L.hopes
+  try (mp <|> meof)
+  where mp = p >>= return . Just
+        meof = eof >> return Nothing
 
 -- | Directives must be only in goal clause (without head literal)
 -- Only recognizing op directives thus far. TODO add more
