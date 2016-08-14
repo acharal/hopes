@@ -45,7 +45,7 @@ runHopes h = do
 
 withFilename filename m =
   let dir = takeDirectory filename
-  in withReaderT (\ctx -> ctx{workingDirectory = dir, depth = depth ctx + 1}) m
+  in local (\ctx -> ctx{workingDirectory = dir, depth = depth ctx + 1}) m
 
 logMsg msg = do
   d <- asks depth

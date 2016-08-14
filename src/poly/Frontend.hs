@@ -7,59 +7,37 @@ module Frontend (
 import           HopesIO   (HopesIO, HopesContext(..), HopesState(..), Command(..), operators, types, gets, asks, modify, withFilename, logMsg)
 import           Error
 import           Loc       (LocSpan)
+import           Syntax    (SSent, isCommand)
 import           TypeCheck (runTcT, Tc, TcOutput(..), withEnvPreds, initTcEnv, tcProg, tcGoal)
 import           Parser    (runPT, ParseState(ParseSt), maybeOrEof, sentence, query, ParsecT, Stream, buildTable, updateState)
 import qualified Parser    (operators)
-import           Syntax
 import           Prepr     (sentencesToProg)
-import           Core
 import           Desugar   (desugarProg, desugarGoal)
 
 import           Pipes
 import           Pipes.Core
 import qualified Pipes.Prelude    as P
 
-import           Data.Monoid      (mappend, mempty)
 import qualified Data.ByteString  as ByteString
 import           Control.Monad    (when, join)
 import           System.FilePath  ((</>), normalise)
 import           System.Directory (canonicalizePath)
 
--- temporary imports (to be removed)
-import           Operator (Operator(..))
 
-processFile :: FilePath -> HopesIO (Either Messages ())
+
+processFile :: FilePath -> Proxy Command () () X HopesIO (Either Messages ())
 processFile filename = do
-  dir <- asks workingDirectory
+  dir <- lift $ asks workingDirectory
   absoluteFilename <- liftIO $ canonicalizePath (normalise $ dir </> filename)
-  withFilename absoluteFilename $ do
-      logMsg $ "Loading " ++ absoluteFilename
-      input <- liftIO $ ByteString.readFile absoluteFilename
-      r <- runPipeline absoluteFilename input pipeline
-      logMsg $ "Loaded " ++ absoluteFilename
-      return r
-
-executeCommand :: Command -> HopesIO ()
-executeCommand (Assert prog tyEnv)  =
-  modify (\e -> e{ assertions = (assertions e) `mappend` (fromList prog)
-                 , types = (types e) `mappend` tyEnv
-                 })
-executeCommand (Command comm) =
-  case c comm of
-    Just (("op", 3), [CNumber (Left prec),CConst assoc, CConst opname]) -> do
-      let op = Operator { opName = opname, opAssoc = assoc }
-      modify (\e -> e{operators = (fromIntegral prec :: Int, op):(operators e)})
-    Just (("$include", 1), [CConst file]) -> do
-      processFile file
-      return ()
-    _ -> return ()
-  where c (CApp _ (CPred _ p) args) = Just (p, args)
-        c _ = Nothing
-executeCommand (Query query)  = return ()
+  lift $ logMsg $ "Loading " ++ absoluteFilename
+  input <- liftIO $ ByteString.readFile absoluteFilename
+  r <- withFilename absoluteFilename $ runPipeline absoluteFilename input pipeline
+  lift $ logMsg $ "Loaded " ++ absoluteFilename
+  return r
 
 --runPipeline :: SourceName -> ByteString -> Effect (Loader HopesIO) () -> HopesIO (Either Messages ())
 runPipeline filename input p = do
-            op <- gets operators
+            op <- lift $ gets operators
             r <- runPT (buildTable >> runTcT initTcEnv (runEffect p)) (parseState op) filename input
             return (join r)
         where parseState op = ParseSt op [] [] []
@@ -116,8 +94,8 @@ pipeline = groupUntil isCommand parse >->
             toCommands >->
             P.mapM_ execCommand
       where execCommand x = do
-                lift $ lift $ executeCommand x
-                ops <- lift $ lift $ (gets operators)
+                lift $ lift $ request x
+                ops <- lift $ lift $ lift $  (gets operators)
                 lift $ updateState (\st -> st{ Parser.operators = ops})
                 lift $ buildTable
 

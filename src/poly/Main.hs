@@ -1,38 +1,34 @@
 module Main where
 
 import Frontend                             (processQuery, processFile)
-import HopesIO                              (runHopes, HopesContext(..), HopesState(..))
-import Core                                 (CExpr)
+import Backend                              (infer)
+import HopesIO                              (runHopes, HopesContext(..), HopesState(..), Command(..), HopesIO, modify, gets)
+import Core                                 (CExpr(..), fromList)
 import Error                                (runExceptT)
 import Pretty                               (pprint)
 
-import qualified Infer                      (infer, prove)
-import           ComputedAnswer             (ComputedAnswer)
-import           Subst                      (Subst)
-import           Trace.Coroutine            (runTraceT, TraceT)
-
 import           Pipes.Core
 
+import           Data.Monoid                (mappend, mempty)
 import           Control.Monad.Trans        (MonadIO, lift, liftIO)
-import           Control.Monad.State.Class  (MonadState(..), gets)
+import           Control.Monad.State.Class  (MonadState(..))
 import           System.Console.Haskeline   (runInputT, InputT, getInputLine, defaultSettings)
 import           System.IO                  (hSetBuffering, stdin, BufferMode(NoBuffering))
 import           System.Environment         (getArgs)
 
-c =[ ("consult", 1)   -- interfers with the loadModule
-   , ("type", 1)      -- interfers with the type environment
-   , ("is", 2)        -- arithmetics
-   , ("op", 3)        -- interfers with the operator table
-   , ("listing", 1)
-  ]
+-- temporary imports (to be removed)
+import           Operator (Operator(..))
+
 
 main = do
   args <- getArgs
   runHopes $ do
-    mapM_ processFile args
+    mapM_ includeFile args
     prog <- gets assertions
     runInputT defaultSettings $ runEffect (readLine +>> repl)
     return ()
+
+includeFile file = runEffect (executeCommand >\\ (processFile file))
 
 instance MonadState s m => MonadState s (InputT m) where
   state = lift . state
@@ -74,25 +70,21 @@ queryDriver queryString = do
   g <- lift $ processQuery queryString
   infer g
 
---infer :: (Monad m,
---          MonadState HopesState m) => CExpr -> Proxy x' x Bool ComputedAnswer m ()
-infer e = do
-    src <- lift $ gets assertions
-    go src (Infer.prove e)
-  where -- aux :: (Monad m, MonadIO m) => KnowledgeBase -> Infer.InferT (TraceT (CExpr,Subst) m) ComputedAnswer -> m (Maybe (ComputedAnswer, Infer.InferT (TraceT (CExpr,Subst) m) ComputedAnswer))
-        aux src i =  traceT (Infer.infer src i)
-        go src i = do
-            result <- lift $ aux src i
-            case result of
-              Nothing -> return False
-              Just (a, cont) -> do
-                continue <- respond a
-                if (continue)
-                then go src cont
-                else return True
-
-traceT :: (Monad m, MonadIO m) => TraceT (CExpr,Subst) m b -> m b
-traceT m = runTraceT m h
-  where h (e,s) cont = do
-          liftIO $ pprint e
-          cont
+-- must be moved probably in Backend
+--executeCommand :: Command -> HopesIO ()
+executeCommand (Assert prog tyEnv)  =
+  modify (\e -> e{ assertions = (assertions e) `mappend` (fromList prog)
+                 , types = (types e) `mappend` tyEnv
+                 })
+executeCommand (Command comm) =
+  case c comm of
+    Just (("op", 3), [CNumber (Left prec),CConst assoc, CConst opname]) -> do
+      let op = Operator { opName = opname, opAssoc = assoc }
+      modify (\e -> e{operators = (fromIntegral prec :: Int, op):(operators e)})
+    Just (("include", 1), [CConst file]) -> do
+      lift $ includeFile file
+      return ()
+    _ -> return ()
+  where c (CApp _ (CPred _ p) args) = Just (p, args)
+        c _ = Nothing
+executeCommand (Query query)  = return ()
