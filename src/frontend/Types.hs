@@ -1,4 +1,5 @@
---  Copyright (C) 2006-2008 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--  Copyright (C) 2013 Angelos Charalambidis <a.charalambidis@di.uoa.gr>
+--                     Emmanouil Koukoutos   <manoskouk@softlab.ntua.gr>
 --
 --  This program is free software; you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,70 +16,103 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+
 module Types where
 
-import Prelude hiding (concatMap, foldl, foldr)
-import Data.List (nub)
-import Data.IORef (IORef) -- that's ugly
-import Data.Foldable hiding (maximum)
-import Data.Monoid
+import Basic
+--import Pos(HasPosition(..))
+import Loc(HasLocation(..))
 
-data TyVar = Tv Int (IORef (Maybe Type))
+import Pretty
 
-instance Eq TyVar where
-    (Tv i _) == (Tv j _) = i==j
+-- Argument variables
+newtype Alpha = Alpha Symbol
+  deriving Eq
+-- Predicate variables
+newtype Phi = Phi Symbol
+  deriving Eq
 
-instance Ord TyVar where
-    compare (Tv i _) (Tv j _) = compare i j
+-- Non generalized predicate
+data PiType = Pi_o
+            | Pi_fun [RhoType] PiType
+            | Pi_var Phi
+    deriving Eq
+-- Argument
+data RhoType = Rho_i
+             | Rho_pi PiType
+             | Rho_var Alpha
+    deriving Eq
+-- Functional with a no. of arguments
+--data FunType = Fun Int
+-- Polymorphic
+data PolyType = Poly_gen [Alpha] [Phi] PiType
+--    deriving Eq -- FIXME: modulo alpha-conversion
 
-instance Show TyVar where
-    showsPrec p (Tv i _) = showsPrec p i
+tyBool = Poly_gen [] [] Pi_o
+tyFun t1 t2 = Poly_gen [] [] (Pi_fun [t1] t2)
 
--- if language supports polymorphism then Type can be MonoType or PolyType (with quantified tyvars)
-type Type     = TypeV TyVar
-type MonoType = MonoTypeV TyVar
+-- Pretty printing for types
 
-type TypeV    = MonoTypeV
+instance Show Alpha where
+    showsPrec p (Alpha alpha) = ( alpha ++ )
 
--- monotype parametrized by the tyvar
--- FIXME: TyTup must be removed and emulated only from TyFun
-data MonoTypeV a =
-      TyVar a
-    | TyGrd GrdType
-    | TyFun (MonoTypeV a) (MonoTypeV a)
---    | TyTup [MonoTypeV a]
-  deriving (Eq, Show)
+instance Show Phi where
+    showsPrec p (Phi phi) = ( phi ++ )
 
-data GrdType = TyAll | TyBool deriving (Eq,Show)
+{-
+instance Show FunType where
+    showsPrec p (Fun n) = ("(" ++). walk n . (") -> i" ++)
+        where walk 1 = ("i" ++)
+              walk n = ("i, " ++) . walk (n-1)
+-}
 
-liftGround = TyGrd
+instance Show RhoType where
+    showsPrec p Rho_i = ("i" ++)
+    showsPrec p (Rho_pi pi) = showsPrec p pi
+    showsPrec p (Rho_var alpha) = showsPrec p alpha
 
-instance Foldable MonoTypeV where
-    foldMap f (TyVar a)     = f a
-    foldMap f (TyGrd c)     = mempty
-    foldMap f (TyFun t1 t2) = foldMap f t1 `mappend` foldMap f t2
---    foldMap f (TyTup tl)    = mconcat (map (foldMap f) tl)
+instance Show PiType where
+    showsPrec p Pi_o = ("o" ++)
+    {- Add this? -}
+    showsPrec p (Pi_fun [rho] pi) | isSimple rho =
+        showsPrec p rho . (" -> " ++) . showsPrec p pi
+        where isSimple (Rho_pi (Pi_fun _ _)) = False
+              isSimple _ = True
+    {- end -}
+    showsPrec p (Pi_fun rhos pi) =
+        ("(" ++) . walk rhos . (") -> " ++) . showsPrec p pi
+        where walk [rho] = showsPrec p rho
+              walk (rho : rhos) = showsPrec p rho . (", " ++) . walk rhos
 
-instance Functor MonoTypeV where
-    fmap f (TyVar a)     = TyVar (f a)
-    fmap f (TyGrd c)     = TyGrd c
-    fmap f (TyFun t1 t2) = TyFun (fmap f t1) (fmap f t2)
---    fmap f (TyTup tl)    = TyTup (map (fmap f) tl)
+    showsPrec p (Pi_var phi) = showsPrec p phi
+
+instance Show PolyType where
+  showsPrec p (Poly_gen alphas phis pi) =
+      walk alphas . walk phis . showsPrec p pi
+      where walk [] = id
+            walk (x : xs) = ("∀" ++) . showsPrec p x . (". " ++) . walk xs
+
+-- Types
+instance Pretty RhoType where
+    ppr rho = text $ show rho
+
+instance Pretty PiType where
+    ppr pi = text $ show pi
+
+instance Pretty PolyType where
+    ppr poly = text $ show poly
 
 
-tyBool    = liftGround TyBool
-tyAll     = liftGround TyAll
-bogusType = error ("This type is a placeholder and must not be evaluated")
+-- Type transformations, from mono- to poly
+piToPoly = Poly_gen [] []
 
-tyargs :: TypeV a -> [TypeV a]
-tyargs (TyFun t t') = t : tyargs t'
-    --where   h (TyTup tl) = tl
-    --        h t = [t]
-tyargs _ = []
+polyToPi (Poly_gen [] [] pi) = pi
+polyToPi poly = error $ "Monomorphism violation: " ++ show poly
 
-tyvars ty = nub $ foldMap (:[]) ty
 
-data Typed a = T a Type deriving Show
+-- | Wrapper type for rho-typed objects
+
+data Typed a = T a RhoType deriving Show
 
 instance Eq a => Eq (Typed a) where
     (T a tya) == (T b tyb) = a == b
@@ -87,53 +121,39 @@ typed ty a = T a ty
 unTyp (T a _) = a
 
 class HasType a where
-    typeOf :: a -> Type
-    hasType :: Type -> a -> a
+    typeOf :: a -> RhoType
+    hasType :: RhoType -> a -> a
 
-instance HasType Type where
+
+instance HasType RhoType where
     typeOf = id
     hasType t _ = t
 
 instance HasType (Typed a) where
     typeOf (T _ ty) = ty
-    hasType ty (T a _) = (T a ty)
+    hasType ty (T a _) = T a ty
 
-instance HasType (TySig a) where
-    typeOf (_, t) = t
-    hasType ty (a, _) = (a, ty)
+--instance Functor Typed where
+--    fmap f (T a ty) = T (f a) ty
 
-instance Functor Typed where
-    fmap f (T a ty) = T (f a) ty
+
+-- Combine type with location
+instance HasLocation a => HasLocation (Typed a) where
+    locSpan (T a _) = locSpan a
 
 
 order :: HasType a => a -> Int
 order a =
     case typeOf a of
-        (TyFun t t') -> max (1 + (order t)) (order t')
-       --(TyTup tys)  -> maximum (map order tys)
-        (TyVar _)    -> error ("no fixed order when type is variable")
-        _            -> 0
+        (Rho_pi (Pi_fun rhos pi)) ->
+            max (1 + maximum(map order rhos)) (order $ Rho_pi pi)
 
-arity :: HasType a => a -> Int
-arity a =
-    let --count (TyTup tys) = length tys
-        count _ = 1
-    in  case typeOf a of
-            TyFun t t' -> count t + arity t'
-            _ -> 0
+        (Rho_pi Pi_o) -> 0
+        (Rho_i) -> 0
+        _  -> error ("no fixed order when type is variable")
 
--- | type signature
-type TySig a = (a, Type)
-
--- | type environment is a set of type signatures
-type TyEnv a = [ TySig a ]
-
--- emptyTyEnv :: TyEnv a
--- emptyTyEnv = []
-
-lookupTyEnv :: Eq a => a -> TyEnv a -> Maybe Type
-lookupTyEnv = lookup
-
-findTySig :: Eq a => a -> TyEnv a -> Maybe (TySig a)
-findTySig a = find (\(b, _) -> b == a)
-
+instance HasArity RhoType where
+    arity (Rho_pi (Pi_fun rhos pi)) = Just $ length rhos
+    arity (Rho_pi Pi_o)             = Just 0
+    arity (Rho_i)                   = Just 0
+    arity r = Nothing

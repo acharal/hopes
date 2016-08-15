@@ -9,7 +9,7 @@ import           Trace.Coroutine            (runTraceT, TraceT)
 import           Core                       (CExpr)
 
 import           Pipes.Core
-
+import           Control.Monad              (when)
 import           Control.Monad.Trans        (liftIO, lift, MonadIO)
 
 
@@ -26,18 +26,18 @@ c =[ ("consult", 1)   -- interfers with the loadModule
 --          MonadState HopesState m) => CExpr -> Proxy x' x Bool ComputedAnswer m ()
 infer e = do
     src <- lift $ gets assertions
-    go src (Infer.prove e)
+    go src (Infer.prove e) False
   where -- aux :: (Monad m, MonadIO m) => KnowledgeBase -> Infer.InferT (TraceT (CExpr,Subst) m) ComputedAnswer -> m (Maybe (ComputedAnswer, Infer.InferT (TraceT (CExpr,Subst) m) ComputedAnswer))
         aux src i =  traceT (Infer.infer src i)
-        go src i = do
+        go src i b = do
             result <- lift $ aux src i
             case result of
-              Nothing -> return False
+              Nothing -> return b
               Just (a, cont) -> do
                 continue <- respond a
-                if (continue)
-                then go src cont
-                else return True
+                case continue of
+                    True -> go src cont True
+                    False -> return True
 
 traceT :: (Monad m, MonadIO m) => TraceT (CExpr,Subst) m b -> m b
 traceT m = runTraceT m h

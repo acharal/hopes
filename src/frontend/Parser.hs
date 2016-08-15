@@ -43,7 +43,6 @@ import Text.Parsec.Pos
 import Data.Monoid (mappend)
 import Control.Monad (when)
 
-import Control.Monad.IO.Class
 import Loc
 import Pretty (ppr, vcat)
 import Control.Monad (when)

@@ -1,29 +1,87 @@
+module HopesIO (
+  module HopesIO,
+  gets, asks, modify,
+  Command(..)
+) where
 
-module HopesIO where
+import Operator (OperatorTable)
+import Core     (KnowledgeBase, CPredDef, CExpr(..), ConstSym)
+import TypeCheck (PolySig, PredSig) -- change to Types(PolySig, PredSig)
 
--- import Types
---import CoreLang
---import Language.Hopl
---import Language.Hopl.Syntax (HpSymbol)
+import Control.Monad     (when)
+import Control.Monad.Reader
+import Control.Monad.State.Strict
+import Data.Monoid      (mappend, mempty)
+import System.Directory (getCurrentDirectory)
+import System.FilePath  (takeDirectory)
 
-import Control.Monad.State.Strict (StateT, evalStateT)
+import Pipes (ListT)
 
-import Data.Monoid
+data HopesState = HopesState
+  { operators  :: OperatorTable
+  , types      :: [PolySig PredSig]
+  , assertions :: KnowledgeBase
+  }
 
-data (Monoid e, Monoid a) => HopeEnv e a = 
-    HEnv {  
-        currentEnv :: e,
-        p          :: a,
---        kb         :: KnowledgeBase (Typed HpSymbol),
-        debugFlag  :: Bool
-    }
+data HopesContext = HopesContext
+  { workingDirectory :: FilePath
+  , moduleName :: String
+  , depth :: Int
+  }
 
--- type HopesIO = StateT HopeEnv IO
+data Command =
+    Assert  [CPredDef] [PolySig PredSig]
+  | Query   CExpr
+  | Command CExpr
 
--- we like for HopesIO to be MonadIO and MonadState HopeEnv
+type HopesIO = ReaderT (HopesContext) (StateT (HopesState) IO)
 
-runDriverM m = evalStateT m tabulaRasa
-    where tabulaRasa = HEnv { currentEnv = mempty
-                            , p  = mempty
-                            , debugFlag = False
-                            }
+
+runHopes h = do
+      dir <- getCurrentDirectory
+      let env = HopesContext dir defaultModule 0
+      evalStateT (runReaderT h env) st
+    where st = (HopesState { operators= mempty, types=mempty, assertions=mempty})
+          defaultModule = "_top"
+
+withFilename filename m =
+  let dir = takeDirectory filename
+  in local (\ctx -> ctx{workingDirectory = dir, depth = depth ctx + 1}) m
+
+logMsg msg = do
+  d <- asks depth
+  liftIO $ putStr "%"
+  liftIO $ putStr $ concat $ take d $ repeat "  "
+  liftIO $ putStrLn $ msg
+
+
+--type Builtin = ReaderT [CExpr] (ListT HopesIO)
+type Builtin = ReaderT [CExpr] HopesIO
+
+runBuiltin m args = runReaderT m args
+
+liftHopesIO :: HopesIO a -> Builtin a
+liftHopesIO = lift
+
+getArgAsSymbol :: Int -> Builtin ConstSym
+getArgAsSymbol i = do
+  args <- ask
+  when (i >= (length args)) $
+    fail $ "Not enough arguments. Requested argument " ++ (show i)
+
+  case args !! i of
+     CConst c -> return c
+     _ -> fail "Not of proper type"
+
+
+getArgAsInt :: Int -> Builtin Int
+getArgAsInt i = do
+  args <- ask
+  when (i >= (length args)) $
+    fail $ "Not enough arguments. Requested argument " ++ (show i)
+
+  case args !! i of
+      CNumber (Left c) -> return $ fromIntegral c
+      _ -> fail "Not of proper type"
+
+getArgAsString = getArgAsSymbol

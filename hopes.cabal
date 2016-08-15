@@ -34,24 +34,18 @@ Flag dc-impl
   Description:    Choose the alternative implementation of prover using delimited continuations
   Default: False
 
-Flag poly
-  Description:    Choose the polyHopes frontend
-  Default: False
-
 Executable      hopes
-  if flag(poly)
-    Main-Is: TestMain.hs
-  else
-    Main-Is: Main.hs
+  Main-Is: Main.hs
 
-  Build-Depends:  mtl >= 2.2.1, haskeline, monad-coroutine
   if flag(split-base)
     Build-Depends: base >= 3.0 && < 5, array, pretty
   else
     Build-Depends: haskell98, base < 3.0
 
-  if flag(poly)
-    Build-Depends: parsec >= 3.0, containers >= 0.5, bytestring
+  Build-Depends: parsec >= 3.0, containers >= 0.5, unordered-containers, bytestring,
+                 mtl >= 2.2.1, haskeline, 
+                 pipes, monad-coroutine,
+                 filepath, directory
 
   if flag(dc-impl)
     Build-Depends: CC-delcont-cxe
@@ -60,17 +54,10 @@ Executable      hopes
   if os(windows)
     CPP-Options: -DBUILD_WINDOWS
 
-  if flag(poly)
-    Hs-Source-Dirs: src/poly
-                    src/basic
-  else
-    Hs-Source-Dirs: src/frontend
-                    src/basic
-                    src/prover
-                    src/interpreter
-
-  if !flag(poly)
-    Other-Modules: Parser
+  Hs-Source-Dirs: src/frontend
+                  src/basic
+                  src/backend
+                  src/interpreter
 
   Extensions:     RankNTypes
                   MultiParamTypeClasses
@@ -82,7 +69,5 @@ Executable      hopes
                   CPP
                   UndecidableInstances
                   NoMonomorphismRestriction
-
- if flag(poly)
-   Extensions: StandaloneDeriving
-               DeriveFunctor
+                  StandaloneDeriving
+                  DeriveFunctor
