@@ -22,7 +22,7 @@ import Unify (unify)
 import Subst (subst, bind, success, dom, Subst)
 
 import Core (CExpr(..), fv, functor, args, isVar, splitExist, exists, Flex(..), isNamedCVar, elemVar)
-import Types hiding (tyBool, tyAll)-- (MonoTypeV(..), tyBool, tyAll, typeOf)
+import Types hiding (tyBool)-- (MonoTypeV(..), tyBool, tyAll, typeOf)
 
 import Control.Monad (msum, mplus, replicateM)
 import Data.List (partition)
