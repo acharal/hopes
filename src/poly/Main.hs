@@ -2,7 +2,7 @@ module Main where
 
 import Frontend                             (processQuery, processFile)
 import Backend                              (infer)
-import HopesIO                              (runHopes, HopesContext(..), HopesState(..), Command(..), HopesIO, modify, gets)
+import HopesIO                              (runHopes, HopesContext(..), HopesState(..), Command(..), HopesIO, modify, gets, getArgAsInt, getArgAsString, liftHopesIO, runBuiltin)
 import Core                                 (CExpr(..), fromList)
 import Error                                (runExceptT)
 import Pretty                               (pprint)
@@ -17,7 +17,7 @@ import           System.IO                  (hSetBuffering, stdin, BufferMode(No
 import           System.Environment         (getArgs)
 
 -- temporary imports (to be removed)
-import           Operator (Operator(..))
+import           Operator                   (Operator(..))
 
 
 main = do
@@ -77,14 +77,32 @@ executeCommand (Assert prog tyEnv)  =
                  , types = (types e) `mappend` tyEnv
                  })
 executeCommand (Command comm) =
-  case c comm of
-    Just (("op", 3), [CNumber (Left prec),CConst assoc, CConst opname]) -> do
-      let op = Operator { opName = opname, opAssoc = assoc }
-      modify (\e -> e{operators = (fromIntegral prec :: Int, op):(operators e)})
-    Just (("include", 1), [CConst file]) -> do
-      lift $ includeFile file
-      return ()
+  case splitCommand comm of
+    Just (f, args) ->
+      case lookup f builtin of
+        Just fdef -> lift $ runBuiltin fdef args
+        Nothing -> return ()
     _ -> return ()
-  where c (CApp _ (CPred _ p) args) = Just (p, args)
-        c _ = Nothing
+  where splitCommand (CApp f (CPred _ p) args) = Just (p, args)
+        splitCommand (CPred _ p) = Just (p, [])
+        splitCommand _ = Nothing
+
 executeCommand (Query query)  = return ()
+
+builtin = [
+    (("op", 3),      commandOp)
+  , (("include", 1), commandInclude)
+  ]
+
+commandInclude = do
+  file <- getArgAsString 0
+  liftHopesIO $ do
+    includeFile file
+    return ()
+
+commandOp = do
+  prec   <- getArgAsInt 0
+  assoc  <- getArgAsString 1
+  opname <- getArgAsString 2
+  let op = Operator { opName = opname, opAssoc = assoc }
+  liftHopesIO $ modify (\e -> e{operators = (fromIntegral prec :: Int, op):(operators e)})

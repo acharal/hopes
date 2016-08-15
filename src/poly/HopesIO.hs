@@ -5,7 +5,7 @@ module HopesIO (
 ) where
 
 import Operator (OperatorTable)
-import Core     (KnowledgeBase, CPredDef, CExpr)
+import Core     (KnowledgeBase, CPredDef, CExpr(..), ConstSym)
 import TypeCheck (PolySig, PredSig) -- change to Types(PolySig, PredSig)
 
 
@@ -15,6 +15,7 @@ import Data.Monoid      (mappend, mempty)
 import System.Directory (getCurrentDirectory)
 import System.FilePath  (takeDirectory)
 
+import Pipes (ListT)
 
 data HopesState = HopesState
   { operators  :: OperatorTable
@@ -52,3 +53,33 @@ logMsg msg = do
   liftIO $ putStr "%"
   liftIO $ putStr $ concat $ take d $ repeat "  "
   liftIO $ putStrLn $ msg
+
+
+--type Builtin = ReaderT [CExpr] (ListT HopesIO)
+type Builtin = ReaderT [CExpr] HopesIO
+
+runBuiltin m args = runReaderT m args
+
+liftHopesIO :: HopesIO a -> Builtin a
+liftHopesIO = lift
+
+getArgAsSymbol :: Int -> Builtin ConstSym
+getArgAsSymbol i = do
+  args <- ask
+  if (i < (length args))
+  then case args !! i of
+           CConst c -> return c
+           _ -> fail "Not of proper type"
+  else fail $ "Not enough arguments. Requested argument " ++ (show i)
+
+
+getArgAsInt :: Int -> Builtin Int
+getArgAsInt i = do
+  args <- ask
+  if (i < (length args))
+  then case args !! i of
+          CNumber (Left c) -> return $ fromIntegral c
+          _ -> fail "Not of proper type"
+  else fail $ "Not enough arguments. Requested argument " ++ (show i)
+
+getArgAsString = getArgAsSymbol
