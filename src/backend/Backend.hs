@@ -30,15 +30,6 @@ import           Control.Monad              (when)
 import           Control.Monad.Trans        (liftIO, lift, MonadIO)
 
 
-
-c =[ ("consult", 1)   -- interfers with the loadModule
-   , ("type", 1)      -- interfers with the type environment
-   , ("is", 2)        -- arithmetics
-   , ("op", 3)        -- interfers with the operator table
-   , ("listing", 1)
-  ]
-
-
 --infer :: (Monad m,
 --          MonadState HopesState m) => CExpr -> Proxy x' x Bool ComputedAnswer m ()
 infer e = do
@@ -57,7 +48,4 @@ infer e = do
                     False -> return True
 
 traceT :: (Monad m, MonadIO m) => TraceT (CExpr,Subst) m b -> m b
-traceT m = runTraceT m h
-  where h (e,s) cont = do
-          liftIO $ pprint e
-          cont
+traceT m = runTraceT m (\_ -> id)

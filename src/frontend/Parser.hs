@@ -466,7 +466,8 @@ sentence = choice [ commandOrGoal, clause ] >>= (return . fixSentence) -- <?> ("
     where commandOrGoal = choice [try command, goal]
 
 query :: Stream s m Char => ParserT s m (SGoal LocSpan)
-query = do{ pos1 <- getPosition
+query = do{ buildTable
+          ; pos1 <- getPosition
           ; ex <- try fullExpr <|> (allExpr True)
           ; pos2 <- getPosition
           ; symbol "."
@@ -615,9 +616,9 @@ parseHopes2 input = do
               when (isCommand s) (opDirective1 s)
               return s
 
-buildTable :: Monad m => ParsecT
-                     ByteString
-                     (ParseState ByteString m) m ()
+buildTable ::  (Stream s m Char, Monad m) => ParsecT
+                     s
+                     (ParseState s m) m ()
 buildTable = do
     cached <- buildOpTable
     updateState (\st -> st{ cachedTable = cached

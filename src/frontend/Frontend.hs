@@ -20,7 +20,7 @@ module Frontend (
   , processQuery
   ) where
 
-import           HopesIO   (HopesIO, HopesContext(..), HopesState(..), Command(..), operators, types, gets, asks, modify, withFilename, logMsg)
+import           HopesIO   (HopesIO, liftHopes, HopesContext(..), HopesState(..), Command(..), operators, types, gets, asks, modify, withFilename, logMsg)
 import           Error
 import           Loc       (LocSpan)
 import           Syntax    (SSent, isCommand)
@@ -43,17 +43,18 @@ import           System.Directory (canonicalizePath)
 
 processFile :: FilePath -> Proxy Command () () X HopesIO (Either Messages ())
 processFile filename = do
-  dir <- lift $ asks workingDirectory
+  dir <- liftHopes $ asks workingDirectory
   absoluteFilename <- liftIO $ canonicalizePath (normalise $ dir </> filename)
   lift $ logMsg $ "Loading " ++ absoluteFilename
   input <- liftIO $ ByteString.readFile absoluteFilename
-  r <- withFilename absoluteFilename $ runPipeline absoluteFilename input pipeline
+  r <- withFilename absoluteFilename $
+    runPipeline absoluteFilename input pipeline
   lift $ logMsg $ "Loaded " ++ absoluteFilename
   return r
 
 --runPipeline :: SourceName -> ByteString -> Effect (Loader HopesIO) () -> HopesIO (Either Messages ())
 runPipeline filename input p = do
-            op <- lift $ gets operators
+            op <- liftHopes $ gets operators
             r <- runPT (buildTable >> runTcT initTcEnv (runEffect p)) (parseState op) filename input
             return (join r)
         where parseState op = ParseSt op [] [] []
@@ -111,7 +112,7 @@ pipeline = groupUntil isCommand parse >->
             P.mapM_ execCommand
       where execCommand x = do
                 lift $ lift $ request x
-                ops <- lift $ lift $ lift $  (gets operators)
+                ops <- liftHopes $ (gets operators)
                 lift $ updateState (\st -> st{ Parser.operators = ops})
                 lift $ buildTable
 

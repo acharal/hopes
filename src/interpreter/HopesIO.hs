@@ -18,21 +18,27 @@
 module HopesIO (
   module HopesIO,
   gets, asks, modify,
-  Command(..)
+  Command(..),
+  HopesIO(..)
 ) where
 
 import Operator (OperatorTable)
-import Core     (KnowledgeBase, CPredDef, CExpr(..), ConstSym)
+import Core     (KnowledgeBase, CPredDef, CExpr(..), ConstSym, PredSym)
 import TypeCheck (PolySig, PredSig) -- change to Types(PolySig, PredSig)
+import Subst
 
+import Control.Applicative
 import Control.Monad     (when)
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.Monoid      (mappend, mempty)
+import Data.Map
 import System.Directory (getCurrentDirectory)
 import System.FilePath  (takeDirectory)
 
-import Pipes (ListT)
+import Pipes (ListT(..), enumerate, next)
+
+type BuiltinTable = Map PredSym (Builtin Subst)
 
 data HopesState = HopesState
   { operators  :: OperatorTable
@@ -44,6 +50,7 @@ data HopesContext = HopesContext
   { workingDirectory :: FilePath
   , moduleName :: String
   , depth :: Int
+  , builtins   :: BuiltinTable
   }
 
 data Command =
@@ -51,13 +58,42 @@ data Command =
   | Query   CExpr
   | Command CExpr
 
-type HopesIO = ReaderT (HopesContext) (StateT (HopesState) IO)
+newtype HopesIO a = HopesIO { unHopes:: ReaderT (HopesContext) (StateT (HopesState) IO) a }
 
+instance Functor HopesIO where
+  fmap f m = HopesIO (fmap f (unHopes m))
+
+instance Applicative HopesIO where
+  pure = HopesIO . pure
+  x <*> y = HopesIO $ (unHopes x) <*> (unHopes y)
+
+instance Monad HopesIO where
+  return = HopesIO . return
+  f >>= g = HopesIO $ (unHopes f) >>= \a -> unHopes (g a)
+
+instance MonadIO HopesIO where
+  liftIO = HopesIO . liftIO
+
+class MonadHopes m where
+  liftHopes :: HopesIO a -> m a
+
+instance MonadHopes (HopesIO) where
+  liftHopes = id
+
+instance MonadReader HopesContext HopesIO where
+  ask = HopesIO ask
+  local f m = HopesIO $ local f (unHopes m)
+
+instance MonadState HopesState HopesIO where
+  state = HopesIO . state
+
+instance (MonadTrans t, Monad m, MonadHopes m) => MonadHopes (t m) where
+  liftHopes m = lift (liftHopes m)
 
 runHopes h = do
       dir <- getCurrentDirectory
-      let env = HopesContext dir defaultModule 0
-      evalStateT (runReaderT h env) st
+      let env = HopesContext dir defaultModule 0 mempty
+      evalStateT (runReaderT (unHopes h) env) st
     where st = (HopesState { operators= mempty, types=mempty, assertions=mempty})
           defaultModule = "_top"
 
@@ -65,39 +101,48 @@ withFilename filename m =
   let dir = takeDirectory filename
   in local (\ctx -> ctx{workingDirectory = dir, depth = depth ctx + 1}) m
 
+withBuiltins lst m =
+  local (\ctx -> ctx{builtins = fromList lst}) m
+
+lookupBuiltin sym = do
+  tbl <- asks builtins
+  return $ Data.Map.lookup sym tbl
+
 logMsg msg = do
-  d <- asks depth
+  d <- liftHopes $  asks depth
   liftIO $ putStr "%"
   liftIO $ putStr $ concat $ take d $ repeat "  "
   liftIO $ putStrLn $ msg
 
+-- instance (MonadHopes m, Monad m) => MonadHopes (ReaderT r m) where
+--  liftHopes m = lift (liftHopes m)
 
---type Builtin = ReaderT [CExpr] (ListT HopesIO)
-type Builtin = ReaderT [CExpr] HopesIO
+type Builtin = ListT (ReaderT [CExpr] (HopesIO))
+-- type Builtin = ReaderT [CExpr] HopesIO
 
-runBuiltin m args = runReaderT m args
+runBuiltin :: Builtin a -> [CExpr] -> HopesIO (Maybe (a, Builtin a))
+runBuiltin m args = do
+    r <- runReaderT (next (enumerate m)) args
+    return $ fmap (\(a,p) -> (a, Select p)) (toMaybe r)
+  where toMaybe (Left _) = Nothing
+        toMaybe (Right a) = Just a
 
-liftHopesIO :: HopesIO a -> Builtin a
-liftHopesIO = lift
-
-getArgAsSymbol :: Int -> Builtin ConstSym
-getArgAsSymbol i = do
+getArg :: Int -> Builtin CExpr
+getArg i = do
   args <- ask
   when (i >= (length args)) $
     fail $ "Not enough arguments. Requested argument " ++ (show i)
+  return (args !! i)
 
-  case args !! i of
+getArgAsSymbol i = do
+  a <- getArg i
+  case a of
      CConst c -> return c
      _ -> fail "Not of proper type"
 
-
-getArgAsInt :: Int -> Builtin Int
 getArgAsInt i = do
-  args <- ask
-  when (i >= (length args)) $
-    fail $ "Not enough arguments. Requested argument " ++ (show i)
-
-  case args !! i of
+  a <- getArg i
+  case a of
       CNumber (Left c) -> return $ fromIntegral c
       _ -> fail "Not of proper type"
 

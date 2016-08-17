@@ -27,7 +27,8 @@ import Types hiding (tyBool)-- (MonoTypeV(..), tyBool, tyAll, typeOf)
 import Control.Monad (msum, mplus, replicateM)
 import Data.List (partition)
 import Data.Maybe (catMaybes)
-
+import HopesIO (liftHopes, MonadHopes, lookupBuiltin, runBuiltin)
+import Control.Monad.Trans (liftIO)
 import Infer.Class
 import Pretty
 
@@ -202,7 +203,7 @@ expandApp e                   = fail ("expandApp")
 
 returnSuccess e = return (e, success)
 
-derive :: (MonadLogic m, MonadFreeVarProvider m, MonadClauseProvider m) => CExpr -> m (CExpr,Subst)
+derive :: (MonadLogic m, MonadFreeVarProvider m, MonadClauseProvider m, MonadHopes m) => CExpr -> m (CExpr,Subst)
 derive CFail = fail "false"
 
 derive e =
@@ -226,7 +227,21 @@ derive e =
         deriveSingle e | isVarApp' e = do
                             (e', s) <- resolveFlex e
                             return (CTrue, s)
-                       | otherwise   = reduce e >>= returnSuccess
+                       | otherwise   = do
+                              maybeBuiltin <- lookupBuiltin' (functor e)
+                              case maybeBuiltin of
+                                Just builtin -> do
+                                  s <- runBuiltin' builtin (concat (args e))
+                                  return (CTrue, s)
+                                Nothing -> reduce e >>= returnSuccess
+
+        lookupBuiltin' (CPred ty sym) = liftHopes $ lookupBuiltin sym
+        lookupBuiltin' _ = return Nothing
+        runBuiltin' m args = do
+          r <- liftHopes (runBuiltin m args)
+          case r of
+            Just (a, b) -> return a `mplus` (runBuiltin' b args)
+            Nothing -> fail "Builtin failed"
 
         deriveSeq e es d = ifte (deriveSingle e) succ f
             where succ (CFail, ss) = return (CFail, ss)
@@ -260,10 +275,13 @@ resolveRigid g =
         body ty [] = lam CFail (typeOf (functor g))
         body ty bs = return $ foldl1 (COr ty) bs
         clauses (CPred ty sym) = clausesOf sym
+        lookupBuiltin' (CPred ty sym) = liftHopes $ lookupBuiltin sym
+        lookupBuiltin' _ = return Nothing
     in do
-       es <- clauses (functor g)
-       e  <- body (typeOf (functor g)) es -- FIXME
-       return $ substFunc g e
+        es <- clauses (functor g)
+        e  <- body (typeOf (functor g)) es -- FIXME
+        return $ substFunc g e
+
 
 lambdaReduce :: (Monad m, MonadFreeVarProvider m) => CExpr -> m (CExpr)
 lambdaReduce = betaReduce

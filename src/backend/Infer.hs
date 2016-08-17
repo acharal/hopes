@@ -38,6 +38,7 @@ import Infer.Class
 import Trace.Class
 
 import Derive (derive)
+import HopesIO (liftHopes, MonadHopes)
 
 (>>-) :: Monad m => m a -> (a -> m b) -> m b
 (>>-) = (>>=)
@@ -62,7 +63,7 @@ infer p m =  observe $ evalStateT (runReaderT (unInferT (msplit m)) p) 0
 
 -- try prove a formula by refutation
 prove  :: (MonadTrace (CExpr, Subst) m,
-           Monad m) => CExpr -> InferT m (ComputedAnswer)
+           Monad m, MonadHopes m) => CExpr -> InferT m (ComputedAnswer)
 prove g =  do
     ans <- refute g
     answer (fv g) ans
@@ -73,11 +74,11 @@ answer fv (g,ans) = return $ Computed (restrict fv ans) (splitAnd g)
           splitAnd e = [e]
 
 -- do a refutation
-refute :: (Monad m,
+refute :: (Monad m, MonadHopes m,
            MonadTrace (CExpr, Subst) m) => CExpr -> InferT m (CExpr, Subst)
 refute =  refute''' --' 50
 
-refute''' :: (Monad m,
+refute''' :: (Monad m, MonadHopes m,
               MonadTrace (CExpr, Subst) m) => CExpr -> InferT m (CExpr, Subst)
 refute''' CTrue = return (CTrue, success)
 refute''' g = ifte (derive g) cont failed
