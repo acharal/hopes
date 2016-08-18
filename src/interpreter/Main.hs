@@ -19,7 +19,7 @@ module Main where
 
 import Frontend                             (processQuery, processFile)
 import Backend                              (infer)
-import HopesIO                              (asks,withBuiltins,MonadHopes,HopesIO(..), runHopes, HopesContext(..), HopesState(..), Command(..), HopesIO, modify, gets, getArgAsInt, getArgAsString, liftHopes, runBuiltin)
+import HopesIO                              (withFilename,asks,logMsg,withBuiltins,MonadHopes,HopesIO(..), runHopes, HopesContext(..), HopesState(..), Command(..), HopesIO, modify, gets, getArgAsInt, getArgAsString, liftHopes, runBuiltin)
 import Core                                 (CExpr(..), fromList)
 import Error                                (runExceptT)
 import Pretty                               (pprint)
@@ -37,6 +37,9 @@ import           System.Environment         (getArgs)
 -- temporary imports (to be removed)
 import           Operator                   (Operator(..))
 
+import           System.FilePath  ((</>), normalise)
+import           System.Directory (canonicalizePath)
+
 import Builtin
 
 main = do
@@ -47,7 +50,12 @@ main = do
     runInputT defaultSettings $ runEffect (readLine +>> repl)
     return ()
 
-includeFile file = runEffect (executeCommand >\\ (processFile file))
+includeFile file = do
+  dir <- asks workingDirectory
+  absoluteFilename <- liftIO $ canonicalizePath (normalise $ dir </> file)
+  logMsg $ "Loading " ++ absoluteFilename
+  withFilename absoluteFilename $ runEffect (executeCommand >\\ (processFile absoluteFilename))
+  logMsg $ "Loaded " ++ absoluteFilename
 
 instance MonadState s m => MonadState s (InputT m) where
   state = lift . state
@@ -102,9 +110,6 @@ executeCommand (Assert prog tyEnv)  =
                  , types = (types e) `mappend` tyEnv
                  })
 executeCommand (Command comm) = do
-  dir <-  asks workingDirectory
-  d <-  asks depth
-  liftIO $ putStrLn $ (show dir) ++ " " ++ (show d)
   b <- runEffect $ (infer />/ continueQuietly) comm
   case b of
     True  -> return ()
@@ -124,9 +129,8 @@ builtin = [
 
 commandInclude = do
   file <- getArgAsString 0
-  liftHopes $ do
-    includeFile file
-    return []
+  liftHopes $ includeFile file
+  return []
 
 commandOp = do
   prec   <- getArgAsInt 0

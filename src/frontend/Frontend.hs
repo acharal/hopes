@@ -20,7 +20,7 @@ module Frontend (
   , processQuery
   ) where
 
-import           HopesIO   (HopesIO, liftHopes, HopesContext(..), HopesState(..), Command(..), operators, types, gets, asks, modify, withFilename, logMsg)
+import           HopesIO   (HopesIO, liftHopes, HopesContext(..), HopesState(..), Command(..), operators, types, gets, asks, modify)
 import           Error
 import           Loc       (LocSpan)
 import           Syntax    (SSent, isCommand)
@@ -36,21 +36,13 @@ import qualified Pipes.Prelude    as P
 
 import qualified Data.ByteString  as ByteString
 import           Control.Monad    (when, join)
-import           System.FilePath  ((</>), normalise)
-import           System.Directory (canonicalizePath)
 
 
 
 processFile :: FilePath -> Proxy Command () () X HopesIO (Either Messages ())
-processFile filename = do
-  dir <- liftHopes $ asks workingDirectory
-  absoluteFilename <- liftIO $ canonicalizePath (normalise $ dir </> filename)
-  lift $ logMsg $ "Loading " ++ absoluteFilename
+processFile absoluteFilename = do
   input <- liftIO $ ByteString.readFile absoluteFilename
-  r <- withFilename absoluteFilename $
-    runPipeline absoluteFilename input pipeline
-  lift $ logMsg $ "Loaded " ++ absoluteFilename
-  return r
+  runPipeline absoluteFilename input pipeline
 
 --runPipeline :: SourceName -> ByteString -> Effect (Loader HopesIO) () -> HopesIO (Either Messages ())
 runPipeline filename input p = do
