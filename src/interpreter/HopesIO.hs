@@ -110,7 +110,7 @@ lookupBuiltin sym = do
 
 logMsg msg = do
   d <- liftHopes $  asks depth
-  liftIO $ putStr "%"
+  liftIO $ putStr "% "
   liftIO $ putStr $ concat $ take d $ repeat "  "
   liftIO $ putStrLn $ msg
 

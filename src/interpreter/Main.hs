@@ -22,11 +22,12 @@ import Backend                              (infer)
 import HopesIO                              (withFilename,asks,logMsg,withBuiltins,MonadHopes,HopesIO(..), runHopes, HopesContext(..), HopesState(..), Command(..), HopesIO, modify, gets, getArgAsInt, getArgAsString, liftHopes, runBuiltin)
 import Core                                 (CExpr(..), fromList)
 import Error                                (runExceptT)
-import Pretty                               (pprint)
+import Pretty                               (pprint, render, ppr)
 
 import           Pipes.Core
 
 import           Data.Monoid                (mappend, mempty)
+import           Data.Char                  (isSpace)
 import           Control.Monad.Trans        (MonadIO, lift, liftIO)
 import           Control.Monad.State.Class  (MonadState(..))
 import           System.Console.Haskeline   (runInputT, InputT, getInputLine, defaultSettings)
@@ -39,7 +40,7 @@ import           Operator                   (Operator(..))
 
 import           System.FilePath  ((</>), normalise)
 import           System.Directory (canonicalizePath)
-
+import           System.Exit      (exitSuccess)
 import Builtin
 
 main = do
@@ -48,6 +49,7 @@ main = do
     mapM_ includeFile args
     prog <- gets assertions
     runInputT defaultSettings $ runEffect (readLine +>> repl)
+    logMsg "Bye!"
     return ()
 
 includeFile file = do
@@ -65,12 +67,17 @@ instance MonadException HopesIO where
                         run' = RunIO (fmap HopesIO . run . unHopes)
                         in fmap unHopes $ f run'
 
-readLine prompt = do
+readLine prompt = let
+  nonEmpty ls = not (null (dropWhile isSpace ls))
+  in do
   line <- lift $ getInputLine prompt
   case line of
     Just l -> do
-      p <- respond l
-      readLine p
+      case (nonEmpty l) of
+        True -> do
+                  p <- respond l
+                  readLine p
+        False -> readLine prompt
     Nothing ->
       return ()
 
@@ -113,7 +120,7 @@ executeCommand (Command comm) = do
   b <- runEffect $ (infer />/ continueQuietly) comm
   case b of
     True  -> return ()
-    False -> fail "command failed"
+    False -> fail $ "command " ++ (render (ppr comm)) ++ " failed"
 
 executeCommand (Query query)  = do
   b <- runEffect $ (infer />/ continueQuietly) query
@@ -125,6 +132,7 @@ builtin = [
     (("op", 3),      commandOp)
   , (("include", 1), commandInclude)
   , (("is",2),       is)
+  , (("halt",0),     commandHalt)
   ]
 
 commandInclude = do
@@ -139,3 +147,7 @@ commandOp = do
   let op = Operator { opName = opname, opAssoc = assoc }
   liftHopes $ modify (\e -> e{operators = (fromIntegral prec :: Int, op):(operators e)})
   return []
+
+commandHalt = do
+  logMsg $ "Halting"
+  liftIO $ exitSuccess
