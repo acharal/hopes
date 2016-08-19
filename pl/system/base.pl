@@ -1,14 +1,19 @@
 
 
-eq(X,X).
-
-% X = Y :- eq(X, Y).
+:- op(1200,  fx, '?-').     % goal
+:- op(1100, xfy, ';').      % disjunction
+:- op(1050, xfy, '->').     % if-then
+%:- op(1000, xfy, ',').     % conjunction
+:- op( 700, xfx, '=').      % unification
+:- op( 700, xfx, '\\=').    % not unifiable
+:- op( 100, xfx, '@').
+:- op(  50, xfx, ':').      % module specification of a predicate Module:Pred
+:- op( 600,  fy, '\\+').    % negation as failure
 
 X = X.
 
-X \= Y :- not(X = Y).
 
-% fail :- !.
+X \\= Y :- not(X = Y).
 
 true.
 true(_).
@@ -21,4 +26,3 @@ not(G) :- G, !, fail.
 \+ G :- not(G).
 
 fail :- a = b.
-

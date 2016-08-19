@@ -7,10 +7,10 @@
 :- op(1200,  fx, '?-').     % goal
 :- op(1100, xfy, ';').      % disjunction
 :- op(1050, xfy, '->').     % if-then
-%:- op(1000, xfy, ',').      % conjunction
+%:- op(1000, xfy, ',').     % conjunction
 :- op( 700, xfx, '=').      % unification
 :- op( 700, xfx, '\\=').    % not unifiable
-:- op( 700, xfx, '==').     
+:- op( 700, xfx, '==').
 :- op( 700, xfx, '\\==').
 :- op( 700, xfx, '@<').
 :- op( 700, xfx, '@=<').
