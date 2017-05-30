@@ -167,9 +167,10 @@ negreduce (Not e) =
                       let renaming = (renameSubst vs1 vs1') `combine` (renameSubst vs2 vs2')
                       let e' = subst (renaming) e
                       let es' = map (subst renaming) es
-                      let diseq = map (\(v,e) -> Eq (Var v) e) renaming
+                      let eq = map (\(v,e) -> Eq (Var v) e) renaming
+                      let es'' = foldAnd eq `Or` foldAnd es'
                       return $ notExists vs1 [e] `Or`
-                                  (exists vs1 (e `And` (notExists vs2 es) `And` (notExists vs' (diseq ++ (e':es')))))
+                                  (exists vs1 (e `And` (notExists vs2 es) `And` (notExists vs' ([e', es'']))))
 
                 {-  Def 22.[10,11].(c)
                     Note: This is always of form (Not e). The other cases are handled by derive Def 20.6.
