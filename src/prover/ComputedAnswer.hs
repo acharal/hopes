@@ -22,7 +22,7 @@ instance (Pretty a, Eq a, Symbol a, Show a) => Pretty (ComputedAnswer a) where
         where pprsubst  xs  = vcat $ map (ppr_bind "=" []) xs
               ppr_bind  s vs (v,t) = sep [ ppr v <+> text s, ppr_expr vs t ]
               ppr_expr' ies = vcat $ map aux ies
-              aux (Not e) = 
+              aux (Not e) =
                 let (v', Eq t1 t2) = splitExist e
                 in ppr_bind "/=" v' (t1, t2)
 
@@ -30,7 +30,7 @@ ppr_expr vs (Var v) | v `elem` vs = text "*" <> ppr v
                     | otherwise   = ppr v
 ppr_expr vs (Rigid x) = ppr x
 ppr_expr vs e@(App _ _) = ppr (functor e) <> parens (sep $ punctuate comma (map (ppr_expr vs) (args e)))
-ppr_expr vs e@(Exists _ _) = 
+ppr_expr vs e@(Exists _ _) =
     let (vs', e') = splitExist e
     in ppr_expr (vs ++ vs') e'
 ppr_expr vs e = ppr_basic' e
@@ -39,17 +39,17 @@ ppr_expr vs e = ppr_basic' e
 data BasicTuple a = BasicTuple [a] [BasicExprRep a]
     deriving Show
 
-data BasicExprRep a = 
+data BasicExprRep a =
     BasicSet { pos  :: [BasicTuple a]   -- a set of positive tuples
              , neg  :: [BasicTuple a]   -- a set of negative tuples
              , vars :: [Expr a]         -- ground representation of atom
              }
-    | BasicGround (Expr a)                  -- 
+    | BasicGround (Expr a)                  --
     deriving Show
 
 instance Monoid (BasicExprRep a) where
     mempty  = BasicSet [] [] []
-    mappend (BasicSet p1 n1 g1) (BasicSet p2 n2 g2) = 
+    mappend (BasicSet p1 n1 g1) (BasicSet p2 n2 g2) =
         BasicSet (mappend p1 p2) (mappend n1 n2) (mappend g1 g2)
 
 mkpos e = BasicSet [e] [] []
@@ -85,7 +85,7 @@ mkbasic e =
                   es = map snd $ sortBy (o vs) $ q $ groupBy v $ map tupElem $ splitAnd e'
 --                  tupElem :: Expr a -> (a, Either (BasicExprRep a) (BasicTuple a))
                   tupElem (Eq (Var x) e) = (x, Left (mkgrd e))
-                  tupElem e@(App _ _) = 
+                  tupElem e@(App _ _) =
                     case functor e of
                         Var x -> (x, Right $ BasicTuple [] (map mkbasic (args e)))
                         _ -> error "tupElem"
@@ -138,4 +138,4 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
               lst e = ([], Just e)
 --    ppr (Forall v e) = parens (text "F" <> ppr v <+> ppr e)
     ppr (Cut)        = text "!"
-
+    ppr (Select e)   = text "S" <> parens (ppr e)
