@@ -7,14 +7,14 @@ import Data.List (union, (\\))
 import Types
 import Data.Monoid
 
-data Expr a = 
+data Expr a =
       CTrue
     | CFalse
     | And (Expr a) (Expr a)	-- Expr :/\: Expr
     | Or  (Expr a) (Expr a)	-- Expr :\/: Expr
     | Lambda a (Expr a)
     | App (Expr a) (Expr a)
-    | Eq  (Expr a) (Expr a)	-- Expr :=: Expr 
+    | Eq  (Expr a) (Expr a)	-- Expr :=: Expr
     | Not (Expr a)		    -- :~: Expr
     | Exists a (Expr a)
     | Var  a			-- variable
@@ -22,6 +22,7 @@ data Expr a =
     | Cut
     | ListCons (Expr a) (Expr a)
     | ListNil
+    | Select (Expr a)
    deriving (Eq, Show)
 
 
@@ -36,10 +37,11 @@ instance HasType a => HasType (Expr a) where
 --    typeOf (Forall _ _) = tyBool
     typeOf (Rigid p) = typeOf p
     typeOf (Var   v) = typeOf v
-    typeOf (App e e') = case typeOf e of 
+    typeOf (App e e') = case typeOf e of
                             TyFun _ ty_res -> ty_res
                             t -> error ("not expected type " ++ show t)
     typeOf (Lambda v e) = TyFun (typeOf v) (typeOf e)
+    typeOf (Select e) = typeOf e
     hasType ty e = error "hasType"
 
 data Program a = Prog { clauses :: [(a,Expr a)] }
@@ -71,6 +73,7 @@ fv (Lambda a e) = filter (/= a) $ fv e
 fv (Exists a e) = filter (/= a) $ fv e
 fv (ListCons e1 e2) = fv e1 `union` fv e2
 fv (ListNil) = []
+fv (Select e) = fv e
 -- fv (Forall a e) = filter (/= a) $ fv e
 
 
@@ -89,7 +92,7 @@ lambda vs e = foldr Lambda e vs
 isVar (Var _) = True
 isVar _ = False
 
-hoplToCoreExpr e@(H.App (H.App op e1) e2) 
+hoplToCoreExpr e@(H.App (H.App op e1) e2)
     | op == ceq  = Eq  c1 c2
     | op == cand = And c1 c2
     | op == cor  = Or  c2 c2
@@ -110,7 +113,7 @@ hoplToCoreExpr' c@(H.Rigid a)  | c == ctop = CTrue
                                | otherwise = Rigid a
 
 hoplToCoreClause c@(H.C a e) = (a, closed e)
-   where  closed' (Lambda x e) vs = Lambda x (closed' e (x:vs)) 
+   where  closed' (Lambda x e) vs = Lambda x (closed' e (x:vs))
           closed' e vs = foldr exists e (fv e \\ vs)
           closed e   = closed' (hoplToCoreExpr e) []
           exists v e = Exists v e
@@ -118,4 +121,3 @@ hoplToCoreClause c@(H.C a e) = (a, closed e)
 hopltoCoreGoal e = hoplToCoreExpr e
 
 kbtoProgram kb = Prog (map hoplToCoreClause (H.clauses kb))
-

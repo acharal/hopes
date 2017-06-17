@@ -55,6 +55,7 @@ instance Eq a => (Substitutable (Expr a) a) where
         subst theta e@(Var x) = maybe e id $ lookup x theta
         subst theta (Not e) = Not (subst theta e)
         subst theta (ListCons e1 e2) = ListCons (subst theta e1) (subst theta e2)
+        subst theta (Select e) = Select (subst theta e)
         subst theta e = e
 
 instance Eq a => (Substitutable (Subst a) a) where
@@ -64,7 +65,7 @@ instance Eq a => (Substitutable (Subst a) a) where
 restrict :: Eq a => [a] -> Subst a -> Subst a
 restrict ss xs = [ (v, e) | (v, e) <- xs, v `elem` ss ]
 
-combine theta zeta  = 
+combine theta zeta  =
     let ss    = map fst theta
         zeta' = [ (v, e) | (v, e) <- zeta, v `notElem` ss ]
     in  subst theta zeta ++ zeta'
@@ -76,4 +77,3 @@ vars theta  = dom theta `union` range theta
 
 
 isRenamingSubst s = all (\(_, x) -> isVar x) s
-

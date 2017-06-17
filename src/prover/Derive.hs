@@ -164,7 +164,8 @@ negreduce (Not e) =
                       vs1' <- mapM (freshVarOfType.typeOf) vs1
                       vs2' <- mapM (freshVarOfType.typeOf) vs2
                       let vs' = vs1' ++ vs2'
-                      let renaming = (renameSubst vs1 vs1') `combine` (renameSubst vs2 vs2')
+                      let (Var r) = functor e
+                      let renaming = (renameSubst vs1 vs1') `combine` (renameSubst vs2 vs2') `combine` [(r, (Select (functor e)))]
                       let e' = subst (renaming) e
                       let es' = map (subst renaming) es
                       let eq = map (\(v,e) -> Eq (Var v) e) renaming
@@ -200,7 +201,13 @@ reduce e =
         Lambda _ _ -> lambdaReduce e
         And _ _    -> expandApp e
         Or  _ _    -> expandApp e
+        Select f   -> return $ substFunc (select f) e
         _ -> fail "cannot reduce"
+
+-- select :: Expr a -> Expr a
+select (Or e1 e2) = e2
+select (And e1 e2) = e2
+select e = error $ "Ergys definition is partial and failed on expression " ++ (show e)
 
 expandApp (App (And e1 e2) e) = return $ And (App e1 e) (App e2 e)
 expandApp (App (Or  e1 e2) e) = return $ Or  (App e1 e) (App e2 e)
