@@ -4,7 +4,7 @@ cabal-version: 2.0
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1e1d88a4043bf13fd9e9604112a8cacf0d13d93f354c9c894040d4f7627e7420
+-- hash: 2979a074d8bbf4fcd94939ae1bbc85ca62b79fec654d7e41dc76af83c5009bf0
 
 name:           hopes
 version:        0.0.5
@@ -110,7 +110,6 @@ test-suite hopes-test
   build-depends:
       array
     , base >=3 && <4.11
-    , hopes
     , pretty
   if os(windows)
     cpp-options: -DBUILD_WINDOWS
