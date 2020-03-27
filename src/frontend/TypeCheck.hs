@@ -76,10 +76,10 @@ buildins' =
 
 tcProg src = do
     withSig src $ do
-    withTypeEnv (tyEnv src `mappend` buildinsigs) $ do
-        cls' <- mapM tcForm $ clauses src
-        ty_env  <- normEnv
-        return (src{ clauses = cls' }, ty_env)
+        withTypeEnv (tyEnv src `mappend` buildinsigs) $ do
+            cls' <- mapM tcForm $ clauses src
+            ty_env  <- normEnv
+            return (src{ clauses = cls' }, ty_env)
 
 -- tcForm :: LHpFormula a -> Tc (LHpFormula b)
 tcForm f@(L l (HpClause b xs ys)) =
