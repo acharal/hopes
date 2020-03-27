@@ -1,74 +1,119 @@
-Cabal-Version:  >= 1.6
-Build-Type:	Simple
-Name:           hopes
-Version:        0.0.5
-License:        GPL
-License-File:   LICENSE
-Author:         Angelos Charalambidis <a.charalambidis@di.uoa.gr>
-Maintainer:     Angelos Charalambidis <a.charalambidis@di.uoa.gr>
-Copyright:	2006-2011 Angelos Charalambidis
-Stability:      Experimental
-Synopsis:       Higher Order Prolog with Extensional Semantics
-Description:
-	Hopes is a prototype interpreter for a subset of Higher Order Logic
-	used as Programming Language.
-Category:       Compilers/Interpreters
-Tested-With:	GHC==6.8.2
-Extra-Source-Files:
-                pl/examples/*.pl
-                Makefile
-		README
-                AUTHORS
-                COPYING
-Bug-Reports:	https://github.com/acharal/hopes/issues
-Homepage:	https://github.com/acharal/hopes
+cabal-version: 2.0
 
-Source-Repository head
-  type:		git
-  location:	https://github.com/acharal/hopes.git
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 1e1d88a4043bf13fd9e9604112a8cacf0d13d93f354c9c894040d4f7627e7420
 
-Flag split-base
-  Description:    Choose the new, split-up base package.
+name:           hopes
+version:        0.0.5
+synopsis:       Higher Order Prolog with Extensional Semantics
+description:    Hopes is a prototype interpreter for a subset of Higher Order Logic used as Programming Language.
+category:       Compilers/Interpreters
+homepage:       https://github.com/acharal/hopes#readme
+bug-reports:    https://github.com/acharal/hopes/issues
+author:         Angelos Charalambidis
+maintainer:     a.charalambidis@di.uoa.gr
+copyright:      2006-2011 Angelos Charalambidis
+license:        GPL
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
 
-Flag dc-impl
-  Description:    Choose the alternative implementation of prover using delimited continuations
-  Default: False
+source-repository head
+  type: git
+  location: https://github.com/acharal/hopes
 
-Executable      hopes
-  Main-Is:	  Main.hs
-  Build-Depends:  mtl >= 2.2.1, haskeline, monad-coroutine
-  if flag(split-base)
-    Build-Depends: base >= 3.0 && < 5, array, pretty
-  else
-    Build-Depends: haskell98, base < 3.0
+flag dc-impl
+  description: Choose the alternative implementation of prover using delimited continuations
+  manual: True
+  default: False
 
-  if flag(dc-impl)
-    Build-Depends: CC-delcont-cxe
-    CPP-Options: -DDCIMPL
-
+executable hopes
+  main-is: Main.hs
+  other-modules:
+      Language.Hopl
+      ComputedAnswer
+      CoreLang
+      Debugger
+      Derive
+      Desugar
+      Driver
+      Error
+      HopesIO
+      Infer
+      Infer.Class
+      Lang
+      Language.Hopl.Pretty
+      Language.Hopl.Syntax
+      Language.Hopl.Syntax.Pretty
+      Lexer
+      Loc
+      Logic
+      Logic.Class
+      Logic.SFK
+      ParseUtils
+      Parser
+      Pretty
+      Restrict
+      Shell
+      Subst
+      Tc
+      Trace
+      Trace.Class
+      Trace.Coroutine
+      TypeCheck
+      Types
+      Unify
+      WellForm
+      Paths_hopes
+  autogen-modules:
+      Paths_hopes
+  hs-source-dirs:
+      src
+      src/basic
+      src/frontend
+      src/prover
+      src/interpreter
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -XCPP -XRankNTypes -XMultiParamTypeClasses -XFlexibleInstances -XFlexibleContexts -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies -XUndecidableInstances -XNoMonomorphismRestriction
+  build-tools:
+      happy
+  build-depends:
+      array
+    , base >=3 && <4.11
+    , haskeline
+    , monad-coroutine
+    , mtl >=2.2.1
+    , pretty
   if os(windows)
-    CPP-Options: -DBUILD_WINDOWS
+    cpp-options: -DBUILD_WINDOWS
+    build-depends:
+        Win32
+  if flag(dc-impl)
+    cpp-options: -DDCIMPL
+    build-depends:
+        CC-delcont-cxe
+  default-language: Haskell2010
 
-  Hs-Source-Dirs: src
-                  src/basic
-                  src/frontend
-                  src/prover
-                  src/interpreter
-  Other-Modules:  Lexer, Parser, ParseUtils, Language.Hopl.Syntax, Language.Hopl.Parser,
-                  Lang, Types,
-                  Tc, WellForm, TypeCheck, Restrict,
-                  Pretty, Error, Loc, Desugar,
-                  Language.Hopl, Logic, Logic.Class, Infer, Subst, 
-                  CoreLang,
-                  Shell, Driver
-  Extensions:     RankNTypes
-                  MultiParamTypeClasses
-                  FlexibleInstances
-                  FlexibleContexts
-                  TypeSynonymInstances
-                  FlexibleContexts
-                  FunctionalDependencies
-                  CPP
-                  UndecidableInstances
-                  NoMonomorphismRestriction
-
+test-suite hopes-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_hopes
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-tools:
+      happy
+  build-depends:
+      array
+    , base >=3 && <4.11
+    , hopes
+    , pretty
+  if os(windows)
+    cpp-options: -DBUILD_WINDOWS
+    build-depends:
+        Win32
+  default-language: Haskell2010
