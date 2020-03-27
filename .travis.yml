@@ -1,42 +1,40 @@
-language: haskell
-sudo: false
+# This is the simple Travis configuration, which is intended for use
+# on applications which do not require cross-platform and
+# multiple-GHC-version support. For more information and other
+# options, see:
+#
+# https://docs.haskellstack.org/en/stable/travis_ci/
+#
+# Copy these contents into the root directory of your Github project in a file
+# named .travis.yml
 
+# Choose a build environment
+dist: xenial
+
+# Do not choose a language; we provide our own build tools.
+language: generic
+
+# Caching so the next build will be fast too.
 cache:
   directories:
-    - $HOME/.cabal/
+  - $HOME/.stack
 
-matrix:
-  include:
-    - env: CABALVER=1.18 GHCVER=7.4.2 HAPPYVER=1.19.5 ALEXVER=3.1.7
-      compiler: ": #GHC 7.4.2"
-      addons: {apt: {packages: [cabal-install-1.18,ghc-7.4.2,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=1.18 GHCVER=7.6.3 HAPPYVER=1.19.5 ALEXVER=3.1.7
-      compiler: ": #GHC 7.6.3"
-      addons: {apt: {packages: [cabal-install-1.18,ghc-7.6.3,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=1.18 GHCVER=7.8.4 HAPPYVER=1.19.5 ALEXVER=3.1.7
-      compiler: ": #GHC 7.8.4"
-      addons: {apt: {packages: [cabal-install-1.18,ghc-7.8.4,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=1.22 GHCVER=7.10.3 HAPPYVER=1.19.5 ALEXVER=3.1.7
-      compiler: ": #GHC 7.10.3"
-      addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=1.24 GHCVER=8.0.1 HAPPYVER=1.19.5 ALEXVER=3.1.7
-      compiler: ": #GHC 8.0.1"
-      addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.1,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=1.24 GHCVER=head HAPPYVER=1.19.5 ALEXVER=3.1.7
-      compiler: ": #GHC head"
-      addons: {apt: {packages: [cabal-install-1.24,ghc-head,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-
-  allow_failures:
-   - env: CABALVER=1.24 GHCVER=head
-
+# Ensure necessary system libraries are present
+addons:
+  apt:
+    packages:
+      - libgmp-dev
 
 before_install:
-  - unset CC
-  - export PATH=~/.cabal/bin:/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:/opt/happy/$HAPPYVER/bin:/opt/alex/$ALEXVER/bin:$PATH
+# Download and unpack the stack executable
+- mkdir -p ~/.local/bin
+- export PATH=$HOME/.local/bin:$PATH
+- travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
 install:
-  - cabal --version
-  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
-  - travis_retry cabal update
-  - cabal install --only-dependencies --enable-tests
+# Build dependencies
+- stack --no-terminal --install-ghc test --only-dependencies
 
+script:
+# Build the package, its tests, and its docs and run the tests
+- stack --no-terminal test --haddock --no-haddock-deps
