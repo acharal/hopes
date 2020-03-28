@@ -34,6 +34,9 @@ config.log
 config.status
 configure
 
+.stack-work
+*.lock
+
 # -----------------------------------------------------------------------------
 # Ignore any overlapped darcs repos and back up files
 

@@ -1,0 +1,123 @@
+name:                hopes
+version:             0.0.5
+github:              "acharal/hopes"
+license:             GPL
+author:              "Angelos Charalambidis"
+maintainer:          "a.charalambidis@di.uoa.gr"
+copyright:           "2006-2011 Angelos Charalambidis"
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+synopsis:            Higher Order Prolog with Extensional Semantics
+category:            Compilers/Interpreters
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:
+  Hopes is a prototype interpreter for a subset of Higher Order Logic
+  used as Programming Language.
+
+dependencies:
+- base >= 3 && < 4.11
+- array
+- pretty
+
+build-tools:
+- happy:happy
+
+when:
+- condition: os(windows)
+  cpp-options: -DBUILD_WINDOWS
+  dependencies:
+  - Win32
+
+executables:
+  hopes:
+    main:                Main.hs
+    source-dirs:
+    - src/basic
+    - src/frontend
+    - src/backend
+    - src/interpreter
+    generated-other-modules:
+    - Paths_hopes
+    other-modules:
+      - Basic
+      - Error
+      - Lang
+      - Loc
+      - Pretty
+      - Core
+      - Desugar
+      - Frontend
+      - Lexer
+      - Operator
+      - Parser
+      - Prepr
+      - Syntax
+      - TcUtils
+      - TypeCheck
+      - Types
+      - Backend
+      - ComputedAnswer
+      - Derive
+      - Infer
+      - Infer.Class
+      - Logic
+      - Logic.Class
+      - Logic.SFK
+      - Trace.Class
+      - Trace.Coroutine
+      - Subst
+      - Unify
+      - Builtin
+      - HopesIO
+    when:
+    - condition: flag(dc-impl)
+      dependencies:
+      - CC-delcont-cxe
+      cpp-options: -DDCIMPL
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -XCPP
+    - -XRankNTypes
+    - -XMultiParamTypeClasses
+    - -XFlexibleInstances
+    - -XFlexibleContexts
+    - -XTypeSynonymInstances
+    - -XFlexibleContexts
+    - -XFunctionalDependencies
+    - -XUndecidableInstances
+    - -XNoMonomorphismRestriction
+    - -XStandaloneDeriving
+    - -XDeriveFunctor
+    dependencies:
+    - mtl >= 2.2.1
+    - haskeline
+    - monad-coroutine
+    - parsec >= 3.0
+    - containers >= 0.5
+    - unordered-containers
+    - bytestring
+    - pipes
+    - filepath
+    - directory
+tests:
+  hopes-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+
+flags:
+  dc-impl:
+    description: Choose the alternative implementation of prover using delimited continuations
+    default: false
+    manual: true

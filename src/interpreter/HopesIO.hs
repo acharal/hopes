@@ -32,7 +32,7 @@ import Control.Monad     (when)
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.Monoid      (mappend, mempty)
-import Data.Map
+import Data.Map hiding (take)
 import System.Directory (getCurrentDirectory)
 import System.FilePath  (takeDirectory)
 
