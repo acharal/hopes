@@ -1,0 +1,19 @@
+name: 'ci'
+on: [ 'push' ]
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      
+    name: ${{ matrix.os }}
+    runs-on: $${{ matrix.os }}
+    
+    steps:
+    - uses: 'actions/checkout@v1'
+    - uses: 'mstksg/setup-stack@v1'
+    - uses: 'actions/cache@v1'
+      with:
+        path: '~/.stack'
+        key: "${{ runner.os }}-stack"
+    - run: 'stack build'
