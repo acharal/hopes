@@ -36,6 +36,7 @@ import Types (unTyp, TySig, Type)
 import ParseUtils
 }
 
+%expect 5
 %tokentype { (Located Token) }
 %token
       ':-'      { (L _ TKgets)    }
@@ -53,7 +54,6 @@ import ParseUtils
       '->'      { (L _ TKarrow)   }
       '\\'      { (L _ TKbslash)  }
       '!'       { (L _ TKcut)     }
-      ';'       { (L _ TKsemi)    }
       ID        { (L _ (TKid _))  }
       '\''      { (L _ (TKsq))    }
       '='       { (L _ (TKeq))    }
@@ -83,10 +83,6 @@ stmts :: { [HpStmt HpSymbol] }
 clause :: { PLHpClause }
        : rule                   { $1 }
        | fact                   { $1 }
-
-clauses :: { [PLHpClause] }
-        : clauses clause        { $2:$1 }
-        |                       { [] }
 
 fact :: { PLHpClause }
      : atom '.'                 { located ($1,$>) $ mkQuantForm [$1] [] }

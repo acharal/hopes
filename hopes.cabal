@@ -4,7 +4,7 @@ cabal-version: 2.0
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d25ecab222e6cbe623533dd50d0b02f6d912421ff1da7645b458be4bf541862d
+-- hash: 3f1d785ad5551bb5fa1c9182de6ccdd10849db61390bc930b5bd40541239bccb
 
 name:           hopes
 version:        0.0.5
@@ -78,6 +78,8 @@ executable hopes
       src/prover
       src/interpreter
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-tools:
+      happy
   build-depends:
       array
     , base
@@ -103,6 +105,8 @@ test-suite hopes-test
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-tools:
+      happy
   build-depends:
       array
     , base

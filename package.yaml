@@ -9,6 +9,9 @@ copyright:           "2006-2011 Angelos Charalambidis"
 extra-source-files:
 - README.md
 
+build-tools:
+- happy
+
 # Metadata used when publishing your package
 synopsis:            Higher Order Prolog with Extensional Semantics
 category:            Compilers/Interpreters
