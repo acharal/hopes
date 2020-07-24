@@ -40,7 +40,7 @@ type FK ans = ans
 type SK ans a = a -> FK ans -> ans
 
 instance MonadTrans LogicT where
-    lift m = SFKT (\sk fk -> m >>= (\a -> sk a fk))
+    lift m = SFKT (\sk fk -> m >>= (`sk` fk))
 
 instance Monad m => Functor (LogicT m) where
     fmap = liftM
@@ -54,7 +54,7 @@ instance Monad m => Alternative (LogicT m) where
     (<|>) = mplus
 
 instance Monad m => Monad (LogicT m) where
-    return e = pure e
+    return = pure
     m >>= f  =
       SFKT (\sk fk ->
            unSFKT m (\a fk' -> unSFKT (f a) sk fk')
@@ -70,7 +70,7 @@ instance MonadIO m => MonadIO (LogicT m) where
 
 instance Monad m => MonadLogic (LogicT m) where
     msplit m = lift $ unSFKT m ssk (return Nothing)
-        where ssk a fk = return $ Just (a, (lift fk >>= reflect))
+        where ssk a fk = return $ Just (a, lift fk >>= reflect)
 
 
 -- observe . lift = id
@@ -79,9 +79,9 @@ observe m = unSFKT m (\a fk -> return a) (fail "no answer")
 runL n m = observe (bagofN n m)
 
 runLogicT :: (Monad m) => Maybe Int -> LogicT m a -> m [a]
-runLogicT  Nothing (SFKT m) = m (\a fk -> fk >>= (return . (a:))) (return [])
+runLogicT  Nothing (SFKT m) = m (\a fk -> (a:) <$> fk) (return [])
 runLogicT (Just n) (SFKT m) | n <=0 = return []
 runLogicT (Just 1) (SFKT m) = m (\a fk -> return [a]) (return [])
 runLogicT (Just n) m = unSFKT (msplit m) runM' (return [])
     where runM' Nothing _ = return []
-          runM' (Just (a,m')) _ = runLogicT (Just (n-1)) m' >>= (return . (a:))
+          runM' (Just (a,m')) _ = (a:) <$> runLogicT (Just (n-1)) m'

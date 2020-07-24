@@ -20,6 +20,7 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE LambdaCase #-}
 
 module Logic.Class where
 
@@ -34,7 +35,7 @@ class MonadPlus m => MonadLogic m where
         case r of
             Nothing -> sg2
             Just (a,b) ->
-                (return a) `mplus` (interleave sg2 b)
+                return a `mplus` interleave sg2 b
     (>>-) :: m a -> (a -> m b) -> m b
     sg >>- g = do
         r <- msplit sg
@@ -46,7 +47,7 @@ class MonadPlus m => MonadLogic m where
         r <- msplit t
         case r of
             Nothing -> el
-            Just (a,b) -> (th a) `mplus` (b >>= th)
+            Just (a,b) -> th a `mplus` (b >>= th)
     once  :: m a -> m a
     once m = do
         r <- msplit m
@@ -66,31 +67,31 @@ reflect r = case r of
 
 instance MonadLogic m => MonadLogic (StateT s m) where
     msplit (StateT m) =
-        StateT $ \s -> 
-            msplit (m s) >>= \r ->
-                case r of 
+        StateT $ \s ->
+            msplit (m s) >>=
+                \case
                     Nothing -> return (Nothing, s)
                     Just ((a, s'), m') ->
-                        return (Just (a, StateT $ \s -> m' ), s')
+                        return (Just (a, StateT $ const m' ), s')
 
 instance MonadLogic m => MonadLogic (ReaderT r m) where
-    msplit (ReaderT m) = 
-        ReaderT $ \env -> 
-            msplit (m env) >>= \r -> 
-                case r of
+    msplit (ReaderT m) =
+        ReaderT $ \env ->
+            msplit (m env) >>=
+                \case
                     Nothing -> return Nothing
-                    Just (a,m') -> return (Just (a, ReaderT $ \env' -> m'))
+                    Just (a,m') -> return (Just (a, ReaderT $ const m'))
 
-instance MonadCut m => MonadCut (StateT s m) where 
+instance MonadCut m => MonadCut (StateT s m) where
     call (StateT m) = StateT $ \s -> call (m s)
     cut = StateT $ \s -> cut >> return ((), s)
 
 instance MonadCut m => MonadCut (ReaderT r m) where
     call (ReaderT m) = ReaderT $ \env -> call (m env)
-    cut    = ReaderT $ \env -> cut
+    cut    = ReaderT $ const cut
 
 bagofN (Just n) _ | n <= 0  = return []
 bagofN n m = msplit m >>= bagofN'
     where bagofN' Nothing = return []
-          bagofN' (Just (a,m')) = bagofN (fmap (-1 +) n) m' >>= (return . (a:))
+          bagofN' (Just (a,m')) = (a:) <$> bagofN (fmap (-1 +) n) m'
 

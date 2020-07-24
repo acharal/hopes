@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Debugger (attachDebugger) where
 
@@ -34,7 +35,7 @@ import System.IO
 -- 2. number derivation and match "call" and "fail" with the same number
 -- 3. print if more branches where found after a derivation (and if possible how many)
 
-attachDebugger m = debug m debug_handler
+attachDebugger m = debug m debugHandler
 
 data DebugState i m a =
     DSt { count :: Int,
@@ -42,7 +43,7 @@ data DebugState i m a =
           prev_cont :: DebugT (DebugState i m a) i m a
         }
 
-data DebugRequest a = Debug Char
+newtype DebugRequest a = Debug Char
 
 data DebugCommand =
       DebugAbort
@@ -70,17 +71,17 @@ data DebugOptions = DebugOptions
     , maxDepth :: Maybe Int  -- Just i is the maximum depth of steps (derivations)
     }
 
-debug m h = runDebugT st m h
+debug = runDebugT st
     where st = DSt { count = 1
                    , retry_cont = fail ""
                    , prev_cont  = fail ""
                    }
 
 
-debug_handler (g, s) cont =
+debugHandler (g, s) cont =
     let prompt = do
             liftIO $ putStr " ? "
-            c <- liftIO $ getChar
+            c <- liftIO getChar
             when (c /= '\n') $
                 liftIO (putChar '\n')
             return $ lookupCommand c
@@ -98,7 +99,7 @@ debug_handler (g, s) cont =
         c <- getsState count
         modifyState (\s -> s{count = c + 1})
 
-        if (flag)
+        if flag
          then do
             liftIO $ putStr $ show $ nest 5 $ parens (int c) $$ nest 5 (ppr g)
             handleOptions cont
@@ -107,7 +108,7 @@ debug_handler (g, s) cont =
 
 goto cont = do
     prev <- getsState prev_cont
-    modifyState (\s -> s{ prev_cont = (goto cont), retry_cont = prev })
+    modifyState (\s -> s{ prev_cont = goto cont, retry_cont = prev })
     cont
 
 
@@ -117,9 +118,8 @@ handle cont DebugFailBranch = do
     goto cont
 
 handle cont DebugNext = goto cont
-handle cont DebugRetry = do
-    retry <- getsState retry_cont
-    retry
+handle cont DebugRetry =
+    join (getsState retry_cont)
 
 handle cont DebugOff = do
     modify (\s -> s{debugFlag = False})

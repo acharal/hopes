@@ -43,7 +43,7 @@ import HopesIO
 parseFromFile fname parser = do
     file     <- liftIO $ openFile fname ReadMode
     content  <- liftIO $ hGetContents file
-    parsed   <- runParser $ fromFile fname $ withInput content $ parser
+    parsed   <- runParser $ fromFile fname $ withInput content parser
     case parsed of
         Right (ast,s) -> return ast
         Left   msgs -> processMsgs msgs
@@ -64,7 +64,7 @@ loadSource file = do
         Nothing -> processMsgs msgs
 
 loadGoal inp env = do
-    parsed_res  <- liftIO $ runParser $ withInput inp $ parseGoal
+    parsed_res  <- liftIO $ runParser $ withInput inp parseGoal
     parsed_goal <- case parsed_res of
                         Right (g,_) -> return g
                         Left msgs   -> processMsgs msgs
@@ -80,7 +80,7 @@ loadGoal inp env = do
 consultFile f = do
     (src, env) <- loadSource f
     modify (\s -> s{ kb = KB src,
-                     p = (kbtoProgram (KB src)),
+                     p = kbtoProgram (KB src),
                      currentEnv = env})
     liftIO $ putStrLn ("% consulted " ++ show f ++ "")
 
@@ -100,11 +100,11 @@ consumeSolutions i = do
 --    case runIdentity (infer src i) of
     case result of
         Nothing ->
-            liftIO $ sayNo
+            liftIO sayNo
         Just (a, rest) -> do
-            liftIO $ sayYes
+            liftIO sayYes
             liftIO $ print $ ppr a
-            c <- liftIO $ getChar
+            c <- liftIO getChar
             when (c == ';') $ do
                 liftIO $ putChar '\n';
                 consumeSolutions rest

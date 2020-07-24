@@ -3,20 +3,20 @@
 [![GitHub license](https://img.shields.io/badge/license-GPLv2-blue.svg)](https://raw.githubusercontent.com/acharal/hopes/master/COPYING)
 [![Build Status](https://travis-ci.org/acharal/hopes.svg?branch=master)](https://travis-ci.org/acharal/hopes)
 
-HOPES is a prototype interpreter for a higher-order PROLOG-like language. 
+HOPES is a prototype interpreter for a higher-order PROLOG-like language.
 
 The syntax of the language extends that of PROLOG by supporting higher-order
 constructs (such as higher-order predicate variables, partial application and
 lambda terms). In particular, the syntax allows clauses (and queries) that
 contain uninstantiated predicate variables. The interpreter implements a
 higher-order top-down SLD-resolution proof procedure described in [CKRW13]
-together with the semantics of the language. 
+together with the semantics of the language.
 
 HOPES has all the advantages of a higher-order system but continues to keep  the
 flavor of classical PROLOG programming.
 
 
-## Introduction 
+## Introduction
 
 In HOPES one can express popular functional operators such as `map`:
 ```prolog
@@ -30,7 +30,7 @@ join(R,Q)(X) :- R(X), Q(X).
 union(R,Q)(X) :- R(X).
 union(R,Q)(X) :- Q(X).
 singleton(Y)(X) :- X = Y.
-diff(R,Q)(X) :- R(X), not(Q(X)). 
+diff(R,Q)(X) :- R(X), not(Q(X)).
 tc(G)(X,Y) :- G(X,Y).
 tc(G)(X,Y) :- G(X,Z), tc(G)(Z,Y).
 ```

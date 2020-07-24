@@ -1,7 +1,5 @@
-{-# LANGUAGE
-    FlexibleInstances
-   ,TypeSynonymInstances
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module ComputedAnswer (ComputedAnswer(..)) where
 
@@ -22,45 +20,45 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Subst a) where
         where ppr_bind (v,t) = sep [ ppr v <+> text "=", ppr t ]
 
 instance (Pretty a, Eq a, Symbol a, Show a) => Pretty (ComputedAnswer a) where
-    ppr (Computed s e) = vcat [ pprsubst s, ppr_expr' e ]
+    ppr (Computed s e) = vcat [ pprsubst s, pprExpr' e ]
         where pprsubst  xs  = vcat $ map (ppr_bind "=" []) xs
-              ppr_bind  s vs (v,t) = sep [ ppr v <+> text s, ppr_expr vs t ]
-              ppr_expr' ies = vcat $ map aux ies
-              aux (Not e) = 
+              ppr_bind  s vs (v,t) = sep [ ppr v <+> text s, pprExpr vs t ]
+              pprExpr' ies = vcat $ map aux ies
+              aux (Not e) =
                 let (v', Eq t1 t2) = splitExist e
                 in ppr_bind "/=" v' (t1, t2)
 
-ppr_expr vs (Var v) | v `elem` vs = text "*" <> ppr v
+pprExpr vs (Var v) | v `elem` vs = text "*" <> ppr v
                     | otherwise   = ppr v
-ppr_expr vs (Rigid x) = ppr x
-ppr_expr vs e@(App _ _) = ppr (functor e) <> parens (sep $ punctuate comma (map (ppr_expr vs) (args e)))
-ppr_expr vs e@(Exists _ _) = 
+pprExpr vs (Rigid x) = ppr x
+pprExpr vs e@(App _ _) = ppr (functor e) <> parens (sep $ punctuate comma (map (pprExpr vs) (args e)))
+pprExpr vs e@(Exists _ _) =
     let (vs', e') = splitExist e
-    in ppr_expr (vs ++ vs') e'
-ppr_expr vs e = ppr_basic' e
+    in pprExpr (vs ++ vs') e'
+pprExpr vs e = pprBasic' e
 
 
 data BasicTuple a = BasicTuple [a] [BasicExprRep a]
     deriving Show
 
-data BasicExprRep a = 
+data BasicExprRep a =
     BasicSet { pos  :: [BasicTuple a]   -- a set of positive tuples
              , neg  :: [BasicTuple a]   -- a set of negative tuples
              , vars :: [Expr a]         -- ground representation of atom
              }
-    | BasicGround (Expr a)                  -- 
+    | BasicGround (Expr a)                  --
     deriving Show
 
 instance Monoid (BasicExprRep a) where
     mempty  = BasicSet [] [] []
-    mappend (BasicSet p1 n1 g1) (BasicSet p2 n2 g2) = 
+    mappend (BasicSet p1 n1 g1) (BasicSet p2 n2 g2) =
         BasicSet (mappend p1 p2) (mappend n1 n2) (mappend g1 g2)
 
 mkpos e = BasicSet [e] [] []
 mkneg e = BasicSet [] [e] []
 mkvar e = BasicSet [] [] [e]
 
-mkgrd e = BasicGround e
+mkgrd = BasicGround
 
 mkbasic e@CTrue     = mkgrd e
 mkbasic e@CFalse    = mkgrd e
@@ -89,14 +87,14 @@ mkbasic e =
                   es = map snd $ sortBy (o vs) $ q $ groupBy v $ map tupElem $ splitAnd e'
 --                  tupElem :: Expr a -> (a, Either (BasicExprRep a) (BasicTuple a))
                   tupElem (Eq (Var x) e) = (x, Left (mkgrd e))
-                  tupElem e@(App _ _) = 
+                  tupElem e@(App _ _) =
                     case functor e of
                         Var x -> (x, Right $ BasicTuple [] (map mkbasic (args e)))
                         _ -> error "tupElem"
                   v (x, _) (y, _) = x == y
-                  q xs = map q'' $ map q' xs
+                  q = map (q'' . q')
                   q' [(x,y)] = (x, [y])
-                  q' ((x,y):xs) = (x, y:(snd (q' xs)))
+                  q' ((x,y):xs) = (x, y : snd (q' xs))
                   q'' (x, [Left y])  = (x, y)
                   q'' (x, [Right y]) = (x, mkpos y)
                   q'' (x, ys) = (x, mconcat $ map mkpos $ rights ys)
@@ -108,24 +106,24 @@ mkbasic e =
     in  mconcat $ map simple $ splitAndOr e
 
 instance (Symbol a, Eq a, Pretty a, Show a) => Pretty (BasicExprRep a) where
-    ppr e = ppr' [] e
-        where ppr' vs (BasicGround e)  = ppr_expr vs e
-              ppr' vs (BasicSet p n v) = (pprset vs p) <+> text "except" <+> (pprset vs n)
+    ppr = ppr' []
+        where ppr' vs (BasicGround e)  = pprExpr vs e
+              ppr' vs (BasicSet p n v) = pprset vs p <+> text "except" <+> pprset vs n
               pprset vs xs = curly $ sep $ punctuate comma $ map (pprtuple vs) xs
               pprtuple vs' (BasicTuple vs [x]) = ppr' (vs' ++ vs) x
               pprtuple vs' (BasicTuple vs xs)  = parens $ sep $ punctuate comma $ map (ppr' (vs' ++ vs)) xs
 
-ppr_basic' e = ppr (mkbasic e)
+pprBasic' e = ppr (mkbasic e)
 
 instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
-    ppr (CTrue)      = text "true"
-    ppr (CFalse)     = text "false"
+    ppr CTrue        = text "true"
+    ppr CFalse       = text "false"
     ppr (Rigid p)    = ppr p
     ppr (Var v)      = ppr v
     ppr e@(App _ _)  = ppr (functor e) <> parens (sep $ punctuate comma (map ppr (args e)))
     ppr (And e1 e2)  = sep $ punctuate comma [ppr e1, ppr e2]
     ppr (Or e1 e2)   = sep $ punctuate (text ";") [ppr e1, ppr e2]
-    ppr (Eq e1 e2)   = sep $ [ppr e1, text "=" , ppr e2]
+    ppr (Eq e1 e2)   = sep [ppr e1, text "=" , ppr e2]
     ppr (Not e1)     = text "not" <> parens (ppr e1)
     ppr e@(Lambda _ _) = parens (text "\\" <> sep (map ppr xs) <> text "^" <> ppr e')
         where (xs, e') = splitLambda e
@@ -137,9 +135,9 @@ instance (Pretty a, Symbol a, Show a) => Pretty (Expr a) where
         where ppr_list (es, Nothing) = brackets $ sep $ punctuate comma $ map ppr es
               ppr_list (es, Just e)  = brackets $ sep (punctuate comma $ map ppr es) <> text "|" <> ppr e
               lst (ListCons e1 ListNil) = ([e1], Nothing)
-              lst (ListCons e1 e2) = ((e1:es), tail)
+              lst (ListCons e1 e2) = (e1:es, tail)
                 where (es, tail) = lst e2
               lst e = ([], Just e)
 --    ppr (Forall v e) = parens (text "F" <> ppr v <+> ppr e)
-    ppr (Cut)        = text "!"
+    ppr Cut        = text "!"
 

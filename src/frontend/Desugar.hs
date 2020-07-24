@@ -15,10 +15,8 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleContexts
-   ,NoMonomorphismRestriction
-#-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | Transform Syntax to plain Hopl removing superfluous information (e.g. Location)
 module Desugar where
@@ -41,20 +39,19 @@ runDesugarT m = evalStateT (runReaderT m (DSEnv [] [])) 0
 
 -- desugarSrc :: Monad m => (HpSrc HpSymbol, TyEnv HpSymbol) -> DesugarT m (KB.KnowledgeBase (Typed HpSymbol))
 desugarSrc :: Monad m => (HpSrc HpSymbol, TyEnv HpSymbol) -> DesugarT m [Clause (Typed HpSymbol)]
-desugarSrc (p, ty_env) = local (\r -> r{ rigty = ty_env}) $ do
-        cl <- mapM (desugarClause.unLoc) (clauses p)
-        return cl
+desugarSrc (p, ty_env) = local (\r -> r{ rigty = ty_env}) $
+        mapM (desugarClause.unLoc) (clauses p)
 
-desugarGoal ((L _ (HpClause b [] ys)),ty_env) =
-    local (\r -> r{ rigty = ty_env, bindings = b:(bindings r)}) $ do
-    bd <- mapM desugarExp (map unLoc ys)
+desugarGoal (L _ (HpClause b [] ys),ty_env) =
+    local (\r -> r{ rigty = ty_env, bindings = b : bindings r}) $ do
+    bd <- mapM (desugarExp . unLoc) ys
     desugarTupApp cand bd
 
 desugarClause (HpClause b [] ys)  = fail "Cannot transform clause without a head"
 desugarClause (HpClause b [x] ys) =
-    local (\r -> r {bindings = b:(bindings r)}) $ do
+    local (\r -> r {bindings = b : bindings r}) $ do
     -- h <- desugarExp (unLoc x)
-    b <- mapM desugarExp (map unLoc ys)
+    b <- mapM (desugarExp . unLoc) ys
     (Rigid p) <- desugarExp (unLoc (funcOf x))
     b2 <- desugarTupApp cand b
     body <- bindAndUnify (map unLoc (argsOf x)) b2
@@ -63,26 +60,26 @@ desugarClause (HpClause b [x] ys) =
 
 bindAndUnify ls b =
     let bindAndUnify' body [] vs es      = return $ foldr Lambda body' (reverse vs)
-                where appAnd e e' = App (App cand e) e' 
+                where appAnd e = App (App cand e)
                       body' = if body == ctop && not(null es)
                               then foldr1 appAnd (reverse es)
                               else foldr appAnd body (reverse es)
-        bindAndUnify' body as@((Flex vv):xs) vs es | vv `elem` vs = bindAndUnify'' body as vs es
+        bindAndUnify' body as@(Flex vv : xs) vs es | vv `elem` vs = bindAndUnify'' body as vs es
                                                    | otherwise    = bindAndUnify' body xs (vv:vs) es
         bindAndUnify' body as vs es = bindAndUnify'' body as vs es
 
         bindAndUnify'' body (a:as) vs es =
              if order a == 0 then do
                  v' <- freshVar >>= \x -> return (typed (typeOf a) x)
-                 bindAndUnify' body as (v':vs) ((App (App ceq (Flex v')) a):es) 
-             else 
-                 fail ("Higher order term, not variable" ++ (show a) )
+                 bindAndUnify' body as (v':vs) (App (App ceq (Flex v')) a : es)
+             else
+                 fail ("Higher order term, not variable" ++ show a )
     in do
         as <- mapM desugarExp ls
         bindAndUnify' b as [] []
 
 desugarAppTup a ls =
-    return $ foldl (\e -> \b -> App e b) a ls
+    return $ foldl App a ls
 
 desugarTupApp _ [] =  return ctop
 desugarTupApp _ [x] = return x
@@ -92,7 +89,7 @@ desugarTupApp a (l:ls) = do
 
 desugarExp (HpApp e es') = do
     ce   <- desugarExp (unLoc e)
-    ces' <- mapM desugarExp (map unLoc es')
+    ces' <- mapM (desugarExp . unLoc) es'
     desugarAppTup ce ces'
 
 {-
@@ -114,7 +111,7 @@ desugarExp (HpSym a)  =
     te <- asks rigty
     le <- asks bindings
     case lookup a te of
-        Nothing -> do
+        Nothing ->
             case le of
                 []    -> error ("wtf? no definition for variable "++ show a)
                 (l:_) ->
@@ -127,10 +124,10 @@ desugarExp (HpSym a)  =
                 _ -> return $ Rigid (typed ty a)
 
 desugarExp (HpLam bs e) =
-    local (\r -> r {bindings = bs:(bindings r)}) $ do
+    local (\r -> r {bindings = bs : bindings r}) $ do
     e' <- desugarExp (unLoc e)
     let f (HpBind x ty) = typed ty x
-    return $ foldl (\a -> \b -> (Lambda (f b) a)) e' bs
+    return $ foldl (\a b -> Lambda (f b) a) e' bs
 
 desugarExp e = error "Expression must not occur in that phase"
 
@@ -138,5 +135,5 @@ desugarExp e = error "Expression must not occur in that phase"
 freshVar = do
     r <- get
     modify (+1)
-    return $ liftSym $ "_" ++ (show r)
+    return $ liftSym $ "_" ++ show r
 

@@ -1,8 +1,6 @@
-{-# LANGUAGE
-    FlexibleInstances
-   ,MultiParamTypeClasses
-   ,UndecidableInstances
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Trace.Coroutine where
 
@@ -24,7 +22,7 @@ type TraceT i m  = Coroutine (Yield i) m
 
 
 instance Monad m => MonadTrace a (Coroutine (Yield a) m) where
-    trace a = yield a
+    trace = yield
 
 instance (Functor s, MonadPlus m) => MonadPlus (Coroutine s m) where
     mzero = Coroutine mzero
@@ -36,7 +34,7 @@ instance (Functor s, Functor m, MonadPlus m) => Alternative (Coroutine s m) wher
 
 instance (Functor s, MonadLogic m) => MonadLogic (Coroutine s m) where
     msplit m = Coroutine (msplit (resume m) >>= apply)
-        where apply (Nothing)    = return $ Right Nothing
+        where apply Nothing             = return $ Right Nothing
               apply (Just (Right a, s)) = return $ Right $ Just (a, Coroutine s)
               apply (Just (Left a, s))  = return $ Left  $
                 fmap (\x -> x >>= \y -> return (Just (y, Coroutine s))) a
@@ -48,7 +46,7 @@ instance (Monad m, Functor s, MonadClauseProvider a m) => MonadClauseProvider a 
     clausesOf = lift . clausesOf
 
 instance (Functor ss, MonadState s m) => MonadState s (Coroutine ss m) where
-    get = lift $ get
+    get = lift get
     put = lift . put
 
 runTraceT m h = pogoStick (f h) m

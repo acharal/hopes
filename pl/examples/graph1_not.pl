@@ -1,5 +1,5 @@
 
-% not prelude 
+% not prelude
 
 eq(X, X).
 

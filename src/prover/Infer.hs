@@ -15,20 +15,17 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleContexts
-   ,FlexibleInstances
-   ,MultiParamTypeClasses
-   ,NoMonomorphismRestriction
-   ,UndecidableInstances
-#-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Proof procedure of Hopl
 module Infer (runInfer, infer, prove) where
 
 
-import Logic (runLogicT, observe)
-import Logic (LogicT)
+import Logic (LogicT, runLogicT, observe)
 import Types (hasType, HasType)
 import Subst (restrict, combine, success)
 import ComputedAnswer
@@ -113,7 +110,7 @@ instance Monad m => Applicative (InferT a m) where
 
 instance Monad m => Monad (InferT a m) where
     return = pure
-    m >>= f = InferT $ (unInferT m >>= \a -> unInferT (f a))
+    m >>= f = InferT (unInferT m >>= \a -> unInferT (f a))
     fail a = InferT $ fail a
 
 instance MonadTrans (InferT a) where
@@ -138,7 +135,7 @@ instance MonadIO m => MonadIO (InferT a m) where
     liftIO = InferT .  liftIO
 
 instance MonadState s m => MonadState s (InferT a m) where
-    get = lift $ get
+    get = lift get
     put = lift . put
 
 instance (Symbol a, HasType a, Monad m) => MonadFreeVarProvider a (InferT a m) where

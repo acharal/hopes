@@ -15,11 +15,9 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleContexts
-   ,FlexibleInstances
-   ,TypeSynonymInstances
-#-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module ParseUtils where
 
@@ -31,6 +29,7 @@ import Error
 import Pretty
 import Data.Char (isUpper)
 import Data.List (partition, nub)
+import Data.Maybe (fromMaybe)
 import Control.Monad.State
 
 type ParserInput = String
@@ -61,26 +60,26 @@ data Token =
    deriving Eq
 
 instance Show Token where
-    showsPrec n (TKoparen) = showString "("
-    showsPrec n (TKcparen) = showString ")"
-    showsPrec n (TKgets)   = showString ":-"
-    showsPrec n (TKdot)    = showString "."
-    showsPrec n (TKcomma)  = showString ","
-    showsPrec n (TKvert)   = showString "|"
-    showsPrec n (TKobrak)  = showString "["
-    showsPrec n (TKcbrak)  = showString "]"
-    showsPrec n (TKocurly) = showString "{"
-    showsPrec n (TKccurly) = showString "}"
-    showsPrec n (TKwild)   = showString "_"
-    showsPrec n (TKcolcol) = showString "::"
-    showsPrec n (TKsemi)   = showString ";"
-    showsPrec n (TKcut)    = showString "!"
-    showsPrec n (TKslash)  = showString "/"
-    showsPrec n (TKbslash) = showString "\\"
-    showsPrec n (TKarrow)  = showString "->"
-    showsPrec n (TKid s)   = showString s
-    showsPrec n (TKsq)     = showString "'"
-    showsPrec n (TKeq)     = showString "="
+    showsPrec n TKoparen = showString "("
+    showsPrec n TKcparen = showString ")"
+    showsPrec n TKgets   = showString ":-"
+    showsPrec n TKdot    = showString "."
+    showsPrec n TKcomma  = showString ","
+    showsPrec n TKvert   = showString "|"
+    showsPrec n TKobrak  = showString "["
+    showsPrec n TKcbrak  = showString "]"
+    showsPrec n TKocurly = showString "{"
+    showsPrec n TKccurly = showString "}"
+    showsPrec n TKwild   = showString "_"
+    showsPrec n TKcolcol = showString "::"
+    showsPrec n TKsemi   = showString ";"
+    showsPrec n TKcut    = showString "!"
+    showsPrec n TKslash  = showString "/"
+    showsPrec n TKbslash = showString "\\"
+    showsPrec n TKarrow  = showString "->"
+    showsPrec n (TKid s) = showString s
+    showsPrec n TKsq     = showString "'"
+    showsPrec n TKeq     = showString "="
 
 
 instance Pretty Token where
@@ -174,17 +173,15 @@ mkQuantForm xs ys =
         symbols'' (HpSym s)    = [s]
         symbols'' (HpTup es)   = concatMap symbols' es
         symbols'' (HpAnn e t)  = symbols'' (unLoc e)
-    in  (HpClause vars' xs ys)
+    in  HpClause vars' xs ys
 
-mkLambda x (L _ (HpLam ys e'))  = HpLam ((HpBind (liftSym (tokId x)) bogusType):ys) e'
-mkLambda x e = HpLam [(HpBind (liftSym (tokId x)) bogusType)] e
+mkLambda x (L _ (HpLam ys e'))  = HpLam (HpBind (liftSym (tokId x)) bogusType : ys) e'
+mkLambda x e = HpLam [HpBind (liftSym (tokId x)) bogusType] e
 
 mkList elems tl =
-    unLoc $ foldr (\x -> \y -> located x $ HpApp consE [x,y]) lastel elems
+    unLoc $ foldr (\x y -> located x $ HpApp consE [x,y]) lastel elems
     where consE   = located bogusLoc $ HpSym (mkBuildin ".")
-          lastel  = case tl of
-                        Nothing -> located bogusLoc $ HpSym (mkBuildin "[]")
-                        Just e  -> e
+          lastel  = fromMaybe (located bogusLoc $ HpSym (mkBuildin "[]")) tl
 
 mkBuildin "_" = AnonSym
 mkBuildin s = liftSym s

@@ -58,7 +58,7 @@ instance Pretty Loc where
 instance Pretty LocSpan where
     ppr (OneLineSpan f l c1 c2) =
         hcat $ punctuate colon [ text f, int l, parens $ int c1 <> char '-' <> int c2 ]
-    ppr (MultiLineSpan f l1 c1 l2 c2) = 
+    ppr (MultiLineSpan f l1 c1 l2 c2) =
         hcat $ punctuate colon [ text f, ppr_par l1 c1 <> char '-' <> ppr_par l2 c2 ]
         where ppr_par l c = parens (int l <> comma <> int c)
     ppr (LocSpan l1 l2) = ppr l1 <> char '-' <> ppr l2
@@ -84,15 +84,15 @@ instance (Eq a, Pretty a) => Pretty (MonoTypeV a) where
 -- pprPrec p f (TyTup tl)     = parens $ sep (punctuate comma (map (pprPrec 1 f) tl))
 pprPrec p f (TyGrd c)      = ppr c
 pprPrec p f (TyVar v)      = f v
-pprPrec p f ty@(TyFun t t') =  if (p == 0) then
+pprPrec p f ty@(TyFun t t') =  if p == 0 then
                                    parens (sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ])
                                else
                                    sep [ pprPrec 0 f t , arrow <+> pprPrec p f t' ]
 
-tynames = letters ++ [ x++(show i) | x <- letters, i <- [1..] ]
+tynames = letters ++ [ x ++ show i | x <- letters, i <- [1..] ]
     where letters = [ "a", "b", "c", "d", "e", "f" ]
 
-tvmap tys v = 
+tvmap tys v =
     let tvs = nub $ concatMap tyvars tys
         fl  = zip tvs tynames
     in case lookup v fl of

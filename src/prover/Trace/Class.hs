@@ -1,9 +1,8 @@
-{-# LANGUAGE
-    FlexibleInstances
-   ,FunctionalDependencies
-   ,MultiParamTypeClasses
-   ,UndecidableInstances
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Trace.Class where
 
@@ -30,9 +29,9 @@ instance MonadTrace a m => MonadTrace a (LogicT m) where
 
 
 
-traceResult m = traceMM return m
+traceResult = traceMM return
 
-traceM f m = traceMM (return . f) m
+traceM f = traceMM (return . f)
 
 traceMM f m = do
     a <- m

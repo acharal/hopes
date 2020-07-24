@@ -79,11 +79,11 @@ class Monad m => MonadWarn m w where
 isWarn msg = level msg == Warning
 isFail = not . isWarn
 
-mkErr typ lev msg = Msg bogusLoc typ lev msg
+mkErr = Msg bogusLoc
 
-mkErrWithLoc l typ lev msg = Msg l typ lev msg
+mkErrWithLoc = Msg
 
-internalErr msg = mkErr Internal Fatal msg
+internalErr = mkErr Internal Fatal
 
 mkMsgs :: Message -> Messages
 mkMsgs msg = ([msg], [])

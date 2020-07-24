@@ -31,7 +31,7 @@ data Loc = Loc {
     locOffset :: !Col }
  deriving Eq
 
-data LocSpan = 
+data LocSpan =
       LocSpan Loc Loc
     | OneLineSpan   FilePath Line Col Col
     | MultiLineSpan FilePath Line Col Line Col
@@ -101,22 +101,22 @@ unLoc :: Located a -> a
 unLoc (L _ e) = e
 
 located :: HasLocation l =>  l -> a -> Located a
-located ss x = L (locSpan ss) x
+located ss = L (locSpan ss)
 
 class Monad m => MonadLoc m where
     getLoc :: m Loc
     getLocSpan :: m LocSpan
-    getLocSpan = getLoc >>= return . locSpan
-    getLoc = getLocSpan >>= return . loc
+    getLocSpan = locSpan <$> getLoc
+    getLoc = loc <$> getLocSpan
 
 class MonadLoc m => MonadSetLoc m where
     withLoc :: Loc -> m a -> m a
     withLocSpan :: LocSpan -> m a -> m a
-    withLoc l a = withLocSpan (locSpan l) a
-    withLocSpan ls a = withLoc (loc ls) a
+    withLoc l = withLocSpan (locSpan l)
+    withLocSpan ls = withLoc (loc ls)
 
 withLocation :: (HasLocation l, MonadSetLoc m) => l -> m a -> m a
-withLocation l a = withLocSpan (locSpan l) a
+withLocation l = withLocSpan (locSpan l)
 
 -- discard location information
 instance MonadLoc Identity where

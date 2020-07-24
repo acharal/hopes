@@ -24,7 +24,7 @@ import TypeCheck (tiExpr, tcExpr)
 import Error (catchError)
 import Loc
 import Pretty
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Data.List (partition)
 import Data.Maybe (catMaybes)
 
@@ -85,7 +85,7 @@ import Data.Maybe (catMaybes)
 
 -- wffcSource :: (HpSource a, TypeEnv) -> Tc (HpSource a, TypeEnv)
 
-restrictProg (p, tyenv) = do
+restrictProg (p, tyenv) =
     extendEnv tyenv $ do
         mapM_ restrictForm (clauses p)
         tyenv <- normEnv
@@ -107,7 +107,7 @@ restrictHead f@(L _ (HpClause b [h] _)) = do
         (var_args, rest_args) = partition (expBind f) args
         expBind f (L _ (HpSym s)) = isBinding f s
         expBind _ _ = False
-        unLocEq x y = (unLoc x) == (unLoc y)
+        unLocEq x y = unLoc x == unLoc y
         varoccu = occurences unLocEq var_args
 
     when (expBind f func) $
@@ -115,14 +115,13 @@ restrictHead f@(L _ (HpClause b [h] _)) = do
 
     let restrToAll x = (tcExpr tyAll x >> return Nothing) `catchError` \e -> return (Just x)
     maybe_errors <- mapM (\(x, _) -> restrToAll x) $ filter ((>1) . length . snd) varoccu
-    let notRestricted = catMaybes $ maybe_errors
-    when (not $ null $ notRestricted) (multiHoOccurErr notRestricted)
+    let notRestricted = catMaybes maybe_errors
+    unless (null notRestricted) (multiHoOccurErr notRestricted)
 
     maybe_preds <- mapM restrToAll $ filter isSymbol rest_args
-    let preds = catMaybes $ maybe_preds
-    when (not $ null $ preds) (predInHeadErr preds)
+    let preds = catMaybes maybe_preds
+    unless (null preds) (predInHeadErr preds)
     --liftIO $ print (map (ppr.unLoc) (filter isSymbol rest_args))
-    return ()
 
 restrictFunc e = do
 --    let args = argsOf e
@@ -139,23 +138,23 @@ restrictInsideFunc e = do
 occurences eq [] = []
 occurences eq (x:xs) =
     let (s, r) = partition (eq x) (x:xs)
-    in  (x, s):(occurences eq r)
+    in  (x, s) : occurences eq r
 
 multiHoOccurErr occlist =
-    typeError (sep ([text "Higher order bound variables:",
-                     nest 4 (sep (punctuate comma (map ppr_aux occlist))),
-                     text "must occur only once as argument in the head of a clause"]))
+    typeError (sep [text "Higher order bound variables:",
+                    nest 4 (sep (punctuate comma (map ppr_aux occlist))),
+                    text "must occur only once as argument in the head of a clause"])
     where ppr_aux e = quotes $ ppr $ unLoc e
 
 predInHeadErr preds =
-    typeError (sep ([text "Predicate variables:",
-                     nest 4 (sep (punctuate comma (map ppr_aux preds))),
-                     text "must not occur as argument in the head of a clause"]))
+    typeError (sep [text "Predicate variables:",
+                    nest 4 (sep (punctuate comma (map ppr_aux preds))),
+                    text "must not occur as argument in the head of a clause"])
     where ppr_aux e = quotes $ ppr $ unLoc e
 
 
 varInHead var =
-    typeError (sep ([text "Bounded variable:",
-                     nest 4 (quotes (ppr (unLoc var))),
-                     text "must not occur as functor in the head of a clause"]))
+    typeError (sep [text "Bounded variable:",
+                    nest 4 (quotes (ppr (unLoc var))),
+                    text "must not occur as functor in the head of a clause"])
 

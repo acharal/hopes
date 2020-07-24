@@ -15,12 +15,11 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleContexts
-   ,FlexibleInstances
-   ,NoMonomorphismRestriction
-   ,TypeSynonymInstances
-#-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- | type checker monad
 module Tc where
@@ -52,11 +51,11 @@ data TcState =
 type Tc m = ReaderT TcEnv (StateT TcState (ErrorT Messages m))
 
 instance Monad m => MonadLoc (Tc m) where
-    getLoc = asks ctxt >>= return . loc
+    getLoc = loc <$> asks ctxt
 
-runTc m =  run >>= \res -> case res of
-                                (Left msg) -> return (Nothing, msg)
-                                (Right (p, s)) -> return (Just p, msgs s)
+runTc m =  run >>= \case
+                       (Left msg) -> return (Nothing, msg)
+                       (Right (p, s)) -> return (Just p, msgs s)
     where run = runErrorT $ runStateT (runReaderT m initEnv) initSt
           initSt  = TcState { uniq = 0, msgs = emptyMsgs }
           initEnv = TcEnv   { tcTyEnv = [], ctxt  = [] }
@@ -73,8 +72,8 @@ getTypeEnv  :: Monad m => Tc m (TyEnv HpSymbol)
 getTypeEnv = asks tcTyEnv
 
 extendEnv :: Monad m => [TySig HpSymbol] -> Tc m a -> Tc m a
-extendEnv binds m = local extend m
-    where extend env = env{tcTyEnv = binds ++ (tcTyEnv env)}
+extendEnv binds = local extend
+    where extend env = env{tcTyEnv = binds ++ tcTyEnv env}
 
 withTypeEnv = extendEnv
 
@@ -139,10 +138,10 @@ typeError err = do
 
 
 instantiate :: Monad m => Type -> Tc m MonoType
-instantiate t = return t
+instantiate = return
 
 generalize :: Monad m => MonoType -> Tc m Type
-generalize t = return t
+generalize = return
 
 freshTyFor :: MonadIO m => a -> Tc m (a, Type)
 freshTyFor v = do
@@ -153,8 +152,8 @@ withSig e m = do
         ty_sym <- mapM freshTyFor (rigids e)
         withTypeEnv ty_sym m
 
-enterContext c m = local addctxt m
-    where addctxt env = env{ctxt = c:(ctxt env)}
+enterContext c = local addctxt
+    where addctxt env = env{ctxt = c : ctxt env}
 
 
 data Context =

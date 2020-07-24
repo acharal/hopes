@@ -40,11 +40,11 @@ type TreeM m a = CC (PS (Tree m a)) m (Tree m a)
 -- Like function composition but has the benefit of rotating the
 -- tree as it proceeds
 
-compose_trees :: Monad m => Tree m a -> TreeM m a -> TreeM m a
-compose_trees HZero r = r
-compose_trees (HOne a) r = return $ HChoice a r
-compose_trees (HChoice a r') r = return $
-                                 HChoice a $ r' >>= (\v -> compose_trees v r)
+composeTrees :: Monad m => Tree m a -> TreeM m a -> TreeM m a
+composeTrees HZero r = r
+composeTrees (HOne a) r = return $ HChoice a r
+composeTrees (HChoice a r') r = return $
+                                HChoice a $ r' >>= (`composeTrees` r)
 
 {-
 treefold :: (a -> b -> b) -> (a -> b) -> b -> Tree a -> b
@@ -71,7 +71,7 @@ instance Monad m => Alternative (LogicT m) where
 
 -- Since SR is the newtype, the SR monad is just as efficient as CC
 instance Monad m => Monad (SR m) where
-  return x = pure x
+  return = pure
   m >>= f  = SR $ unSR m >>= (unSR . f)
   fail s = SR $ abortP ps (return HZero)
 
@@ -91,7 +91,7 @@ instance (MonadIO m) => MonadIO (SR m) where
     liftIO = lift . liftIO
 
 instance Monad m => MonadLogic (SR m) where
-    msplit m = SR (lift $ (runCC (reify m) >>= (return . reflect_sr)))
+    msplit m = SR (lift (reflect_sr <$> runCC (reify m)))
         where reflect_sr HZero          =  Nothing
               reflect_sr (HOne a)       = Just (a, mzero)
               reflect_sr (HChoice a r1) = Just (a, refl (runCC r1))
@@ -108,7 +108,7 @@ refl m = SR (lift m >>= check)
 
 
 reify :: Monad m => SR m a -> TreeM m a
-reify m = pushPrompt ps (unSR m >>= (return . HOne))
+reify m = pushPrompt ps (HOne <$> unSR)
 
 runLogicT :: Monad m => Maybe Int -> SR m a -> m [a]
 runLogicT n m = runCC (reify m >>= flatten n)
@@ -117,7 +117,7 @@ runLogicT n m = runCC (reify m >>= flatten n)
   flatten (Just n) _ | n <= 0 = return []
   flatten _ (HOne a) = return [a]
   flatten (Just 1) (HChoice a r) = return [a] -- Don't run r unless needed!
-  flatten n (HChoice a r) = r >>= flatten (fmap pred n) >>= (return . (a:))
+  flatten n (HChoice a r) = (a:) <$> (r >>= flatten (fmap pred n))
 
 -- Hinze's `observe' -- the opposite of `lift'
 --       observe . lift == id

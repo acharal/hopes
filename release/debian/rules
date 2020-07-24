@@ -23,13 +23,13 @@ clean:
 	rm -rf setup Setup.hi Setup.ho Setup.o .*config* dist html
 	$(MAKE) clean
 
-	dh_clean 
+	dh_clean
 
 install: build
 	dh_testdir
 	dh_testroot
-	dh_clean -k 
-	dh_installdirs -a 
+	dh_clean -k
+	dh_installdirs -a
 	
 	# Add here commands to install the package into debian/tmp
 	./setup copy --copy-prefix=$(CURDIR)/debian/$(PACKAGE)/$(PROGPATH)

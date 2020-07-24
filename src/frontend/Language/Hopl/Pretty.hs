@@ -15,11 +15,9 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleContexts
-   ,MonoLocalBinds
-   ,UndecidableInstances
-#-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Hopl.Pretty () where
 
@@ -34,49 +32,49 @@ import Language.Hopl.Syntax.Pretty ()
 
 
 instance (Pretty a, Eq a, Symbol a, HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (Expr a) where
-    ppr a =  pprPrec1 v' 1 a
+    ppr =  pprPrec1 v' 1
         where {- v x = case lookup x vlist of
                       Nothing -> ppr x
                       Just n  -> text n
               vlist = zip (vars a) varnames
               letters = [ "X", "Y", "Z", "A", "B", "C", "D", "E", "F", "H", "K", "L" ]
               varnames = letters ++ [ x ++ (show i) | x <- letters, i <- [1..]] -}
-              v' x = ppr x
+              v' = ppr
 
 
-pprPrec1 f p (Flex sym)    = (f sym)
+pprPrec1 f p (Flex sym)    = f sym
 pprPrec1 f p (Rigid sym)   = ppr sym
 pprPrec1 f p e@(App e1 e2) =
     let fu = functor e
-    in if (fu == ceq) then
-            (sep (punctuate (text "=") (map (pprPrec1 f  p) $ args e)))
+    in if fu == ceq then
+            sep (punctuate (text "=") (map (pprPrec1 f  p) $ args e))
        else if fu == cand then
-            (sep (punctuate comma (map (pprPrec1 f p) $ args e)))
+            sep (punctuate comma (map (pprPrec1 f p) $ args e))
        else if fu == cor then
-            (sep (punctuate semi (map (pprPrec1 f p) $ args e)))
-       else if fu == (Rigid (liftSym ".")) then
+            sep (punctuate semi (map (pprPrec1 f p) $ args e))
+       else if fu == Rigid (liftSym ".") then
             pprList f p e
-       else 
-            (pprPrec1 f p (functor e)) <> parens (sep (punctuate comma (map (pprPrec1 f p) $ args e)))
+       else
+            pprPrec1 f p (functor e) <> parens (sep (punctuate comma (map (pprPrec1 f p) $ args e)))
 
 pprPrec1 f p (Lambda a e) =
-    text "\\" <> (f a) <> text "." <+> (pprPrec1 f p e)
+    text "\\" <> f a <> text "." <+> pprPrec1 f p e
 
 pprList f p (Rigid x) = ppr x
-pprList f p e = 
-    let listelem (App (App (Rigid x) e1) e2) = if (x == liftSym ".") then e1:(listelem e2) else []
+pprList f p e =
+    let listelem (App (App (Rigid x) e1) e2) = if x == liftSym "." then e1 : listelem e2 else []
         listelem _ = []
-        listtail (App (App (Rigid x) _) e2) = if (x == liftSym ".") then listtail e2 else Nothing
+        listtail (App (App (Rigid x) _) e2) = if x == liftSym "." then listtail e2 else Nothing
         listtail e1@(Flex x) = Just e1
         listtail (Rigid x) = Nothing
         xs = listelem e
         t = listtail e
-    in case t of 
+    in case t of
         Nothing -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)))
-        Just e' -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)) <> text "|" <> (pprPrec1 f p e'))
+        Just e' -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)) <> text "|" <> pprPrec1 f p e')
 
 instance (Pretty a, Eq a, Symbol a,  HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (Clause a) where
-    ppr (C h b) = hang ((ppr h) <+> text "<:=") 4 $ ppr b
+    ppr (C h b) = hang (ppr h <+> text "<:=") 4 $ ppr b
 
 instance (Pretty a, Eq a, Symbol a,  HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (KnowledgeBase a) where
     ppr a = vcat $ map ppr (clauses a)
@@ -110,30 +108,34 @@ isbs _ _ = False
 praPrec n p@(Lambda _ _) = ppr p --pprBasicSet p --ppr p
 praPrec n p = ppr p
 
-pprBasicSet e = 
-   let getbindings (Lambda x e) = x:(getbindings e)
+pprBasicSet e =
+   let getbindings (Lambda x e) = x : getbindings e
        getbindings e = []
        getbody (Lambda x e) = getbody e
        getbody e = e
 
-       pprElemsList e = 
+       pprElemsList e =
          let xs = getbindings e
              bd = getbody e
-         in case bd of 
-             (App (App x y) e') -> if x == cor then ((pprElem xs y):(pprElemsList (removeapp (reverse xs) e'))) else if (xs == []) then [ppr bd] else error ""
+         in case bd of
+             (App (App x y) e')
+                | x == cor ->
+                  pprElem xs y : pprElemsList (removeapp (reverse xs) e')
+                | null xs -> [ppr bd]
+                | otherwise -> error ""
              e -> [ppr e]
 
-       removeapp (x:xs) (App e (Flex y)) = if (x == y) then removeapp xs e else error ""
+       removeapp (x:xs) (App e (Flex y)) = if x == y then removeapp xs e else error ""
        removeapp [] e = e
 
-       splitand e@(App (App x e1) e2) = if (x == cand) then e1:(splitand e2) else [e]
+       splitand e@(App (App x e1) e2) = if x == cand then e1 : splitand e2 else [e]
        splitand e = [e]
 
        pprElem xs e = if length pes == 1 then sep (punctuate comma pes) else parens (sep (punctuate comma pes))
              where es = map spliteq (splitand e)
                    pes = map (ppr.snd) es
-       spliteq (App (App x e1) e2) = if (x == ceq) then (e1, e2) else error ""
+       spliteq (App (App x e1) e2) = if x == ceq then (e1, e2) else error ""
        spliteq e = (undefined, e)
-       pprElems e = pprElemsList e
+       pprElems = pprElemsList
    in curly (sep (punctuate comma (pprElems e)))
 

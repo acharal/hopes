@@ -15,10 +15,8 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleInstances
-   ,MultiParamTypeClasses
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Language.Hopl.Syntax where
 
@@ -76,7 +74,7 @@ lookupBind x = find ((x==).symbolBind)
 --type HpTySign = TySig HpSymbol
 
 data HpSrc a =
-    HpSrc { 
+    HpSrc {
         clauses :: [LHpClause a],
         tyEnv   :: TyEnv HpSymbol
     }
@@ -87,7 +85,7 @@ instance (Eq a, HasSignature a a) => HasSignature (HpSrc a) a where
 
 instance (Eq a, HasSignature a a) => HasSignature (HpClause a) a where
     sig f@(HpClause b xs ys) = (filter (not.isBinding f) as,
-                              bs `mappend` (map symbolBind b))
+                              bs `mappend` map symbolBind b)
         where (as, bs) = mconcat $ map sig (xs ++ ys)
 
 instance (Eq a, HasSignature a a) => HasSignature (HpExpr a) a where
@@ -97,7 +95,7 @@ instance (Eq a, HasSignature a a) => HasSignature (HpExpr a) a where
     sig (HpAnn e _)  = sig e
     sig (HpTup es)   = mconcat (map sig es)
     sig a@(HpLam b e)= (filter (not.isBinding a) as, bs `mappend`
-                       (map symbolBind b))
+                       map symbolBind b)
         where (as, bs) = sig e
 
 
@@ -123,7 +121,7 @@ instance HasVariables (HpClause a) where
 
 -- returns the signature of a program
 
--- normalized formula :  
+-- normalized formula :
 -- forall x1 ... xk. (A1, ..., An <- B1, ..., Bm)
 -- rule or clause has exactly one A an more than one B
 -- fact has exactly one A and no B
@@ -132,7 +130,7 @@ instance HasVariables (HpClause a) where
 
 data HpClause a = HpClause (HpBindings a) [LHpExpr a] [LHpExpr a]
 
-data HpExpr a = 
+data HpExpr a =
       HpSym a                              -- symbol (constant, functional symbol, variable, predicate)
     | HpVar a                              -- variable
     | HpApp (LHpExpr a) [LHpExpr a]        -- general application (predicate or func sym)
@@ -146,7 +144,7 @@ data HpExpr a =
 class Eq b => HasBindings a b where
     bindings :: a -> HpBindings b
     isBinding :: a -> b -> Bool
-    isBinding a s = any (s==) $ map symbolBind (bindings a)
+    isBinding a s = elem s $ map symbolBind (bindings a)
 
 instance Eq a => HasBindings (HpClause a) a where
     bindings (HpClause b _ _) = b
@@ -159,7 +157,7 @@ instance (Eq b, HasBindings a b) => HasBindings (Located a) b where
     bindings = bindings . unLoc
 
 
-isFact e = 
+isFact e =
     case unLoc e of
         (HpClause _ [h] []) -> True
         _ -> False
@@ -170,7 +168,7 @@ isApp e =
         _ -> False
 
 argsOf :: LHpExpr a -> [LHpExpr a]
-argsOf e = 
+argsOf e =
     case unLoc e of
         (HpApp e1 e2) -> argsOf e1 ++ e2
         _ -> []
@@ -178,23 +176,23 @@ argsOf e =
 -- get a head of an application
 
 funcOf :: LHpExpr a -> LHpExpr a
-funcOf e = 
+funcOf e =
     case unLoc e of
         (HpApp e1 _) -> funcOf e1
         _ -> e
 
 
 isSymbol :: LHpExpr a -> Bool
-isSymbol e = 
-    case unLoc e of 
+isSymbol e =
+    case unLoc e of
         (HpSym _) -> True
         _ -> False
 
--- located syntax 
+-- located syntax
 type LHpExpr a    = Located (HpExpr a)
 type LHpClause a  = Located (HpClause a)
 
--- parsed located syntax 
+-- parsed located syntax
 
 type PLHpExpr    = LHpExpr    HpSymbol
 type PLHpClause  = LHpClause  HpSymbol

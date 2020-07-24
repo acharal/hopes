@@ -34,14 +34,14 @@ data Var =
 
 instance Show Var where
     showsPrec p (V n) = showsPrec p n
-    showsPrec p (NoNameVar) = showString "_"
+    showsPrec p NoNameVar = showString "_"
 
 instance  Show Sym where
     showsPrec p (Sym a) = showsPrec p a
     showsPrec p AnonSym = showString "_"
 
 instance Symbol Sym where
-    liftSym a = Sym a
+    liftSym = Sym
 
 instance Eq Sym where
     (Sym s1) == (Sym s2) = s1 == s2

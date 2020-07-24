@@ -40,16 +40,13 @@ lexToken = do
     lexToken' inp (spanEnd ls)
 
 lexToken' :: Monad m => ParserInput -> Loc -> ParserT m (Located Token)
-lexToken' inp l = do
+lexToken' inp l =
     case scanTok inp l of
-        TokEnd -> do
-            return $ located l TKEOF
-        TokError l2 inp2 -> do
-            lexError inp2 l2
-        TokSkip l2 inp2 -> do
-            lexToken' inp2 l2
+        TokEnd -> return $ located l TKEOF
+        TokError l2 inp2 -> lexError inp2 l2
+        TokSkip l2 inp2 -> lexToken' inp2 l2
         Tok t len inp2 -> do
-            let l2 = l{locOffset=(locOffset l)+len}
+            let l2 = l{locOffset=locOffset l+len}
             setInput inp2
             return $ located (l,l2) t
 
@@ -106,6 +103,6 @@ scanSkip inp lo =
     in scanSkip_aux (locOffset lo) (locLine lo) inp lo
 
 scanSkipLine :: ScanAction
-scanSkipLine inp lo = scanSkip inp2 lo{locOffset=1, locLine=(locLine lo) + 1}
-    where (com, ('\n':inp2)) = span (/='\n') inp
+scanSkipLine inp lo = scanSkip inp2 lo{locOffset=1, locLine=locLine lo + 1}
+    where (com, '\n':inp2) = span (/='\n') inp
 

@@ -19,7 +19,7 @@ module Language.Hopl.Parser () where
 
 import Parser ()
 
-{- 
+{-
 --loadSource :: String -> IO (Maybe (Prog, TypeEnv), Messages)
 loadSource file = do
     parsed       <- liftIO $ parseFromFile file parseSrc

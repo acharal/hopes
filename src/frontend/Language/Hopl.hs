@@ -15,11 +15,9 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleInstances
-   ,MultiParamTypeClasses
-   ,NoMonomorphismRestriction
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | Higher Order Predicate Language
 module Language.Hopl where
@@ -111,14 +109,14 @@ instance (Symbol a, Eq a, HasType a) => HasType (Expr a) where
         typeOf (App e1 e2) =
             case typeOf e1 of
                 (TyFun a b) -> b
-                t -> error ("not expected type " ++ (show t))
+                t -> error ("not expected type " ++ show t)
         typeOf (Flex a)  = typeOf a
         typeOf c@(Rigid a)
             | c == ctop = tyBool
             | c == cbot = tyBool
-            | c == cor  = TyFun tyBool ((TyFun tyBool) tyBool)
-            | c == cand = TyFun tyBool ((TyFun tyBool) tyBool)
-            | c == ceq  = TyFun tyAll ((TyFun tyAll) tyBool)
+            | c == cor  = TyFun tyBool (TyFun tyBool tyBool)
+            | c == cand = TyFun tyBool (TyFun tyBool tyBool)
+            | c == ceq  = TyFun tyAll (TyFun tyAll tyBool)
             | c == cexists = TyFun (TyVar undefined) tyBool
             | otherwise = typeOf a
         typeOf (Lambda a e) =
@@ -130,7 +128,7 @@ instance (Symbol a, Eq a, HasType a) => HasType (Expr a) where
 instance HasType a => HasType (Clause a) where
         typeOf c = liftGround TyBool
         hasType ty c =
-            if not (ty == tyBool) then
+            if ty /= tyBool then
                 error "clause can have not boolean type"
             else c
 
@@ -151,7 +149,7 @@ args (App e a) = args2 e ++ [a]
           args2 e = []
 
 
-data KnowledgeBase a =
+newtype KnowledgeBase a =
     KB {
         -- name :: String
         clauses :: [Clause a]

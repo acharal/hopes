@@ -1,9 +1,8 @@
-{-# LANGUAGE
-    FlexibleInstances
-   ,MultiParamTypeClasses
-   ,NoMonomorphismRestriction
-   ,UndecidableInstances
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Trace (
     module Trace,
@@ -32,8 +31,8 @@ instance Monad m => Applicative (DebugT s i m) where
     (<*>) = ap
 
 instance Monad m => Monad (DebugT s i m) where
-    return a = pure a
-    m >>= f  = DebugT $ (unDebugT m) >>= \a -> unDebugT (f a)
+    return = pure
+    m >>= f  = DebugT $ unDebugT m >>= \a -> unDebugT (f a)
     fail  = lift . fail
 
 instance MonadTrans (DebugT s i) where
@@ -47,13 +46,13 @@ instance MonadPlus m => Alternative (DebugT s a m) where
     (<|>) = mplus
 
 instance MonadPlus m => MonadPlus (DebugT s a m) where
-    mzero = DebugT $ mzero
-    m1 `mplus` m2 = DebugT $ (unDebugT m1) `mplus` (unDebugT m2)
+    mzero = DebugT mzero
+    m1 `mplus` m2 = DebugT $ unDebugT m1 `mplus` unDebugT m2
 
 instance MonadLogic m => MonadLogic (DebugT s a m) where
     msplit m = DebugT $
-        msplit (unDebugT m) >>= \r ->
-            case r of
+        msplit (unDebugT m) >>=
+            \case
                 Nothing -> return Nothing
                 Just (a, s) -> return $ Just (a, DebugT s)
 
@@ -67,7 +66,7 @@ instance MonadIO m => MonadIO (DebugT s b m) where
     liftIO =  lift . liftIO
 
 instance MonadState s m => MonadState s (DebugT s1 b m) where
-    get = lift $ get
+    get = lift get
     put = lift . put
 
 runDebugT st m h = evalStateT (runTraceT (unDebugT m) (f h)) st
@@ -76,7 +75,7 @@ runDebugT st m h = evalStateT (runTraceT (unDebugT m) (f h)) st
 noDebugT m = runDebugT undefined m h
     where h _ c = c
 
-getState = DebugT $ lift $ get
+getState = DebugT $ lift get
 modifyState f = DebugT $ lift $ modify f
 getsState f = getState >>= \s -> return (f s)
 

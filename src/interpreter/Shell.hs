@@ -15,10 +15,8 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleContexts
-   ,NoMonomorphismRestriction
-#-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Shell(runInteractive, Command(..)) where
 
@@ -32,7 +30,7 @@ import Error (catchError)
 import Control.Monad.State (lift, liftIO, gets, modify)
 
 import System.Console.Haskeline (getInputLine, setComplete, defaultSettings, completeWord, simpleCompletion, InputT, runInputT)
-import System.Exit(exitWith, ExitCode(..))
+import System.Exit(exitSuccess, exitWith, ExitCode(..))
 import System.Console.GetOpt
 
 import Driver (refute, consultFile)
@@ -40,10 +38,10 @@ import HopesIO
 import Pretty
 
 trim :: String -> String
-trim xs = dropWhile (isSpace) $ reverse $ dropWhile (isSpace) $ reverse xs
+trim xs = dropWhile isSpace $ reverse $ dropWhile isSpace $ reverse xs
 
 parseCommand' (':':x:xs) =
-    case find (\c -> any (x==) (short c)) userCommands of
+    case find (elem x . short) userCommands of
         Nothing -> fail "Unknown command"
         Just s  -> return $ mkCom s (trim xs)
 
@@ -66,13 +64,13 @@ getCommand = do
     case maybe_inp of
         Nothing -> getCommand
         Just "" -> getCommand
-        Just str -> do
+        Just str ->
             parseCommand' str --`catchError`
 --                        (\e -> (liftIO $ print e) >> getCommand)
 
 runLoopM = do
         command <- getCommand
-        lift $ dispatch command `catchError` (\e -> (liftIO $ print e))
+        lift $ dispatch command `catchError` (liftIO . print)
         runLoopM
 
 runInteractiveM commands = runShell runLoopM
@@ -127,7 +125,7 @@ dispatch command = dispatch' command
           dispatch' (CShowType p) = showType p
           dispatch' (CShowDef  p) = showDef p
           dispatch' (CDebugOnOff s) = debugOnOff s
-          dispatch' (CHalt) = halt
+          dispatch' CHalt = halt
 
 
 toggleDebug Nothing  = modify (\s -> s{debugFlag = not (debugFlag s)})
@@ -162,7 +160,7 @@ halt = bye "halting ..."
 
 bye s = do
     writeInfo s
-    liftIO $ exitWith ExitSuccess
+    liftIO exitSuccess
 
 writeInfo s = liftIO $ comm s
     where comm s = putStr "% "  >> putStrLn s

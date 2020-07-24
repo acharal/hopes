@@ -15,11 +15,9 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleInstances
-   ,MultiParamTypeClasses
-   ,TypeSynonymInstances
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Types where
 
@@ -74,7 +72,7 @@ instance Functor MonoTypeV where
 
 tyBool    = liftGround TyBool
 tyAll     = liftGround TyAll
-bogusType = error ("This type is a placeholder and must not be evaluated")
+bogusType = error "This type is a placeholder and must not be evaluated"
 
 tyargs :: TypeV a -> [TypeV a]
 tyargs (TyFun t t') = t : tyargs t'
@@ -102,7 +100,7 @@ instance HasType Type where
 
 instance HasType (Typed a) where
     typeOf (T _ ty) = ty
-    hasType ty (T a _) = (T a ty)
+    hasType ty (T a _) = T a ty
 
 instance HasType (TySig a) where
     typeOf (_, t) = t
@@ -115,9 +113,9 @@ instance Functor Typed where
 order :: HasType a => a -> Int
 order a =
     case typeOf a of
-        (TyFun t t') -> max (1 + (order t)) (order t')
+        (TyFun t t') -> max (1 + order t) (order t')
        --(TyTup tys)  -> maximum (map order tys)
-        (TyVar _)    -> error ("no fixed order when type is variable")
+        (TyVar _)    -> error "no fixed order when type is variable"
         _            -> 0
 
 arity :: HasType a => a -> Int

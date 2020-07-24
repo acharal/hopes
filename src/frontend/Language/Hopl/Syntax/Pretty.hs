@@ -38,7 +38,7 @@ instance Pretty a => Pretty (HpExpr a) where
 instance Pretty a => Pretty (HpClause a) where
     ppr (HpClause _ [h] []) = ppr (unLoc h) <> dot
     ppr (HpClause _ h b)  =
-        hang (  sep (punctuate comma (map (ppr.unLoc)  h)) <> entails) 4 $ 
+        hang (  sep (punctuate comma (map (ppr.unLoc)  h)) <> entails) 4 $
                 sep (punctuate comma (map (ppr.unLoc)  b)) <> dot
 
 

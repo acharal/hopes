@@ -15,13 +15,12 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleContexts
-   ,FlexibleInstances
-   ,FunctionalDependencies
-   ,MultiParamTypeClasses
-   ,TypeSynonymInstances
-#-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Subst where
 
@@ -29,6 +28,7 @@ module Subst where
 -- import Data.Monoid (mconcat)
 import CoreLang
 import Data.List (union)
+import Data.Maybe (fromMaybe)
 
 type Subst a = [ (a, Expr a) ]
 
@@ -44,7 +44,7 @@ isTaut (v, Var v') = v == v'
 isTaut _ = False
 
 class (Substitutable a b) | a -> b where
-        subst :: Substitutable a b => (Subst b) -> a -> a
+        subst :: Substitutable a b => Subst b -> a -> a
 
 instance Eq a => (Substitutable (Expr a) a) where
         subst theta (App e1 e2)  = App (subst theta e1) (subst theta e2)
@@ -60,7 +60,7 @@ instance Eq a => (Substitutable (Expr a) a) where
 --        subst theta (Forall x e) = maybe (Forall x (subst theta e)) aux $ lookup x theta
 --            where aux (Var y) = Forall y (subst theta e)
 --                  aux _ = error "Cannot substitute lambda bounds vars with expr"
-        subst theta e@(Var x) = maybe e id $ lookup x theta
+        subst theta e@(Var x) = fromMaybe e $ lookup x theta
         subst theta (Not e) = Not (subst theta e)
         subst theta (ListCons e1 e2) = ListCons (subst theta e1) (subst theta e2)
         subst theta e = e
@@ -72,16 +72,16 @@ instance Eq a => (Substitutable (Subst a) a) where
 restrict :: Eq a => [a] -> Subst a -> Subst a
 restrict ss xs = [ (v, e) | (v, e) <- xs, v `elem` ss ]
 
-combine theta zeta  = 
+combine theta zeta  =
     let ss    = map fst theta
         zeta' = [ (v, e) | (v, e) <- zeta, v `notElem` ss ]
     in  subst theta zeta ++ zeta'
 
 
-dom theta   = map fst theta
-range theta = concatMap fv (map snd theta)
-vars theta  = dom theta `union` range theta
+dom        = map fst
+range      = concatMap (fv . snd)
+vars theta = dom theta `union` range theta
 
 
-isRenamingSubst s = all (\(_, x) -> isVar x) s
+isRenamingSubst = all (\(_, x) -> isVar x)
 

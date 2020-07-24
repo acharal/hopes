@@ -36,10 +36,10 @@ data Tree r m a =
     | HOne a
     | HChoice a (CCT r m (Tree r m a))
 
-compose_trees HZero r = r
-compose_trees (HOne a) r = return $ HChoice a r
-compose_trees (HChoice a r') r =
-    return $ HChoice a $ r' >>= \v -> compose_trees v r
+composeTrees HZero r = r
+composeTrees (HOne a) r = return $ HChoice a r
+composeTrees (HChoice a r') r =
+    return $ HChoice a $ r' >>= \v -> composeTrees v r
 
 
 newtype SR r m a = SR (forall ans. ReaderT (Prompt r (Tree r m ans)) (CCT r m) a)
@@ -49,7 +49,7 @@ unSR (SR r) = r
 
 instance Monad m => Monad (SR r m) where
     return e = SR $ return e
-    (SR m) >>= f = SR $ m >>= \x -> (unSR (f x))
+    (SR m) >>= f = SR $ m >>= \x -> unSR (f x)
 
 
 instance Monad m => MonadPlus (SR r m) where
@@ -61,18 +61,18 @@ instance Monad m => MonadPlus (SR r m) where
             compose_trees f1 f2
 
 reify :: Monad m => SR r m a -> CCT r m (Tree r m a)
-reify m = reset $ \p -> runReaderT (unSR m) p >>= \a -> return (HOne a)
+reify m = reset (runReaderT (unSR m) >=> (\a -> return . HOne))
 
 
 instance MonadTrans (SR r) where
     lift m = SR $ lift $ lift m
 
 instance Monad m => MonadLogic (SR r m) where
-    msplit m = SR $ lift (reify m >>= return . reflect_sr)
+    msplit m = SR $ lift (reflect_sr <$> reify m)
         where reflect_sr HZero    = Nothing
               reflect_sr (HOne a) = Just (a, mzero)
               reflect_sr (HChoice a r) =
-                    Just (a, (SR (lift r)) >>= (return . reflect_sr) >>= reflect)
+                    Just (a, (reflect_sr <$> SR (lift r)) >>= reflect)
 
 
 observe :: Monad m => (forall ans. SR ans m a) -> m a
@@ -85,6 +85,6 @@ runLogicT :: Monad m => Maybe Int -> (forall ans. SR ans m a) -> m [a]
 runLogicT n m = observe (bagofN n m)
 
 hasBranch m = SR $ lift (reify m >>= check)
-    where check (HZero ) = return False
+    where check HZero    = return False
           check (HOne _) = return False
           check (HChoice _ _) = return True

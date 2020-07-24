@@ -23,7 +23,7 @@
 
 hanoi( 0, S, M, D, [] ).
 hanoi( s( N ), S, M, D, L ) :-
-    hanoi( N, S, D, M, L1 ), 
-    append( L1, [ move( S, D ) ], L2 ), 
-    hanoi( N, M, S, D, L3 ), 
+    hanoi( N, S, D, M, L1 ),
+    append( L1, [ move( S, D ) ], L2 ),
+    hanoi( N, M, S, D, L3 ),
     append( L2, L3, L ).

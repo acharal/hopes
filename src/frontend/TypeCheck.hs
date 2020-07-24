@@ -15,6 +15,7 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | check for well typed expressions and formulas
@@ -76,8 +77,8 @@ buildins' =
 
 -- type checking and inference
 
-tcProg src = do
-    withSig src $ do
+tcProg src =
+    withSig src $
         withTypeEnv (tyEnv src `mappend` buildinsigs) $ do
             cls' <- mapM tcForm $ clauses src
             ty_env  <- normEnv
@@ -100,7 +101,7 @@ tyBinds = mapM tyBind
             s' <- tySym s
             return (HpBind s' ty)
 
-newTyBindings b = mapM (freshTyFor.symbolBind) b
+newTyBindings = mapM (freshTyFor.symbolBind)
 
 -- tcAtom, tcAtom' :: LHpAtom a -> Tc ()
 tcAtom a = enterContext (CtxtAtom a) $ tcExpr tyBool a
@@ -130,7 +131,7 @@ tcExpr' exp_ty (L l (HpApp e args))  = do
     --                 [x] -> x
     --                 tys -> TyTup tys
     let arg'_ty = head args_ty
-    let res'_ty =  foldr (\a -> \t -> TyFun a t) exp_ty (tail args_ty)
+    let res'_ty =  foldr TyFun exp_ty (tail args_ty)
     (arg_ty, res_ty) <- unifyFun fun_ty
     unify arg_ty arg'_ty
     unify res_ty res'_ty
@@ -148,7 +149,7 @@ tcExpr' exp_ty (L l (HpLam bs e)) = do
     tvs <- newTyBindings bs
     extendEnv tvs $ do
         (body_ty, e')  <- tiExpr e
-        let fun_ty = foldl (\a -> \(_,t) -> TyFun t a) body_ty (reverse tvs)
+        let fun_ty = foldl (\a (_,t) -> TyFun t a) body_ty (reverse tvs)
         unify fun_ty exp_ty
         bs' <- tyBinds bs
         return (L l (HpLam bs' e'))
@@ -207,9 +208,9 @@ varBind v ty = do
 
 -- utilities
 
-tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
-    where auxM v = lookupTy v >>= \mayv' ->
-            case mayv' of
+tyvarsM = foldlM (\l v -> auxM v >>= \l' -> return (l' ++ l)) []
+    where auxM v = lookupTy v >>=
+            \case
                 Nothing -> return []
                 Just ty -> do
                     vs <- tyvarsM ty
@@ -217,7 +218,7 @@ tyvarsM = foldlM (\l -> \v -> auxM v >>= \l' -> return (l' ++ l)) []
 
 
 -- tySym :: HpSymbol -> Tc HpSymbol
-tySym = return . id   --no annotation
+tySym = return   --no annotation
 
 -- error reporting
 

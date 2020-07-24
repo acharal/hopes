@@ -18,7 +18,7 @@
 module Main where
 
 import Paths_hopes(version)
-import System.Exit(exitWith, ExitCode(..))
+import System.Exit(exitSuccess, exitWith, ExitCode(..))
 import System.Environment(getArgs, getProgName)
 import System.Console.GetOpt
 import Data.Version(showVersion)
@@ -58,10 +58,10 @@ mainWith args =
 copyright = unlines [
   "HOPES interpreter, version " ++ showVersion version,
   "Copyright (c) 2006-2008 Angelos Charalambidis"
-  ] 
+  ]
 
 bye :: String -> IO a
-bye s = putStr s >> exitWith ExitSuccess
+bye s = putStr s >> exitSuccess
 
 die :: String -> IO a
 die s = putStr s >> exitWith (ExitFailure 1)
@@ -90,15 +90,15 @@ argInfo = [
 
 toCommand :: [CLIFlag] -> [Command]
 toCommand cli = collectFiles cli ++ getGoal cli ++ mustHalt cli
-    where collectFiles ((CliConsultFile f):r) = (CConsult f):(collectFiles r)
-          collectFiles ((CliRunFile f):r)     = [CConsult f]
+    where collectFiles (CliConsultFile f : r) = CConsult f : collectFiles r
+          collectFiles (CliRunFile f : r)     = [CConsult f]
           collectFiles _ = []
           getGoal cli = case cli of
                             [] -> []
-                            (CliRunGoal g):_ -> [CRefute (g ++ ".")]
+                            CliRunGoal g : _ -> [CRefute (g ++ ".")]
                             (_:rcli) -> getGoal rcli
           mustHalt cli = case cli of
                             [] -> []
-                            (CliRunFile _):_ -> [CHalt]
+                            CliRunFile _ : _ -> [CHalt]
                             (_:rcli) -> mustHalt rcli
 

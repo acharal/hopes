@@ -15,10 +15,8 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
-{-# LANGUAGE
-    FlexibleInstances
-   ,NoMonomorphismRestriction
-#-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | Proof procedure of Hopl
 module Derive (derive) where
@@ -41,7 +39,7 @@ splitAnd e = [e]
 
 foldAnd [] = CTrue
 foldAnd es = foldr1 And es
-foldOr  es = foldr1 Or es
+foldOr     = foldr1 Or
 
 isUnsatisf vs theta = not satisf
     where satisf = norenames && not (null onlyfree)
@@ -51,7 +49,7 @@ isUnsatisf vs theta = not satisf
 notExists vs [] = CFalse
 notExists vs es  = Not $ exists vs $ foldAnd es
 
-notEq vs e1 e2 = notExists vs [(Eq e1 e2)]
+notEq vs e1 e2 = notExists vs [Eq e1 e2]
 
 isDisEq (Not e) = isEq e'
     where (_, e') = splitExist e
@@ -74,12 +72,12 @@ renameM vs e = do
     let e' = subst (renameSubst vs vs') e
     return (e', vs')
 
-negreduce (Not e) = 
+negreduce (Not e) =
     let (u, e') = splitExist e
         (t:ts)  = splitAnd e'
 
         negreduce' CTrue  es =
-            case es of 
+            case es of
                 [] -> return CFalse
                 _  -> return $ notExists u es
 
@@ -95,14 +93,14 @@ negreduce (Not e) =
 
         {- equality -}
         negreduce' (Eq e1 e2) es = ifte (unify e1 e2) nonvalid valid
-            where diseq = notExists u [(Eq e1 e2)]
+            where diseq = notExists u [Eq e1 e2]
                   valid = return CTrue
-                  
-                  nonvalid theta 
-                        | isPrimDisEq diseq && 
+
+                  nonvalid theta
+                        | isPrimDisEq diseq &&
                           isUnsatisf u theta      = unsatisf theta es
-                        | isPrimDisEq diseq && 
-                          null es                 = fail "prim disequality" 
+                        | isPrimDisEq diseq &&
+                          null es                 = fail "prim disequality"
                         | isPrimDisEq diseq       = chan u (Eq e1 e2) es
                         | otherwise               = unfold theta es
 
@@ -111,16 +109,16 @@ negreduce (Not e) =
                               eq theta x = Eq (Var x) (subst theta (Var x))
 
                   unsatisf [] es = return $ notExists u es
-                  unsatisf theta@[(x, e)] es = 
+                  unsatisf theta@[(x, e)] es =
                         return $ notExists u $ map (subst theta') es
                     where theta' | x `elem` u  = theta
-                                 | otherwise   = case e of 
+                                 | otherwise   = case e of
                                                      Var y -> bind y (Var x)
                                                      _ -> fail "not unsatisf"
-                  chan vs eq@(Eq _ _) es = 
-                        return $ Or (Not (exists vs1 eq)) 
+                  chan vs eq@(Eq _ _) es =
+                        return $ Or (Not (exists vs1 eq))
                                  (exists vs1 (And eq (notExists vs2 es)))
-                     where (vs1, vs2) = partition (\v -> v `elem` (fv eq)) vs
+                     where (vs1, vs2) = partition (\v -> v `elem` fv eq) vs
 
 
         negreduce' e@(Not ee) es = ifte (negreduce e) reducable rest
@@ -142,36 +140,36 @@ negreduce (Not e) =
             where f | not (null es) = negreduceSeq (head es) (tail es) (e:d)
                     | otherwise     = fail "not reducable"
 
-        handleHigher vs e es = 
-            let args' (Not e) = args' e' 
+        handleHigher vs e es =
+            let args' (Not e) = args' e'
                     where (_, e') = splitExist e
                 args' e = args e
                 functor' (Not e) = functor' e'
                     where (_, e') = splitExist e
                 functor' e = functor e
 
-                aux | (functor' e) `isIn` vs = aux1
-                    | not (null es)          = aux2
-                    | otherwise              = aux3 e
+                aux | functor' e `isIn` vs = aux1
+                    | not (null es)        = aux2
+                    | otherwise            = aux3 e
 
                 isIn (Var v) vs = v `elem` vs
 
                 aux1 = do
                     (_, s) <- resolveFlex e
                     return $ notExists u $ map (subst s) es {- must include the new var R' to "u" -}
-                aux2 = 
-                    let (vs1, vs2) = partition (\v -> v `elem` (fv e)) vs
+                aux2 =
+                    let (vs1, vs2) = partition (\v -> v `elem` fv e) vs
                     in return $ Or (Not (exists vs1 e))
                                 (And (exists vs1 (And e (notExists vs2 es)))
                                      (notExists vs (e:es)))
 
-                aux3 (Not e) = 
-                    let (vs, e') = splitExist e 
-                    in if null vs 
-                       then fail "not reducable" 
-                       else do 
+                aux3 (Not e) =
+                    let (vs, e') = splitExist e
+                    in if null vs
+                       then fail "not reducable"
+                       else do
                             (e'', vs') <- renameM vs e'
-                            return $ exists vs $ notExists u $ [Not e', notExists vs' [e''] ]
+                            return $ exists vs $ notExists u [Not e', notExists vs' [e''] ]
                 aux3 _ = fail "not reducable"
 
             in aux
@@ -184,8 +182,8 @@ negreduce (Not e) =
 
 negreduce _ = fail "not a negative expression"
 
-reduce e = 
-    case functor e of 
+reduce e =
+    case functor e of
         Rigid _    -> resolveRigid e
         Lambda _ _ -> lambdaReduce e
         And _ _    -> expandApp e
@@ -195,9 +193,9 @@ reduce e =
 expandApp (App (And e1 e2) e) = return $ And (App e1 e) (App e2 e)
 expandApp (App (Or  e1 e2) e) = return $ Or  (App e1 e) (App e2 e)
 expandApp (App e1 e)          = do
-    e1' <- (expandApp e1)
+    e1' <- expandApp e1
     expandApp (App e1' e)
-expandApp e                   = fail ("expandApp")
+expandApp e                   = fail "expandApp"
 
 returnSuccess e = return (e, success)
 
@@ -208,25 +206,25 @@ derive e =
             theta <- unify e1 e2
             return (CTrue, theta)
 
-        deriveSingle (Or e1 e2) = mplus (b e1) (b e2) 
+        deriveSingle (Or e1 e2) = mplus (b e1) (b e2)
             where b = returnSuccess
-        
+
         deriveSingle e@(Exists _ _) = do
             (e'', _) <- renameM vs e'
             returnSuccess e''
            where (vs, e') = splitExist e
 
-        deriveSingle e@(Not _) | isVarApp' e = do 
+        deriveSingle e@(Not _) | isVarApp' e = do
                             (e', s) <- resolveFlex e
                             return (CTrue, s)
                                | otherwise =  negreduce e >>= returnSuccess
 
-        deriveSingle e | isVarApp' e = do 
+        deriveSingle e | isVarApp' e = do
                             (e', s) <- resolveFlex e
                             return (CTrue, s)
                        | otherwise   = reduce e >>= returnSuccess
 
-        deriveSeq e es d = ifte (deriveSingle e) succ f 
+        deriveSeq e es d = ifte (deriveSingle e) succ f
             where succ (CFalse, ss) = return (CFalse, ss)
                   succ (CTrue, ss)  = return (subst ss (foldAnd (d ++ es)),   ss)
                   succ (e', ss) = return (subst ss (foldAnd (e':(d ++ es))), ss)
@@ -246,10 +244,10 @@ derive e =
     in deriveSeq (head es) (tail es) []
 
 
-substFunc (App e a) b = (App (substFunc e b) a)
+substFunc (App e a) b = App (substFunc e b) a
 substFunc _ b = b
 
-resolveRigid g = 
+resolveRigid g =
     let lam e (TyFun a b) = do
             l <- lam e b
             v <- freshVarOfType a
@@ -281,7 +279,7 @@ betaReduce (App e a) = do
         Lambda x e'' ->
            return $ subst (bind x a) e''
         _ ->
-           return $ (App e' a)
+           return $ App e' a
 betaReduce e = alphaConvert e
 
 
@@ -291,14 +289,14 @@ resolveFlex (Not e) = resolveFlexNot' vs e'
           resolveFlexNot' vs e       = resolveFlexNeg vs e
 resolveFlex e = resolveFlexPos [] e
 
-resolveFlexNeg vs g =  
+resolveFlexNeg vs g =
     let neg vs (Lambda x e) = Lambda x (neg vs e)
         neg vs e = Not (exists vs' e')
             where vs'  = map snd vs
                   vs'' = map (\(x,y) -> (x, Var y)) vs
                   e'   = subst vs'' e
     in case functor g of
-           Var x -> 
+           Var x ->
                singleInstance (typeOf x) >>- \fi -> do
                fi' <- instantiate fi g
                r <- freshVarOfType (typeOf x)
@@ -310,12 +308,12 @@ resolveFlexNeg vs g =
 
 resolveFlexPos vs g =
     let pos vs (Lambda x e) = Lambda x (pos vs e)
-        pos vs e = (exists  vs' e')
+        pos vs e = exists  vs' e'
             where vs'  = map snd vs
                   vs'' = map (\(x,y) -> (x, Var y)) vs
                   e'   = subst vs'' e
     in case functor g of
-           Var x -> 
+           Var x ->
                singleInstance (typeOf x) >>- \fi -> do
                fi' <- instantiate fi g
                r <- freshVarOfType (typeOf x)
@@ -327,14 +325,14 @@ resolveFlexPos vs g =
            _ -> fail "resolveF: cannot resolve a non flexible"
 
 
-instantiate f g = 
-    let l (Lambda x e) = x:(l e)
+instantiate f g =
+    let l (Lambda x e) = x : l e
         l _ = []
         sl = zip (l f) (args g)
         s (Eq (Var v) e) =
             case lookup v sl of
-                Just e' -> (Eq (Var v) e')
-                Nothing -> (Eq (Var v) e)
+                Just e' -> Eq (Var v) e'
+                Nothing -> Eq (Var v) e
         s (And e1 e2) = And (s e1) (s e2)
         s (Lambda x e) = Lambda x (s e)
         s e = e
@@ -347,20 +345,20 @@ basicInstance ty@(TyFun _ _) =
     return $ foldl1 Or le
 basicInstance x = singleInstance x
 
-singleInstance (TyFun ty_arg ty_res) = 
-    let argExpr (TyFun _ _) x       = msum (map return [1..])        >>- \n -> 
+singleInstance (TyFun ty_arg ty_res) =
+    let argExpr (TyFun _ _) x       = msum (map return [1..])        >>- \n ->
                                       replicateM n (appInst (Var x)) >>- \le ->
                                       return $ foldl1 And le
         argExpr ty x | ty == tyAll  = do { y <- singleInstance ty
                                          ; return $ Eq (Var x) y
                                          }
                      | ty == tyBool = do { y <- singleInstance ty
-                                         ; return $ if y == CTrue then (Var x) else y
+                                         ; return $ if y == CTrue then Var x else y
                                          }
                      | otherwise    = fail ""
-        comb e' (Lambda x e) = (Lambda x (comb e' e))
+        comb e' (Lambda x e) = Lambda x (comb e' e)
         comb e' e            = And e' e
-        appInst e = do
+        appInst e =
              case typeOf e of
                  TyFun t1 _ -> do
                       a <- freshVarOfType (typeOf t1)
@@ -370,9 +368,9 @@ singleInstance (TyFun ty_arg ty_res) =
        x   <- freshVarOfType ty_arg
        xe  <- argExpr ty_arg x
 
-       if (ty_res == tyBool)
+       if ty_res == tyBool
         then return (Lambda x xe)
-        else singleInstance ty_res >>- \res -> 
+        else singleInstance ty_res >>- \res ->
              return (Lambda x (comb xe res))
 
 singleInstance ty

@@ -15,6 +15,8 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 -- | checking well formatted formulas
 module WellForm (wfp, wfg) where
 
@@ -78,7 +80,7 @@ normForm (L l (HpClause b xs ys)) = do
     ys' <- mapM normExpr ys
     return (L l (HpClause b' xs' ys'))
 
-normBinds bs = mapM normBind bs
+normBinds = mapM normBind
     where normBind (HpBind s ty) = do
             ty' <- normType ty
             s'   <- normSym s
