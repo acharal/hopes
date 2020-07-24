@@ -15,6 +15,11 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE
+    FlexibleInstances
+   ,NoMonomorphismRestriction
+#-}
+
 -- | Proof procedure of Hopl
 module Derive (derive) where
 

@@ -15,6 +15,12 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE
+    FlexibleInstances
+   ,MultiParamTypeClasses
+   ,NoMonomorphismRestriction
+#-}
+
 -- | Higher Order Predicate Language
 module Language.Hopl where
 
@@ -90,23 +96,23 @@ isContra = (==contradiction)
 -}
 
 instance Symbol a => HasSignature (Expr a) a where
-	sig (App e1 e2) = sig e1 `mappend` sig e2
-	sig (Flex a)  = varSig a
-	sig (Rigid a) = rigSig a
+        sig (App e1 e2) = sig e1 `mappend` sig e2
+        sig (Flex a)  = varSig a
+        sig (Rigid a) = rigSig a
         sig (Lambda a x) = varSig a `mappend` sig x
 
 instance Symbol a => HasSignature (Clause a) a where
-	sig (C p e2) = rigSig p `mappend` sig e2 `mappend` mempty
+        sig (C p e2) = rigSig p `mappend` sig e2 `mappend` mempty
 
 --instance HasSignature (Goal a) a where
---	sig gs = mconcat $ map sig gs
+--        sig gs = mconcat $ map sig gs
 
 instance (Symbol a, Eq a, HasType a) => HasType (Expr a) where
-	typeOf (App e1 e2) =
+        typeOf (App e1 e2) =
             case typeOf e1 of
                 (TyFun a b) -> b
                 t -> error ("not expected type " ++ (show t))
-	typeOf (Flex a)  = typeOf a
+        typeOf (Flex a)  = typeOf a
         typeOf c@(Rigid a)
             | c == ctop = tyBool
             | c == cbot = tyBool
@@ -115,21 +121,21 @@ instance (Symbol a, Eq a, HasType a) => HasType (Expr a) where
             | c == ceq  = TyFun tyAll ((TyFun tyAll) tyBool)
             | c == cexists = TyFun (TyVar undefined) tyBool
             | otherwise = typeOf a
-	typeOf (Lambda a e) =
+        typeOf (Lambda a e) =
             let t = typeOf e
                 t1 = typeOf a
             in TyFun t1 t
         hasType ty e = error "hasType"
 
 instance HasType a => HasType (Clause a) where
-	typeOf c = liftGround TyBool
+        typeOf c = liftGround TyBool
         hasType ty c =
             if not (ty == tyBool) then
                 error "clause can have not boolean type"
             else c
 
 -- instance HasType a => HasType (Goal a) where
---	typeOf g = liftGround TyBool
+--        typeOf g = liftGround TyBool
 
 -- liftSet :: Expr a -> Expr a
 -- liftSet e@(Set _ _) = e
@@ -152,7 +158,7 @@ data KnowledgeBase a =
     }
 
 instance Symbol a => HasSignature (KnowledgeBase a) a where
-	sig cs = mconcat $ map sig $ clauses cs
+        sig cs = mconcat $ map sig $ clauses cs
 
 instance Monoid (KnowledgeBase a) where
     mempty  = KB mempty

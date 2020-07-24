@@ -1,3 +1,7 @@
+{-# LANGUAGE
+    FlexibleInstances
+   ,TypeSynonymInstances
+#-}
 
 module ComputedAnswer (ComputedAnswer(..)) where
 

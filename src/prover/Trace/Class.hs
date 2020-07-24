@@ -1,4 +1,9 @@
-
+{-# LANGUAGE
+    FlexibleInstances
+   ,FunctionalDependencies
+   ,MultiParamTypeClasses
+   ,UndecidableInstances
+#-}
 
 module Trace.Class where
 

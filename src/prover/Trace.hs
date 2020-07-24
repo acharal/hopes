@@ -1,3 +1,9 @@
+{-# LANGUAGE
+    FlexibleInstances
+   ,MultiParamTypeClasses
+   ,NoMonomorphismRestriction
+   ,UndecidableInstances
+#-}
 
 module Trace (
     module Trace,

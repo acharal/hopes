@@ -15,6 +15,14 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE
+    FlexibleContexts
+   ,FlexibleInstances
+   ,FunctionalDependencies
+   ,MultiParamTypeClasses
+   ,TypeSynonymInstances
+#-}
+
 module Subst where
 
 -- import Language.Hopl (Expr(..), Clause(..))
@@ -36,7 +44,7 @@ isTaut (v, Var v') = v == v'
 isTaut _ = False
 
 class (Substitutable a b) | a -> b where
-	subst :: Substitutable a b => (Subst b) -> a -> a
+        subst :: Substitutable a b => (Subst b) -> a -> a
 
 instance Eq a => (Substitutable (Expr a) a) where
         subst theta (App e1 e2)  = App (subst theta e1) (subst theta e2)
@@ -58,7 +66,7 @@ instance Eq a => (Substitutable (Expr a) a) where
         subst theta e = e
 
 instance Eq a => (Substitutable (Subst a) a) where
-	subst theta zeta = [ (v, e') | (v, e) <- theta, let e' = subst zeta e, not (isTaut (v, e')) ]
+         subst theta zeta = [ (v, e') | (v, e) <- theta, let e' = subst zeta e, not (isTaut (v, e')) ]
 
 
 restrict :: Eq a => [a] -> Subst a -> Subst a

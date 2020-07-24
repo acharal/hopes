@@ -203,21 +203,21 @@ pnats( N, L ) :- length( L, N ), applist( inc, 0, L ).
 
 
 nqueens( N, L ) :-
-	length( L, N ),
-	add( N, N, s( K ) ),
-	map( pnats, [ N, K ], [ C, D ] ),
-	nqueens_search( L, C, C, D, D ).
+        length( L, N ),
+        add( N, N, s( K ) ),
+        map( pnats, [ N, K ], [ C, D ] ),
+        nqueens_search( L, C, C, D, D ).
 
 
 
 nqueens_search( [], Dx, [], Xs, Ys ).
 nqueens_search( [ Q | Qs ], Dx, Columns, Xs, Ys ) :-
-	select( Q, Columns, Columns1 ),
-	nth( Q, Dx, X ), select( X, Xs, Xs1 ),
-	reverse( Dx, Dy ),
-	nth( Q, Dy, Y ), select( Y, Ys, Ys1 ),
-	map( inc, Dx, Dx1 ),
-	nqueens_search( Qs, Dx1, Columns1, Xs1, Ys1 ).
+        select( Q, Columns, Columns1 ),
+        nth( Q, Dx, X ), select( X, Xs, Xs1 ),
+        reverse( Dx, Dy ),
+        nth( Q, Dy, Y ), select( Y, Ys, Ys1 ),
+        map( inc, Dx, Dx1 ),
+        nqueens_search( Qs, Dx1, Columns1, Xs1, Ys1 ).
 
 
 

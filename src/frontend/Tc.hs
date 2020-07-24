@@ -15,6 +15,13 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE
+    FlexibleContexts
+   ,FlexibleInstances
+   ,NoMonomorphismRestriction
+   ,TypeSynonymInstances
+#-}
+
 -- | type checker monad
 module Tc where
 
@@ -143,8 +150,8 @@ freshTyFor v = do
     return (v, ty)
 
 withSig e m = do
-	ty_sym <- mapM freshTyFor (rigids e)
-	withTypeEnv ty_sym m
+        ty_sym <- mapM freshTyFor (rigids e)
+        withTypeEnv ty_sym m
 
 enterContext c m = local addctxt m
     where addctxt env = env{ctxt = c:(ctxt env)}

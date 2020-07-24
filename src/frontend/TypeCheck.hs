@@ -15,6 +15,8 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 -- | check for well typed expressions and formulas
 module TypeCheck (tcProg, tcExpr, tiExpr, tcForm) where
 

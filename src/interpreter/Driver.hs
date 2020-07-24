@@ -15,6 +15,8 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE FlexibleContexts #-}
+
 -- | drives the pipeline of compilation + execution
 module Driver where
 

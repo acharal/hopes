@@ -4,7 +4,7 @@
 -- continuations
 
 {- Copyright (c) 2005, Amr Sabry, Chung-chieh Shan, Oleg Kiselyov,
-	and Daniel P. Friedman
+                       and Daniel P. Friedman
 -}
 
 -- Modified on August 2010 to migrate to the new implementation of the
@@ -44,7 +44,7 @@ compose_trees :: Monad m => Tree m a -> TreeM m a -> TreeM m a
 compose_trees HZero r = r
 compose_trees (HOne a) r = return $ HChoice a r
 compose_trees (HChoice a r') r = return $
-				 HChoice a $ r' >>= (\v -> compose_trees v r)
+                                 HChoice a $ r' >>= (\v -> compose_trees v r)
 
 {-
 treefold :: (a -> b -> b) -> (a -> b) -> b -> Tree a -> b
@@ -82,7 +82,7 @@ instance Monad m => MonadPlus (SR m) where
   m1 `mplus` m2 = SR $ (id =<<) . shift0P ps $ \sk ->
                          do f1    <- sk (unSR m1)
                             let f2 = sk (unSR m2)
-			    compose_trees f1 f2
+                            compose_trees f1 f2
 
 instance MonadTrans SR where
     lift m = SR (lift m)
@@ -92,9 +92,9 @@ instance (MonadIO m) => MonadIO (SR m) where
 
 instance Monad m => MonadLogic (SR m) where
     msplit m = SR (lift $ (runCC (reify m) >>= (return . reflect_sr)))
-	where reflect_sr HZero          =  Nothing
-	      reflect_sr (HOne a)       = Just (a, mzero)
-	      reflect_sr (HChoice a r1) = Just (a, refl (runCC r1))
+        where reflect_sr HZero          =  Nothing
+              reflect_sr (HOne a)       = Just (a, mzero)
+              reflect_sr (HChoice a r1) = Just (a, refl (runCC r1))
 
 refl :: Monad m => m (Tree m a) -> SR m a
 refl m = SR (lift m >>= check)
@@ -102,9 +102,9 @@ refl m = SR (lift m >>= check)
  check HZero         = abortP ps (return HZero)
  check (HOne a)      = return a
  check (HChoice a r) = (id =<<) . shift0P ps $ \sk ->
-		         do f1 <- sk (return a)
-			    let f2 = sk (unSR . refl $ runCC r)
-			    compose_trees f1 f2
+                         do f1 <- sk (return a)
+                            let f2 = sk (unSR . refl $ runCC r)
+                            compose_trees f1 f2
 
 
 reify :: Monad m => SR m a -> TreeM m a
@@ -120,10 +120,10 @@ runLogicT n m = runCC (reify m >>= flatten n)
   flatten n (HChoice a r) = r >>= flatten (fmap pred n) >>= (return . (a:))
 
 -- Hinze's `observe' -- the opposite of `lift'
---	observe . lift == id
+--       observe . lift == id
 
 observe :: Monad m => SR m a -> m a
 observe m = runCC (reify m) >>= pick1
   where pick1 HZero         = fail "no answers"
-	pick1 (HOne a)      = return a
-	pick1 (HChoice a _) = return a
+        pick1 (HOne a)      = return a
+        pick1 (HChoice a _) = return a

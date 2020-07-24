@@ -15,6 +15,12 @@
 --  the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 --  Boston, MA 02110-1301, USA.
 
+{-# LANGUAGE
+    FlexibleContexts
+   ,MonoLocalBinds
+   ,UndecidableInstances
+#-}
+
 module Language.Hopl.Pretty () where
 
 
@@ -59,15 +65,15 @@ pprPrec1 f p (Lambda a e) =
 pprList f p (Rigid x) = ppr x
 pprList f p e = 
     let listelem (App (App (Rigid x) e1) e2) = if (x == liftSym ".") then e1:(listelem e2) else []
-	listelem _ = []
-	listtail (App (App (Rigid x) _) e2) = if (x == liftSym ".") then listtail e2 else Nothing
+        listelem _ = []
+        listtail (App (App (Rigid x) _) e2) = if (x == liftSym ".") then listtail e2 else Nothing
         listtail e1@(Flex x) = Just e1
-	listtail (Rigid x) = Nothing
+        listtail (Rigid x) = Nothing
         xs = listelem e
-	t = listtail e
+        t = listtail e
     in case t of 
-	Nothing -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)))
-	Just e' -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)) <> text "|" <> (pprPrec1 f p e'))
+        Nothing -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)))
+        Just e' -> brackets (sep (punctuate comma (map (pprPrec1 f p) xs)) <> text "|" <> (pprPrec1 f p e'))
 
 instance (Pretty a, Eq a, Symbol a,  HasLogicConstants (Expr a), HasSignature (Expr a) a) => Pretty (Clause a) where
     ppr (C h b) = hang ((ppr h) <+> text "<:=") 4 $ ppr b
@@ -113,7 +119,7 @@ pprBasicSet e =
        pprElemsList e = 
          let xs = getbindings e
              bd = getbody e
-	 in case bd of 
+         in case bd of 
              (App (App x y) e') -> if x == cor then ((pprElem xs y):(pprElemsList (removeapp (reverse xs) e'))) else if (xs == []) then [ppr bd] else error ""
              e -> [ppr e]
 
@@ -124,7 +130,7 @@ pprBasicSet e =
        splitand e = [e]
 
        pprElem xs e = if length pes == 1 then sep (punctuate comma pes) else parens (sep (punctuate comma pes))
-	     where es = map spliteq (splitand e)
+             where es = map spliteq (splitand e)
                    pes = map (ppr.snd) es
        spliteq (App (App x e1) e2) = if (x == ceq) then (e1, e2) else error ""
        spliteq e = (undefined, e)

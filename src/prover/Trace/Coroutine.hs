@@ -1,4 +1,8 @@
-
+{-# LANGUAGE
+    FlexibleInstances
+   ,MultiParamTypeClasses
+   ,UndecidableInstances
+#-}
 
 module Trace.Coroutine where
 

@@ -10,15 +10,15 @@ import Data.Monoid
 data Expr a = 
       CTrue
     | CFalse
-    | And (Expr a) (Expr a)	-- Expr :/\: Expr
-    | Or  (Expr a) (Expr a)	-- Expr :\/: Expr
+    | And (Expr a) (Expr a)     -- Expr :/\: Expr
+    | Or  (Expr a) (Expr a)     -- Expr :\/: Expr
     | Lambda a (Expr a)
     | App (Expr a) (Expr a)
-    | Eq  (Expr a) (Expr a)	-- Expr :=: Expr 
-    | Not (Expr a)		    -- :~: Expr
+    | Eq  (Expr a) (Expr a)     -- Expr :=: Expr 
+    | Not (Expr a)              -- :~: Expr
     | Exists a (Expr a)
-    | Var  a			-- variable
-    | Rigid a			-- predicate and function symbol
+    | Var a                     -- variable
+    | Rigid a                   -- predicate and function symbol
     | Cut
     | ListCons (Expr a) (Expr a)
     | ListNil
